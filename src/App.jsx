@@ -101,8 +101,11 @@ export default function App() {
       if (overlapping.length > 0) {
         const responsibles = new Set();
         const allInvolved = [submittingUser, ...overlapping.map(r => users.find(u => u.name === r.userName)).filter(Boolean)];
-        const involvedNames = allInvolved.map(u => u.name).filter(Boolean).join(', ');
-        const msg = `ATTENZIONE!!! DEI DIPENDENTI CON MANSIONI EQUIVALENTI STANNO CHIEDENDO LE FERIE NELLO STESSO PERIODO. VERIFICA PRIMA DI APPROVARE "le ferie di ${involvedNames}" PER EVITARE DI LASCIARE SCOPERTA UNA O PIÙ FUNZIONI!`;
+        const involvedNames = allInvolved.map(u => u.name ? u.name.toUpperCase() : '').filter(Boolean);
+        const namesStr = involvedNames.length > 1
+          ? involvedNames.slice(0, -1).join(', ') + ' E ' + involvedNames[involvedNames.length - 1]
+          : involvedNames[0] || '';
+        const msg = `ATTENZIONE!!! DEI DIPENDENTI CON MANSIONI EQUIVALENTI STANNO CHIEDENDO LE FERIE NELLO STESSO PERIODO. VERIFICA PRIMA DI APPROVARE LE FERIE DI ${namesStr} PER EVITARE DI LASCIARE SCOPERTA UNA O PIÙ FUNZIONI!`;
         for (const u of allInvolved) {
           if (u && u.resp1 && u.resp1 !== '/') responsibles.add(u.resp1);
           if (u && u.resp2 === 'Mirco Ronci') responsibles.add('Mirco Ronci');
@@ -863,12 +866,18 @@ export default function App() {
         <div className="bg-white rounded-3xl border p-5 space-y-4">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-3">Cronologia</p>
           {myHistory.length === 0 && <p className="text-slate-400 text-sm font-bold">Nessuna notifica.</p>}
-          {myHistory.map(n => (
-            <div key={n.id} className="flex gap-3 border-b border-slate-50 pb-3 last:border-0">
-              <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0"></div>
-              <div><p className="text-sm font-bold text-slate-700">{n.message}</p><p className="text-[9px] font-black text-slate-400 uppercase mt-0.5">{n.date}</p></div>
-            </div>
-          ))}
+          {myHistory.map(n => {
+            const isAlert = n.message && n.message.startsWith('ATTENZIONE!!!');
+            return (
+              <div key={n.id} className={'flex gap-3 border-b pb-3 last:border-0 ' + (isAlert ? 'border-red-100 bg-red-50 rounded-2xl px-3 py-2' : 'border-slate-50')}>
+                <div className={'w-2 h-2 rounded-full mt-1.5 shrink-0 ' + (isAlert ? 'bg-red-500' : 'bg-blue-500')}></div>
+                <div>
+                  <p className={'text-sm font-bold ' + (isAlert ? 'text-red-600' : 'text-slate-700')}>{n.message}</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase mt-0.5">{n.date}</p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
