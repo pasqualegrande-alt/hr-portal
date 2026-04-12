@@ -102,8 +102,8 @@ export default function App() {
         const responsibles = new Set();
         const allInvolved = [submittingUser, ...overlapping.map(r => users.find(u => u.name === r.userName)).filter(Boolean)];
         for (const u of allInvolved) {
-          if (u.resp1 && u.resp1 !== '/') responsibles.add(u.resp1);
-          if (u.resp2 === 'Mirco Ronci') responsibles.add('Mirco Ronci');
+          if (u && u.resp1 && u.resp1 !== '/') responsibles.add(u.resp1);
+          if (u && u.resp2 === 'Mirco Ronci') responsibles.add('Mirco Ronci');
         }
         if (responsibles.size === 0) responsibles.add('Mirco Ronci');
         for (const resp of responsibles) {
