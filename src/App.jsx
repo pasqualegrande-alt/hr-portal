@@ -390,7 +390,7 @@ export default function App() {
     const year = currentDate.getFullYear();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDay = new Date(year, month, 1).getDay();
-    const subordinates = users.filter(u => u.resp1 === user.name);
+    const subordinates = user ? users.filter(u => u.resp1 === user.name) : [];
 
     const visibleRequests = requests.filter(r => {
       if (user.role === 'dipendente') return r.userId === user.id;
@@ -449,7 +449,7 @@ export default function App() {
     const handleSendPermesso = async () => {
       const mins = calcMinutesExcludingLunch(form.timeFrom, form.timeTo);
       if (mins <= 0) return alert('Orario non valido');
-      const assignedTo = user.resp1 && user.resp1 !== '/' ? user.resp1 : 'Mirco Ronci';
+      const assignedTo = user && user.resp1 && user.resp1 !== '/' ? user.resp1 : 'Mirco Ronci';
       const newReq = {
         userId: user.id, userName: user.name, type: 'permesso',
         dates: [selection], timeFrom: form.timeFrom, timeTo: form.timeTo,
@@ -468,7 +468,7 @@ export default function App() {
     const handleSendFuoriSede = async () => {
       const mins = calcMinutesExcludingLunch(form.timeFrom, form.timeTo);
       if (mins <= 0) return alert('Orario non valido');
-      const assignedTo = user.resp1 && user.resp1 !== '/' ? user.resp1 : 'Mirco Ronci';
+      const assignedTo = user && user.resp1 && user.resp1 !== '/' ? user.resp1 : 'Mirco Ronci';
       const status = form.mancataTimbratura ? 'pendente' : 'comunicato';
       const newReq = {
         userId: user.id, userName: user.name, type: 'fuorisede',
@@ -490,8 +490,7 @@ export default function App() {
     const handleSendTrasferta = async () => {
       const dates = buildDates(selection, form.end);
       if (dates.length === 0) return alert('Seleziona giorni lavorativi');
-      const resp1 = user.resp1 && user.resp1 !== '/' ? user.resp1 : null;
-      const firstRecipient = resp1 || 'Mirco Ronci';
+      const resp1 = user && user.resp1 && user.resp1 !== '/' ? user.resp1 : null;
       const initialStatus = resp1 ? 'pendente_responsabile' : 'pendente_mirco';
       const newReq = {
         userId: user.id, userName: user.name, type: 'trasferta',
@@ -515,8 +514,8 @@ export default function App() {
       // ferie e malattia
       const dates = buildDates(selection, form.end);
       if (dates.length === 0) return alert('Seleziona giorni lavorativi');
-      const resp1 = user.resp1 && user.resp1 !== '/' ? user.resp1 : null;
-      const resp2 = user.resp2 === 'Mirco Ronci' ? 'Mirco Ronci' : null;
+      const resp1 = user && user.resp1 && user.resp1 !== '/' ? user.resp1 : null;
+      const resp2 = user && user.resp2 === 'Mirco Ronci' ? 'Mirco Ronci' : null;
       if (resp1 && resp2 && requestType !== 'malattia') { setRecipientModal({ resp1, resp2 }); return; }
       await doSendFerie(resp1 || resp2 || 'Mirco Ronci');
     };
