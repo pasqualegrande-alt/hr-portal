@@ -694,13 +694,16 @@ export default function App() {
             const rows = [];
             for (let r = 0; r < cells.length / 7; r++) rows.push(cells.slice(r * 7, r * 7 + 7));
             return rows.map((row, ri) => {
-              // Calcola numero settimana dal primo giorno reale della riga
-              const firstReal = row.find(d => d !== null);
-              const weekNum = firstReal ? getISOWeek(new Date(year, month, firstReal)) : null;
+              // Calcola numero settimana dal LUNEDÌ della riga (ISO: la settimana inizia il lunedì)
+              // row[0]=Dom, row[1]=Lun — se lunedì esiste usalo, altrimenti usa il primo giorno reale dopo domenica
+              const monday = row[1];
+              const firstWeekday = row.slice(1).find(d => d !== null); // primo giorno da lun in poi
+              const weekRef = firstWeekday ?? row.find(d => d !== null);
+              const weekNum = weekRef ? getISOWeek(new Date(year, month, weekRef)) : null;
               return (
                 <div key={ri} className="grid gap-0.5 mb-0.5" style={{gridTemplateColumns: '24px repeat(7, 1fr)'}}>
                   <div className="h-16 flex items-center justify-center">
-                    {weekNum && <span className="text-[9px] font-black text-slate-300 leading-none">{weekNum}</span>}
+                    {weekNum && <span className="text-[9px] font-black text-slate-800 leading-none">{weekNum}</span>}
                   </div>
                   {row.map((day, di) => {
                     if (!day) return <div key={di} className="h-16 bg-slate-50/50 rounded-xl"></div>;
