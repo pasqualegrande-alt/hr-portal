@@ -45,6 +45,12 @@ const formatMinutes = (mins) => {
   return h > 0 ? `${h}h ${m > 0 ? m + 'min' : ''}`.trim() : `${m}min`;
 };
 
+const formatDate = (isoStr) => {
+  if (!isoStr) return '';
+  const [y, m, d] = isoStr.split('-');
+  return d + '/' + m + '/' + y;
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('calendar');
@@ -450,8 +456,12 @@ export default function App() {
       };
       const reqRef = await addDoc(collection(db, 'requests'), newReq);
       if (newReq.status === 'pendente') {
+        const dateRange = dates.length === 1
+          ? 'il ' + formatDate(dates[0])
+          : 'dal ' + formatDate(dates[0]) + ' al ' + formatDate(dates[dates.length - 1]) + ' (' + dates.length + ' giorni)';
         await addDoc(collection(db, 'notifications'), {
-          to: assignedTo, message: 'Richiesta ' + form.type + ' da ' + user.name,
+          to: assignedTo,
+          message: 'Richiesta di ' + form.type + ' di ' + user.name + ' ' + dateRange,
           date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), requestId: reqRef.id, read: false
         });
       }
@@ -472,7 +482,7 @@ export default function App() {
       const reqRef = await addDoc(collection(db, 'requests'), newReq);
       await addDoc(collection(db, 'notifications'), {
         to: assignedTo,
-        message: 'Richiesta permesso da ' + user.name + ' il ' + selection + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + ' (' + formatMinutes(mins) + ')',
+        message: 'Richiesta di permesso di ' + user.name + ' il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + ' (' + formatMinutes(mins) + ')',
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), requestId: reqRef.id, read: false
       });
       setSelection(null);
@@ -491,8 +501,8 @@ export default function App() {
       };
       await addDoc(collection(db, 'requests'), newReq);
       const msg = form.mancataTimbratura
-        ? 'ATTENZIONE! ' + user.name + ' ha una mancata timbratura il ' + selection + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + '. Approva per giustificarla.'
-        : user.name + ' è stato fuori sede il ' + selection + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo;
+        ? 'ATTENZIONE! ' + user.name + ' ha una mancata timbratura il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + '. Approva per giustificarla.'
+        : 'Fuori sede di ' + user.name + ' il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + ' (' + formatMinutes(calcMinutesExcludingLunch(form.timeFrom, form.timeTo)) + ')';
       await addDoc(collection(db, 'notifications'), {
         to: assignedTo, message: msg,
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
@@ -514,7 +524,7 @@ export default function App() {
       const reqRef = await addDoc(collection(db, 'requests'), newReq);
       await addDoc(collection(db, 'notifications'), {
         to: firstRecipient,
-        message: 'Richiesta trasferta da ' + user.name + ' dal ' + dates[0] + ' al ' + dates[dates.length - 1],
+        message: 'Richiesta di trasferta di ' + user.name + ' dal ' + formatDate(dates[0]) + ' al ' + formatDate(dates[dates.length - 1]) + ' (' + dates.length + ' giorni)',
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), requestId: reqRef.id, read: false
       });
       await checkPolivalenza(dates, user);
@@ -539,7 +549,13 @@ export default function App() {
       await deleteDoc(doc(db, 'requests', req.id));
       await addDoc(collection(db, 'notifications'), {
         to: req.assignedTo,
-        message: 'ATTENZIONE! IL DIPENDENTE ' + user.name + ' HA CANCELLATO LE SUE ' + (req.type === 'trasferta' ? 'TRASFERTE' : 'FERIE'),
+        message: (() => {
+          const typeLabel = req.type === 'trasferta' ? 'trasferta' : req.type === 'permesso' ? 'permesso' : req.type === 'fuorisede' ? 'fuori sede' : 'ferie';
+          const dateInfo = req.dates && req.dates.length > 0
+            ? (req.dates.length === 1 ? ' del ' + formatDate(req.dates[0]) : ' dal ' + formatDate(req.dates[0]) + ' al ' + formatDate(req.dates[req.dates.length - 1]))
+            : '';
+          return 'ATTENZIONE! ' + user.name + ' ha cancellato la richiesta di ' + typeLabel + dateInfo;
+        })(),
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
       });
       setReqModal(null);
@@ -551,7 +567,13 @@ export default function App() {
       await updateDoc(doc(db, 'requests', req.id), { dates, type: modifyForm.type, updatedAt: new Date().toISOString() });
       await addDoc(collection(db, 'notifications'), {
         to: req.assignedTo,
-        message: 'ATTENZIONE! IL DIPENDENTE ' + user.name + ' HA MODIFICATO LE SUE FERIE',
+        message: (() => {
+          const dates2 = buildDates(modifyForm.start || req.dates[0], modifyForm.end || req.dates[req.dates.length - 1]);
+          const dateInfo = dates2.length > 0
+            ? ' dal ' + formatDate(dates2[0]) + ' al ' + formatDate(dates2[dates2.length - 1]) + ' (' + dates2.length + ' giorni)'
+            : '';
+          return 'ATTENZIONE! ' + user.name + ' ha modificato la richiesta di ' + req.type + dateInfo;
+        })(),
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
       });
       setReqModal(null); setModifyMode(false);
@@ -839,14 +861,17 @@ export default function App() {
     const resolve = async (req, status) => {
       if (req.type === 'trasferta' && status === 'approvato' && req.status === 'pendente_responsabile') {
         await updateDoc(doc(db, 'requests', req.id), { status: 'pendente_mirco', assignedTo: 'Mirco Ronci' });
+        const trDateInfo = req.dates && req.dates.length > 0
+          ? ' dal ' + formatDate(req.dates[0]) + ' al ' + formatDate(req.dates[req.dates.length - 1])
+          : '';
         await addDoc(collection(db, 'notifications'), {
           to: 'Mirco Ronci',
-          message: 'Trasferta di ' + req.userName + ' approvata dal responsabile. In attesa della tua approvazione.',
+          message: 'Trasferta di ' + req.userName + trDateInfo + ' approvata dal responsabile. In attesa della tua approvazione.',
           date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), requestId: req.id, read: false
         });
         await addDoc(collection(db, 'notifications'), {
           to: req.userName,
-          message: 'La tua trasferta è stata approvata dal responsabile. In attesa di approvazione da Mirco Ronci.',
+          message: 'La tua trasferta' + trDateInfo + ' è stata approvata dal responsabile. In attesa di approvazione da Mirco Ronci.',
           date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
         });
         return;
@@ -854,7 +879,14 @@ export default function App() {
       await updateDoc(doc(db, 'requests', req.id), { status });
       await addDoc(collection(db, 'notifications'), {
         to: req.userName,
-        message: (req.type === 'trasferta' ? 'Trasferta ' : 'Richiesta ') + status.toUpperCase() + ' dal responsabile',
+        message: (() => {
+          const typeLabel = req.type === 'trasferta' ? 'trasferta' : req.type === 'permesso' ? 'permesso' : req.type === 'fuorisede' ? 'fuori sede' : req.type === 'malattia' ? 'malattia' : 'ferie';
+          const dateInfo = req.dates && req.dates.length > 0
+            ? (req.dates.length === 1 ? ' del ' + formatDate(req.dates[0]) : ' dal ' + formatDate(req.dates[0]) + ' al ' + formatDate(req.dates[req.dates.length - 1]) + ' (' + req.dates.length + ' gg)')
+            : '';
+          const statusLabel = status === 'approvato' ? 'APPROVATA' : 'RIFIUTATA';
+          return 'Richiesta di ' + typeLabel + dateInfo + ' ' + statusLabel;
+        })(),
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
       });
     };
@@ -863,7 +895,7 @@ export default function App() {
       await updateDoc(doc(db, 'requests', req.id), { status: 'approvato' });
       await addDoc(collection(db, 'notifications'), {
         to: req.userName,
-        message: 'Mancata timbratura del ' + req.dates?.[0] + ' approvata dal responsabile.',
+        message: 'Mancata timbratura del ' + formatDate(req.dates?.[0]) + ' APPROVATA.',
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
       });
     };
