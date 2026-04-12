@@ -101,6 +101,8 @@ export default function App() {
       if (overlapping.length > 0) {
         const responsibles = new Set();
         const allInvolved = [submittingUser, ...overlapping.map(r => users.find(u => u.name === r.userName)).filter(Boolean)];
+        const involvedNames = allInvolved.map(u => u.name).filter(Boolean).join(', ');
+        const msg = `ATTENZIONE!!! DEI DIPENDENTI CON MANSIONI EQUIVALENTI STANNO CHIEDENDO LE FERIE NELLO STESSO PERIODO. VERIFICA PRIMA DI APPROVARE "le ferie di ${involvedNames}" PER EVITARE DI LASCIARE SCOPERTA UNA O PIÙ FUNZIONI!`;
         for (const u of allInvolved) {
           if (u && u.resp1 && u.resp1 !== '/') responsibles.add(u.resp1);
           if (u && u.resp2 === 'Mirco Ronci') responsibles.add('Mirco Ronci');
@@ -108,7 +110,7 @@ export default function App() {
         if (responsibles.size === 0) responsibles.add('Mirco Ronci');
         for (const resp of responsibles) {
           await addDoc(collection(db, 'notifications'), {
-            to: resp, message: POLIVALENZA_MSG,
+            to: resp, message: msg,
             date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false,
           });
         }
