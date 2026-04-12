@@ -384,6 +384,7 @@ export default function App() {
     const [modifyForm, setModifyForm] = useState({ start: '', end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00' });
     const [recipientModal, setRecipientModal] = useState(null);
     const [trasfertaStep, setTrasfertaStep] = useState(null); // 'responsabile' | 'mirco'
+    const [dayDetailModal, setDayDetailModal] = useState(null); // { date, requests }
 
     const month = currentDate.getMonth();
     const year = currentDate.getFullYear();
@@ -544,7 +545,20 @@ export default function App() {
     };
 
     const handleCellClick = (dStr, isWeekend, closure, dayReqs) => {
-      if (isWeekend || closure || user.role === 'CEO') return;
+      if (isWeekend || closure) return;
+
+      // CEO, admin e responsabile in modalità "tutti" o "dipendente specifico" → mostra esploso
+      const isViewingOthers = user.role === 'CEO' ||
+        (user.role === 'amministratore') ||
+        (user.role === 'responsabile' && calFilter !== 'mine');
+
+      if (isViewingOthers && dayReqs.length > 0) {
+        setDayDetailModal({ date: dStr, reqs: dayReqs });
+        return;
+      }
+
+      if (user.role === 'CEO') return;
+
       const myReq = dayReqs.find(r => r.userId === user.id);
       if (myReq) {
         setReqModal(myReq); setModifyMode(false);
@@ -694,7 +708,40 @@ export default function App() {
 
         {selection && renderRequestForm()}
 
-        {recipientModal && (
+        {dayDetailModal && (
+          <BottomSheet onClose={() => setDayDetailModal(null)}>
+            <h3 className="text-xl font-black uppercase italic mb-1">Dettaglio giorno</h3>
+            <p className="text-xs text-slate-400 font-bold uppercase mb-5">
+              {new Date(dayDetailModal.date + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+            <div className="space-y-3">
+              {dayDetailModal.reqs.map(r => (
+                <div key={r.id} className={'p-4 rounded-2xl border-l-4 ' + (r.status === 'approvato' ? 'border-green-500 bg-green-50' : r.status === 'comunicato' ? 'border-teal-500 bg-teal-50' : r.type === 'trasferta' ? 'border-blue-500 bg-blue-50' : 'border-orange-400 bg-orange-50')}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-black text-slate-800 text-sm uppercase">{r.userName}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={'px-2 py-0.5 rounded-full text-[10px] font-black uppercase text-white ' + getTypeBadgeColor(r.type, r.status)}>
+                          {getTypeLabel(r.type)}
+                        </span>
+                        <span className={'text-[10px] font-black uppercase ' + (r.status === 'approvato' ? 'text-green-600' : r.status === 'comunicato' ? 'text-teal-600' : r.status === 'pendente_mirco' ? 'text-blue-500' : r.status === 'pendente_responsabile' ? 'text-blue-400' : 'text-orange-500')}>
+                          {r.status === 'pendente_responsabile' ? 'Att. responsabile' : r.status === 'pendente_mirco' ? 'Att. Mirco' : r.status === 'comunicato' ? 'Comunicato' : r.status}
+                        </span>
+                      </div>
+                      {r.timeFrom && (
+                        <p className="text-xs text-slate-500 font-bold mt-1">{r.timeFrom} → {r.timeTo} · {formatMinutes(r.durationMinutes || 0)}</p>
+                      )}
+                      {r.mancataTimbratura && (
+                        <p className="text-[10px] text-teal-600 font-black mt-0.5">⚠ Mancata timbratura</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setDayDetailModal(null)} className="w-full bg-slate-100 text-slate-400 py-4 rounded-2xl font-black uppercase text-sm mt-5">Chiudi</button>
+          </BottomSheet>
+        )}
           <BottomSheet>
             <h3 className="text-xl font-black uppercase italic mb-2">Invia a chi?</h3>
             <p className="text-sm text-slate-400 font-bold mb-6">Scegli il destinatario della richiesta</p>
