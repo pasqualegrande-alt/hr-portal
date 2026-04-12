@@ -31,6 +31,14 @@ const calcMinutesExcludingLunch = (fromStr, toStr) => {
   return Math.max(0, total);
 };
 
+const getISOWeek = (date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+};
+
 const formatMinutes = (mins) => {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
@@ -670,32 +678,57 @@ export default function App() {
             <span className="font-black uppercase italic text-sm">{currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}</span>
             <button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-3 bg-slate-50 rounded-2xl"><ChevronRight size={20}/></button>
           </div>
-          <div className="grid grid-cols-7 gap-0.5">
+          {/* Header giorni */}
+          <div className="grid gap-0.5 mb-0.5" style={{gridTemplateColumns: '24px repeat(7, 1fr)'}}>
+            <div className="text-center text-[9px] font-black text-slate-300 py-1">W</div>
             {['D','L','M','M','G','V','S'].map((d, i) => <div key={i} className="text-center text-[9px] font-black text-slate-400 py-1 uppercase">{d}</div>)}
-            {[...Array(firstDay)].map((_, i) => <div key={i} className="h-16 bg-slate-50/50 rounded-xl"></div>)}
-            {[...Array(daysInMonth)].map((_, i) => {
-              const dStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(i+1).padStart(2,'0');
-              const isWeekend = new Date(dStr).getDay() === 0 || new Date(dStr).getDay() === 6;
-              const closure = getClosureForDate(dStr);
-              const dayReqs = visibleRequests.filter(r => r.dates && r.dates.includes(dStr)).slice().sort((a, b) => (a.createdAt||'').localeCompare(b.createdAt||''));
-              let cellBg = 'bg-white';
-              if (isWeekend) cellBg = 'bg-red-50/30';
-              else if (closure) cellBg = closure.contaComeFerie ? 'bg-purple-50' : 'bg-slate-100';
+          </div>
+          {/* Righe settimana */}
+          {(() => {
+            const cells = [];
+            // Riempi le celle: firstDay celle vuote + daysInMonth giorni
+            for (let i = 0; i < firstDay; i++) cells.push(null);
+            for (let i = 1; i <= daysInMonth; i++) cells.push(i);
+            // Aggiungi celle vuote in coda per completare l'ultima riga
+            while (cells.length % 7 !== 0) cells.push(null);
+            const rows = [];
+            for (let r = 0; r < cells.length / 7; r++) rows.push(cells.slice(r * 7, r * 7 + 7));
+            return rows.map((row, ri) => {
+              // Calcola numero settimana dal primo giorno reale della riga
+              const firstReal = row.find(d => d !== null);
+              const weekNum = firstReal ? getISOWeek(new Date(year, month, firstReal)) : null;
               return (
-                <div key={i} onClick={() => handleCellClick(dStr, isWeekend, closure, dayReqs)} className={'h-16 border border-slate-100 p-1 rounded-xl transition-all flex flex-col ' + cellBg + ((!isWeekend && !closure && user.role !== 'CEO') ? ' cursor-pointer active:bg-blue-50' : ' cursor-default')}>
-                  <span className={'text-[10px] font-bold shrink-0 ' + (isWeekend ? 'text-red-300' : closure ? (closure.contaComeFerie ? 'text-purple-400' : 'text-slate-400') : 'text-slate-400')}>{i+1}</span>
-                  <div className="overflow-y-auto flex-1 space-y-0.5 mt-0.5">
-                    {closure && <div className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + (closure.contaComeFerie ? 'bg-purple-400' : 'bg-slate-400')}>{closure.descrizione || 'Chiusura'}</div>}
-                    {dayReqs.map(r => (
-                      <div key={r.id} className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + getTypeBadgeColor(r.type, r.status)}>
-                        {r.userName.split(' ')[0]}{r.type !== 'ferie' && r.type !== 'malattia' ? ' (' + getTypeLabel(r.type)[0] + ')' : ''}
-                      </div>
-                    ))}
+                <div key={ri} className="grid gap-0.5 mb-0.5" style={{gridTemplateColumns: '24px repeat(7, 1fr)'}}>
+                  <div className="h-16 flex items-center justify-center">
+                    {weekNum && <span className="text-[9px] font-black text-slate-300 leading-none">{weekNum}</span>}
                   </div>
+                  {row.map((day, di) => {
+                    if (!day) return <div key={di} className="h-16 bg-slate-50/50 rounded-xl"></div>;
+                    const dStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+                    const isWeekend = new Date(dStr).getDay() === 0 || new Date(dStr).getDay() === 6;
+                    const closure = getClosureForDate(dStr);
+                    const dayReqs = visibleRequests.filter(r => r.dates && r.dates.includes(dStr)).slice().sort((a, b) => (a.createdAt||'').localeCompare(b.createdAt||''));
+                    let cellBg = 'bg-white';
+                    if (isWeekend) cellBg = 'bg-red-50/30';
+                    else if (closure) cellBg = closure.contaComeFerie ? 'bg-purple-50' : 'bg-slate-100';
+                    return (
+                      <div key={di} onClick={() => handleCellClick(dStr, isWeekend, closure, dayReqs)} className={'h-16 border border-slate-100 p-1 rounded-xl transition-all flex flex-col ' + cellBg + ((!isWeekend && !closure && user.role !== 'CEO') ? ' cursor-pointer active:bg-blue-50' : ' cursor-default')}>
+                        <span className={'text-[12px] font-bold shrink-0 ' + (isWeekend ? 'text-red-300' : closure ? (closure.contaComeFerie ? 'text-purple-400' : 'text-slate-400') : 'text-slate-400')}>{day}</span>
+                        <div className="overflow-y-auto flex-1 space-y-0.5 mt-0.5">
+                          {closure && <div className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + (closure.contaComeFerie ? 'bg-purple-400' : 'bg-slate-400')}>{closure.descrizione || 'Chiusura'}</div>}
+                          {dayReqs.map(r => (
+                            <div key={r.id} className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + getTypeBadgeColor(r.type, r.status)}>
+                              {r.userName.split(' ')[0]}{r.type !== 'ferie' && r.type !== 'malattia' ? ' (' + getTypeLabel(r.type)[0] + ')' : ''}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               );
-            })}
-          </div>
+            });
+          })()}
         </div>
 
         {/* Legenda */}
