@@ -383,8 +383,8 @@ export default function App() {
     const [modifyMode, setModifyMode] = useState(false);
     const [modifyForm, setModifyForm] = useState({ start: '', end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00' });
     const [recipientModal, setRecipientModal] = useState(null);
-    const [trasfertaStep, setTrasfertaStep] = useState(null); // 'responsabile' | 'mirco'
-    const [dayDetailModal, setDayDetailModal] = useState(null); // { date, requests }
+    const [trasfertaStep, setTrasfertaStep] = useState(null);
+    const [dayDetailModal, setDayDetailModal] = useState(null);
 
     const month = currentDate.getMonth();
     const year = currentDate.getFullYear();
@@ -491,6 +491,7 @@ export default function App() {
       const dates = buildDates(selection, form.end);
       if (dates.length === 0) return alert('Seleziona giorni lavorativi');
       const resp1 = user && user.resp1 && user.resp1 !== '/' ? user.resp1 : null;
+      const firstRecipient = resp1 || 'Mirco Ronci';
       const initialStatus = resp1 ? 'pendente_responsabile' : 'pendente_mirco';
       const newReq = {
         userId: user.id, userName: user.name, type: 'trasferta',
@@ -546,7 +547,6 @@ export default function App() {
     const handleCellClick = (dStr, isWeekend, closure, dayReqs) => {
       if (isWeekend || closure) return;
 
-      // CEO, admin e responsabile in modalità "tutti" o "dipendente specifico" → mostra esploso
       const isViewingOthers = user.role === 'CEO' ||
         (user.role === 'amministratore') ||
         (user.role === 'responsabile' && calFilter !== 'mine');
@@ -593,7 +593,6 @@ export default function App() {
         <BottomSheet>
           <h3 className="text-xl font-black uppercase italic mb-4">{getTypeLabel(requestType)}</h3>
           <div className="space-y-3">
-            {/* Tipo selector */}
             <div className="grid grid-cols-3 gap-2 mb-2">
               {['ferie', 'malattia', 'permesso'].map(t => (
                 <button key={t} onClick={() => setRequestType(t)} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all ' + (requestType === t ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500')}>{getTypeLabel(t)}</button>
@@ -741,6 +740,9 @@ export default function App() {
             <button onClick={() => setDayDetailModal(null)} className="w-full bg-slate-100 text-slate-400 py-4 rounded-2xl font-black uppercase text-sm mt-5">Chiudi</button>
           </BottomSheet>
         )}
+
+        {/* ✅ FIX: guardia recipientModal aggiunta — era null al login e causava il crash */}
+        {recipientModal && (
           <BottomSheet>
             <h3 className="text-xl font-black uppercase italic mb-2">Invia a chi?</h3>
             <p className="text-sm text-slate-400 font-bold mb-6">Scegli il destinatario della richiesta</p>
@@ -794,9 +796,7 @@ export default function App() {
     const myHistory = notifications.filter(n => n.to === user.name);
 
     const resolve = async (req, status) => {
-      // Gestione trasferta a due step
       if (req.type === 'trasferta' && status === 'approvato' && req.status === 'pendente_responsabile') {
-        // Primo step: responsabile approva, passa a Mirco
         await updateDoc(doc(db, 'requests', req.id), { status: 'pendente_mirco', assignedTo: 'Mirco Ronci' });
         await addDoc(collection(db, 'notifications'), {
           to: 'Mirco Ronci',
