@@ -489,7 +489,7 @@ export default function App() {
       if (r.type === 'permesso') return 'P';
       if (r.type === 'malattia') return 'M';
       if (r.type === 'trasferta') return 'T';
-      if (r.type === 'fuorisede') return r.mancataTimbratura ? 'MR' : 'FS';
+      if (r.type === 'fuorisede') return r.mancataTimbratura ? 'MM' : 'FS';
       return '';
     };
 
@@ -702,7 +702,7 @@ export default function App() {
               <div><label className="text-[10px] font-black text-slate-400 uppercase">Data</label><input type="date" value={selection} readOnly className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
 
               {(isFerie || isTrasferta) && (
-                <div className="mt-3"><label className="text-[10px] font-black text-slate-400 uppercase">Data fine {isTrasferta ? '' : '(opzionale)'}</label><input type="date" onChange={e => setForm({...form, end: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
+                <div className="mt-3"><label className="text-[10px] font-black text-slate-400 uppercase">Data fine {isTrasferta ? '' : '(opzionale)'}</label><input type="date" min={selection} defaultValue={selection} onChange={e => setForm({...form, end: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
               )}
 
               {(isPermesso || isFuoriSede) && (
@@ -1184,6 +1184,10 @@ export default function App() {
   };
 
   const LogView = () => {
+    const [filters, setFilters] = useState({ username: '', date: '', recipient: '', type: '', action: '' });
+    const [sortCol, setSortCol] = useState('code');
+    const [sortDir, setSortDir] = useState('desc');
+
     const handleClearLog = async () => {
       if (!window.confirm('Cancellare tutto il registro operazioni?')) return;
       const snap = await getDocs(collection(db, 'auditLog'));
@@ -1195,32 +1199,113 @@ export default function App() {
       return map[a] || a;
     };
 
+    const handleSort = (col) => {
+      if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+      else { setSortCol(col); setSortDir('asc'); }
+    };
+
+    const SortIcon = ({ col }) => {
+      if (sortCol !== col) return <span className="text-slate-300 ml-1">↕</span>;
+      return <span className="text-blue-500 ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+    };
+
+    const filtered = auditLogs
+      .filter(l =>
+        (!filters.username || (l.username||'').toLowerCase().includes(filters.username.toLowerCase())) &&
+        (!filters.date     || (l.date||'').includes(filters.date)) &&
+        (!filters.recipient|| (l.recipient||'').toLowerCase().includes(filters.recipient.toLowerCase())) &&
+        (!filters.type     || (l.type||'').toLowerCase().includes(filters.type.toLowerCase())) &&
+        (!filters.action   || (l.action||'').toLowerCase().includes(filters.action.toLowerCase()))
+      )
+      .sort((a, b) => {
+        const va = (a[sortCol] || '').toString();
+        const vb = (b[sortCol] || '').toString();
+        return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      });
+
+    const FilterInput = ({ col, placeholder }) => (
+      <input
+        type="text"
+        value={filters[col]}
+        onChange={e => setFilters(f => ({ ...f, [col]: e.target.value }))}
+        placeholder={placeholder}
+        className="w-full mt-1 p-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold outline-none placeholder-slate-300"
+      />
+    );
+
+    const hasFilters = Object.values(filters).some(v => v !== '');
+
     return (
       <div className="space-y-4 pb-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl font-black uppercase italic">Registro Operazioni</h2>
-          <button onClick={handleClearLog} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-2xl font-black uppercase text-xs">
-            <Trash2 size={14}/> Svuota
-          </button>
+          <div className="flex gap-2">
+            {hasFilters && (
+              <button onClick={() => setFilters({ username: '', date: '', recipient: '', type: '', action: '' })}
+                className="flex items-center gap-1 bg-slate-100 text-slate-500 px-3 py-2 rounded-2xl font-black uppercase text-xs">
+                <X size={12}/> Reset filtri
+              </button>
+            )}
+            <button onClick={handleClearLog} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-2xl font-black uppercase text-xs">
+              <Trash2 size={14}/> Svuota
+            </button>
+          </div>
         </div>
+
+        <p className="text-[10px] font-bold text-slate-400">
+          {filtered.length} di {auditLogs.length} operazioni
+          {hasFilters && ' (filtrate)'}
+        </p>
+
         {auditLogs.length === 0 && <p className="text-slate-400 text-sm font-bold text-center py-8">Nessuna operazione registrata.</p>}
+
         <div className="bg-white rounded-3xl border overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left" style={{minWidth: '700px'}}>
+            <table className="w-full text-left" style={{minWidth: '750px'}}>
               <thead className="bg-slate-50 border-b">
                 <tr className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                  <th className="p-3">Codice</th>
-                  <th className="p-3">Username</th>
-                  <th className="p-3">Data</th>
-                  <th className="p-3">Orario</th>
-                  <th className="p-3">Destinatario</th>
-                  <th className="p-3">Tipo</th>
-                  <th className="p-3">Azione</th>
+                  {/* Codice — solo sort */}
+                  <th className="p-3 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('code')}>
+                    Codice <SortIcon col="code"/>
+                  </th>
+                  {/* Username */}
+                  <th className="p-3 min-w-[110px]">
+                    <div className="cursor-pointer select-none" onClick={() => handleSort('username')}>Username <SortIcon col="username"/></div>
+                    <FilterInput col="username" placeholder="Filtra..."/>
+                  </th>
+                  {/* Data */}
+                  <th className="p-3 min-w-[100px]">
+                    <div className="cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('date')}>Data <SortIcon col="date"/></div>
+                    <FilterInput col="date" placeholder="gg/mm/aaaa"/>
+                  </th>
+                  {/* Orario */}
+                  <th className="p-3 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('time')}>
+                    Orario <SortIcon col="time"/>
+                  </th>
+                  {/* Destinatario */}
+                  <th className="p-3 min-w-[110px]">
+                    <div className="cursor-pointer select-none" onClick={() => handleSort('recipient')}>Destinatario <SortIcon col="recipient"/></div>
+                    <FilterInput col="recipient" placeholder="Filtra..."/>
+                  </th>
+                  {/* Tipo */}
+                  <th className="p-3 min-w-[90px]">
+                    <div className="cursor-pointer select-none" onClick={() => handleSort('type')}>Tipo <SortIcon col="type"/></div>
+                    <FilterInput col="type" placeholder="ferie..."/>
+                  </th>
+                  {/* Azione */}
+                  <th className="p-3 min-w-[120px]">
+                    <div className="cursor-pointer select-none" onClick={() => handleSort('action')}>Azione <SortIcon col="action"/></div>
+                    <FilterInput col="action" placeholder="appr..."/>
+                  </th>
+                  {/* Nota */}
                   <th className="p-3">Nota</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {auditLogs.map(l => (
+                {filtered.length === 0 && (
+                  <tr><td colSpan={8} className="p-6 text-center text-slate-400 text-sm font-bold">Nessun risultato per i filtri applicati.</td></tr>
+                )}
+                {filtered.map(l => (
                   <tr key={l.id} className="hover:bg-slate-50/50 text-xs">
                     <td className="p-3 font-mono text-[9px] text-slate-500 whitespace-nowrap">{l.code}</td>
                     <td className="p-3 font-black text-slate-800 uppercase">{l.username}</td>
