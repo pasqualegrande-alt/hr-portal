@@ -152,7 +152,7 @@ export default function App() {
   // BottomSheet component (shared)
   const BottomSheet = ({ children, onClose }) => (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-end justify-center z-50">
-      <div className="bg-white p-6 rounded-t-[2.5rem] w-full max-w-lg shadow-2xl text-slate-800 pb-10 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white p-6 rounded-t-[2.5rem] w-full max-w-lg shadow-2xl text-slate-800 pb-12 max-h-[85vh] overflow-y-auto">
         <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-6"></div>
         {children}
       </div>
@@ -876,7 +876,27 @@ export default function App() {
                 ) : (
                   <p className="text-xs text-slate-500 font-bold mb-2">{reqModal.dates?.length} giorni</p>
                 )}
-                <p className="text-xs font-black mb-5"><span className={reqModal.status === 'approvato' ? 'text-green-500' : reqModal.status === 'comunicato' ? 'text-teal-500' : 'text-orange-500'}>{reqModal.status === 'pendente_responsabile' ? 'In attesa responsabile' : reqModal.status === 'pendente_mirco' ? 'In attesa Mirco' : reqModal.status === 'comunicato' ? 'Comunicato' : reqModal.status}</span></p>
+                <div className="mb-5 space-y-2">
+                  <p className="text-xs font-black">
+                    <span className={
+                      reqModal.status === 'approvato' || reqModal.status === 'comunicato' ? 'text-green-500' :
+                      reqModal.status === 'rifiutato' ? 'text-red-500' : 'text-orange-500'
+                    }>
+                      {reqModal.status === 'pendente_responsabile' ? 'In attesa responsabile' :
+                       reqModal.status === 'pendente_mirco' ? 'In attesa Mirco' :
+                       reqModal.status === 'comunicato' ? 'Comunicato' :
+                       reqModal.status === 'approvato' ? '✓ Approvato' :
+                       reqModal.status === 'rifiutato' ? '✗ Rifiutato' :
+                       reqModal.status}
+                    </span>
+                  </p>
+                  {reqModal.notaResponsabile && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3">
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Nota del responsabile</p>
+                      <p className="text-sm font-bold text-slate-700 italic">"{reqModal.notaResponsabile}"</p>
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-3">
                   {reqModal.type !== 'fuorisede' && reqModal.type !== 'permesso' && (
                     <button onClick={() => setModifyMode(true)} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 text-base"><Edit3 size={18}/> Modifica</button>
@@ -925,7 +945,10 @@ export default function App() {
         });
         return;
       }
-      await updateDoc(doc(db, 'requests', req.id), { status });
+      await updateDoc(doc(db, 'requests', req.id), {
+        status,
+        ...(approvalNotes[req.id] ? { notaResponsabile: approvalNotes[req.id] } : {})
+      });
       await addDoc(collection(db, 'notifications'), {
         to: req.userName,
         message: (() => {
