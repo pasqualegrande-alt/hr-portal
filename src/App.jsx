@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, Bell, LogOut, ChevronLeft, ChevronRight, Trash2, Edit3, CheckCircle, XCircle, UserPlus, Save, X, Building2, GitBranch, Briefcase, Clock } from 'lucide-react';
+import { Calendar, Users, Bell, LogOut, ChevronLeft, ChevronRight, Trash2, Edit3, CheckCircle, XCircle, UserPlus, Save, X, Building2, GitBranch, Briefcase, Clock, ClipboardList, RefreshCw } from 'lucide-react';
 import { db, getMessagingInstance } from './firebase';
 import { collection, doc, setDoc, getDocs, onSnapshot, deleteDoc, updateDoc, addDoc, query, orderBy } from 'firebase/firestore';
 import { getToken, onMessage } from 'firebase/messaging';
@@ -61,6 +61,7 @@ export default function App() {
   const [closures, setClosures] = useState([]);
   const [polivalenze, setPolivalenze] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [auditLogs, setAuditLogs] = useState([]);
 
   useEffect(() => {
     const initUsers = async () => {
@@ -79,7 +80,8 @@ export default function App() {
     const unsubNotifs = onSnapshot(query(collection(db, 'notifications'), orderBy('createdAt', 'desc')), snap => setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubClosures = onSnapshot(collection(db, 'closures'), snap => setClosures(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubPoli = onSnapshot(collection(db, 'polivalenze'), snap => setPolivalenze(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => { unsubUsers(); unsubReqs(); unsubNotifs(); unsubClosures(); unsubPoli(); };
+    const unsubAudit = onSnapshot(query(collection(db, 'auditLog'), orderBy('createdAt', 'desc')), snap => setAuditLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return () => { unsubUsers(); unsubReqs(); unsubNotifs(); unsubClosures(); unsubPoli(); unsubAudit(); };
   }, []);
 
   useEffect(() => {
@@ -147,6 +149,28 @@ export default function App() {
         }
       }
     }
+  };
+
+  const writeAuditLog = async ({ action, fromUser, toUser, type, nota = '' }) => {
+    try {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+      const code = [now.getFullYear(), pad(now.getMonth()+1), pad(now.getDate()), pad(now.getHours()), pad(now.getMinutes()), pad(now.getSeconds())].join('.') + '.' + letter;
+      const dateStr = pad(now.getDate()) + '/' + pad(now.getMonth()+1) + '/' + now.getFullYear();
+      const timeStr = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+      await addDoc(collection(db, 'auditLog'), {
+        code,
+        username: fromUser?.username || fromUser?.name || '-',
+        date: dateStr,
+        time: timeStr,
+        recipient: toUser || '-',
+        type: type || '-',
+        action: action || '-',
+        nota: nota || '',
+        createdAt: now.toISOString()
+      });
+    } catch(e) { console.log('Audit log error:', e); }
   };
 
   // BottomSheet component (shared)
@@ -490,6 +514,7 @@ export default function App() {
         });
       }
       await checkPolivalenza(dates, user);
+      await writeAuditLog({ action: 'inviata', fromUser: user, toUser: assignedTo, type: form.type, nota: form.nota || '' });
       setSelection(null); setRecipientModal(null);
     };
 
@@ -510,6 +535,7 @@ export default function App() {
         message: 'Richiesta di permesso di ' + user.name + ' il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + ' (' + formatMinutes(mins) + ')' + (form.nota ? ' — Nota: ' + form.nota : ''),
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), requestId: reqRef.id, read: false
       });
+      await writeAuditLog({ action: 'inviata', fromUser: user, toUser: assignedTo, type: 'permesso', nota: form.nota || '' });
       setSelection(null);
     };
 
@@ -532,6 +558,7 @@ export default function App() {
         to: assignedTo, message: msg,
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
       });
+      await writeAuditLog({ action: 'inviata', fromUser: user, toUser: assignedTo, type: 'fuorisede', nota: form.nota || '' });
       setSelection(null);
     };
 
@@ -553,6 +580,7 @@ export default function App() {
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), requestId: reqRef.id, read: false
       });
       await checkPolivalenza(dates, user);
+      await writeAuditLog({ action: 'inviata', fromUser: user, toUser: firstRecipient, type: 'trasferta', nota: form.nota || '' });
       setSelection(null);
     };
 
@@ -583,6 +611,7 @@ export default function App() {
         })(),
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
       });
+      await writeAuditLog({ action: 'cancellata', fromUser: user, toUser: req.assignedTo, type: req.type });
       setReqModal(null);
     };
 
@@ -601,6 +630,7 @@ export default function App() {
         })(),
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
       });
+      await writeAuditLog({ action: 'modificata', fromUser: user, toUser: req.assignedTo, type: req.type });
       setReqModal(null); setModifyMode(false);
     };
 
@@ -778,9 +808,11 @@ export default function App() {
                           {closure && <div className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + (closure.contaComeFerie ? 'bg-purple-400' : 'bg-slate-400')}>Chiusura az.</div>}
                           {dayReqs.map(r => {
                             const sigla = getSigla(r);
+                            const reqUser = users.find(u => u.id === r.userId);
+                            const displayName = reqUser?.username || r.userName.split(' ')[0];
                             const label = isPersonalView
                               ? getTypeLabel(r.type)
-                              : (r.userName.split(' ')[0] + (sigla ? ' ' + sigla : ''));
+                              : (displayName + (sigla ? ' ' + sigla : ''));
                             return (
                               <div key={r.id} className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + getTypeBadgeColor(r.type, r.status)}>
                                 {label}
@@ -949,6 +981,7 @@ export default function App() {
         status,
         ...(approvalNotes[req.id] ? { notaResponsabile: approvalNotes[req.id] } : {})
       });
+      await writeAuditLog({ action: status, fromUser: user, toUser: req.userName, type: req.type, nota: approvalNotes[req.id] || '' });
       await addDoc(collection(db, 'notifications'), {
         to: req.userName,
         message: (() => {
@@ -966,6 +999,7 @@ export default function App() {
 
     const approveFuoriSede = async (req) => {
       await updateDoc(doc(db, 'requests', req.id), { status: 'approvato' });
+      await writeAuditLog({ action: 'approvata', fromUser: user, toUser: req.userName, type: 'fuorisede' });
       await addDoc(collection(db, 'notifications'), {
         to: req.userName,
         message: 'Mancata timbratura del ' + formatDate(req.dates?.[0]) + ' APPROVATA.',
@@ -1012,6 +1046,44 @@ export default function App() {
             />
           </div>
         ))}
+        {/* Richieste rifiutate — possibilità di rivalutare */}
+        {requests.filter(r => r.assignedTo === user.name && r.status === 'rifiutato').length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Richieste rifiutate — Rivaluta</p>
+            {requests.filter(r => r.assignedTo === user.name && r.status === 'rifiutato').map(r => (
+              <div key={r.id} className="bg-white p-5 rounded-3xl border-2 border-red-100 shadow-sm space-y-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-black text-slate-800 uppercase text-sm">{r.userName}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{r.type} · {r.dates?.length || 0} giorni</p>
+                    {r.dates?.[0] && <p className="text-[10px] font-bold text-slate-500 mt-0.5">{formatDate(r.dates[0])}{r.dates.length > 1 ? ' → ' + formatDate(r.dates[r.dates.length-1]) : ''}</p>}
+                    {r.notaResponsabile && <p className="text-xs text-red-400 font-bold mt-1 italic">Nota precedente: "{r.notaResponsabile}"</p>}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm('Vuoi approvare questa richiesta precedentemente rifiutata?')) return;
+                      await updateDoc(doc(db, 'requests', r.id), { status: 'approvato', notaResponsabile: '' });
+                      await writeAuditLog({ action: 'rivalutata→approvata', fromUser: user, toUser: r.userName, type: r.type });
+                      await addDoc(collection(db, 'notifications'), {
+                        to: r.userName,
+                        message: (() => {
+                          const typeLabel = r.type === 'trasferta' ? 'trasferta' : r.type === 'permesso' ? 'permesso' : r.type === 'fuorisede' ? 'fuori sede' : 'ferie';
+                          const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
+                          return 'Richiesta di ' + typeLabel + dateInfo + ' APPROVATA (rivalutazione)';
+                        })(),
+                        date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
+                      });
+                    }}
+                    className="shrink-0 flex items-center gap-2 bg-green-500 text-white px-4 py-3 rounded-2xl font-black text-xs uppercase"
+                  >
+                    <RefreshCw size={16}/> Approva
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="bg-white rounded-3xl border p-5 space-y-4">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-3">Cronologia</p>
           {myHistory.length === 0 && <p className="text-slate-400 text-sm font-bold">Nessuna notifica.</p>}
@@ -1027,6 +1099,63 @@ export default function App() {
               </div>
             );
           })}
+        </div>
+      </div>
+    );
+  };
+
+  const LogView = () => {
+    const handleClearLog = async () => {
+      if (!window.confirm('Cancellare tutto il registro operazioni?')) return;
+      const snap = await getDocs(collection(db, 'auditLog'));
+      await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'auditLog', d.id))));
+    };
+
+    const actionLabel = (a) => {
+      const map = { inviata: '📤 Inviata', approvata: '✅ Approvata', rifiutata: '❌ Rifiutata', cancellata: '🗑 Cancellata', modificata: '✏️ Modificata', 'rivalutata→approvata': '🔄 Rivalutata→Appr.' };
+      return map[a] || a;
+    };
+
+    return (
+      <div className="space-y-4 pb-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-black uppercase italic">Registro Operazioni</h2>
+          <button onClick={handleClearLog} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-2xl font-black uppercase text-xs">
+            <Trash2 size={14}/> Svuota
+          </button>
+        </div>
+        {auditLogs.length === 0 && <p className="text-slate-400 text-sm font-bold text-center py-8">Nessuna operazione registrata.</p>}
+        <div className="bg-white rounded-3xl border overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left" style={{minWidth: '700px'}}>
+              <thead className="bg-slate-50 border-b">
+                <tr className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="p-3">Codice</th>
+                  <th className="p-3">Username</th>
+                  <th className="p-3">Data</th>
+                  <th className="p-3">Orario</th>
+                  <th className="p-3">Destinatario</th>
+                  <th className="p-3">Tipo</th>
+                  <th className="p-3">Azione</th>
+                  <th className="p-3">Nota</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {auditLogs.map(l => (
+                  <tr key={l.id} className="hover:bg-slate-50/50 text-xs">
+                    <td className="p-3 font-mono text-[9px] text-slate-500 whitespace-nowrap">{l.code}</td>
+                    <td className="p-3 font-black text-slate-800 uppercase">{l.username}</td>
+                    <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{l.date}</td>
+                    <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{l.time}</td>
+                    <td className="p-3 font-bold text-slate-600">{l.recipient}</td>
+                    <td className="p-3"><span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[9px] font-black uppercase">{l.type}</span></td>
+                    <td className="p-3 whitespace-nowrap font-bold text-slate-700">{actionLabel(l.action)}</td>
+                    <td className="p-3 text-slate-500 italic max-w-[150px] truncate">{l.nota || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     );
@@ -1073,6 +1202,7 @@ export default function App() {
           {view === 'notifications' && <NotificationsView />}
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && showAdmin && <ClosuresView />}
+          {view === 'log' && showAdmin && <LogView />}
         </div>
       </main>
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white flex z-30 border-t border-slate-800">
@@ -1091,6 +1221,11 @@ export default function App() {
         {showAdmin && (
           <button onClick={() => setView('closures')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'closures' ? 'text-blue-400' : 'text-slate-500')}>
             <Building2 size={22}/><span className="text-[10px] font-black uppercase">Chiusure</span>
+          </button>
+        )}
+        {showAdmin && (
+          <button onClick={() => setView('log')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'log' ? 'text-blue-400' : 'text-slate-500')}>
+            <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Registro</span>
           </button>
         )}
       </nav>
