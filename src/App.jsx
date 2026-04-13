@@ -114,12 +114,26 @@ export default function App() {
       );
       if (overlapping.length > 0) {
         const responsibles = new Set();
-        const allInvolved = [submittingUser, ...overlapping.map(r => users.find(u => u.name === r.userName)).filter(Boolean)];
+        // Deduplicazione: un solo oggetto per nome dipendente
+        const involvedMap = new Map();
+        involvedMap.set(submittingUser.name, submittingUser);
+        for (const r of overlapping) {
+          const u = users.find(u => u.name === r.userName);
+          if (u && !involvedMap.has(u.name)) involvedMap.set(u.name, u);
+        }
+        const allInvolved = [...involvedMap.values()];
+        // Calcola le date di sovrapposizione effettiva
+        const overlapDates = submittedDates.filter(d =>
+          overlapping.some(r => r.dates && r.dates.includes(d))
+        ).sort();
+        const overlapDateStr = overlapDates.length === 1
+          ? 'IL ' + formatDate(overlapDates[0])
+          : 'DAL ' + formatDate(overlapDates[0]) + ' AL ' + formatDate(overlapDates[overlapDates.length - 1]);
         const involvedNames = allInvolved.map(u => u.name ? u.name.toUpperCase() : '').filter(Boolean);
         const namesStr = involvedNames.length > 1
           ? involvedNames.slice(0, -1).join(', ') + ' E ' + involvedNames[involvedNames.length - 1]
           : involvedNames[0] || '';
-        const msg = `ATTENZIONE!!! DEI DIPENDENTI CON MANSIONI EQUIVALENTI STANNO CHIEDENDO LE FERIE NELLO STESSO PERIODO. VERIFICA PRIMA DI APPROVARE LE FERIE DI ${namesStr} PER EVITARE DI LASCIARE SCOPERTA UNA O PIÙ FUNZIONI!`;
+        const msg = `ATTENZIONE!!! DEI DIPENDENTI CON MANSIONI EQUIVALENTI STANNO CHIEDENDO LE FERIE NELLO STESSO PERIODO. VERIFICA PRIMA DI APPROVARE LE FERIE DI ${namesStr} (SOVRAPPOSIZIONE ${overlapDateStr}) PER EVITARE DI LASCIARE SCOPERTA UNA O PIÙ FUNZIONI!`;
         for (const u of allInvolved) {
           if (u && u.resp1 && u.resp1 !== '/') responsibles.add(u.resp1);
           if (u && u.resp2 === 'Mirco Ronci') responsibles.add('Mirco Ronci');
