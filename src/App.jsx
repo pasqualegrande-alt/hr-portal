@@ -411,7 +411,7 @@ export default function App() {
     const [calFilter, setCalFilter] = useState('mine');
     const [selection, setSelection] = useState(null);
     const [requestType, setRequestType] = useState('ferie');
-    const [form, setForm] = useState({ end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false });
+    const [form, setForm] = useState({ end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '' });
     const [reqModal, setReqModal] = useState(null);
     const [modifyMode, setModifyMode] = useState(false);
     const [modifyForm, setModifyForm] = useState({ start: '', end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00' });
@@ -453,12 +453,21 @@ export default function App() {
     };
 
     const getTypeBadgeColor = (type, status) => {
-      if (type === 'trasferta') return status === 'approvato' ? 'bg-blue-600' : status === 'pendente_mirco' ? 'bg-blue-400' : 'bg-blue-300';
-      if (type === 'fuorisede') return 'bg-teal-500';
-      if (type === 'malattia') return 'bg-red-400';
-      if (type === 'permesso') return 'bg-yellow-500';
-      return status === 'approvato' ? 'bg-green-500' : 'bg-orange-500';
+      if (status === 'rifiutato') return 'bg-red-500';
+      if (status === 'approvato' || status === 'comunicato' || type === 'malattia') return 'bg-green-500';
+      return 'bg-orange-500';
     };
+
+    const getSigla = (r) => {
+      if (r.type === 'ferie') return 'F';
+      if (r.type === 'permesso') return 'P';
+      if (r.type === 'malattia') return 'M';
+      if (r.type === 'trasferta') return 'T';
+      if (r.type === 'fuorisede') return r.mancataTimbratura ? 'MR' : 'FS';
+      return '';
+    };
+
+    const isPersonalView = user.role === 'dipendente' || calFilter === 'mine';
 
     const doSendFerie = async (assignedTo) => {
       const dates = buildDates(selection, form.end);
@@ -466,7 +475,8 @@ export default function App() {
       const newReq = {
         userId: user.id, userName: user.name, type: form.type, dates,
         status: form.type === 'malattia' ? 'approvato' : 'pendente',
-        assignedTo, createdAt: new Date().toISOString()
+        assignedTo, createdAt: new Date().toISOString(),
+        ...(form.nota ? { nota: form.nota } : {})
       };
       const reqRef = await addDoc(collection(db, 'requests'), newReq);
       if (newReq.status === 'pendente') {
@@ -475,7 +485,7 @@ export default function App() {
           : 'dal ' + formatDate(dates[0]) + ' al ' + formatDate(dates[dates.length - 1]) + ' (' + dates.length + ' giorni)';
         await addDoc(collection(db, 'notifications'), {
           to: assignedTo,
-          message: 'Richiesta di ' + form.type + ' di ' + user.name + ' ' + dateRange,
+          message: 'Richiesta di ' + form.type + ' di ' + user.name + ' ' + dateRange + (form.nota ? ' — Nota: ' + form.nota : ''),
           date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), requestId: reqRef.id, read: false
         });
       }
@@ -491,12 +501,13 @@ export default function App() {
         userId: user.id, userName: user.name, type: 'permesso',
         dates: [selection], timeFrom: form.timeFrom, timeTo: form.timeTo,
         durationMinutes: mins, status: 'pendente', assignedTo,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        ...(form.nota ? { nota: form.nota } : {})
       };
       const reqRef = await addDoc(collection(db, 'requests'), newReq);
       await addDoc(collection(db, 'notifications'), {
         to: assignedTo,
-        message: 'Richiesta di permesso di ' + user.name + ' il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + ' (' + formatMinutes(mins) + ')',
+        message: 'Richiesta di permesso di ' + user.name + ' il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + ' (' + formatMinutes(mins) + ')' + (form.nota ? ' — Nota: ' + form.nota : ''),
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), requestId: reqRef.id, read: false
       });
       setSelection(null);
@@ -612,7 +623,7 @@ export default function App() {
         setReqModal(myReq); setModifyMode(false);
         setModifyForm({ start: myReq.dates[0], end: myReq.dates[myReq.dates.length - 1], type: myReq.type, timeFrom: myReq.timeFrom || '09:00', timeTo: myReq.timeTo || '10:00' });
       } else {
-        setForm({ end: '', type: requestType, timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false });
+        setForm({ end: '', type: requestType, timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '' });
         setSelection(dStr);
       }
     };
@@ -692,6 +703,16 @@ export default function App() {
               )}
             </div>
 
+            <div className="border-t pt-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase">Nota (opzionale)</label>
+              <textarea
+                placeholder="Aggiungi un messaggio per il responsabile..."
+                value={form.nota}
+                onChange={e => setForm({...form, nota: e.target.value})}
+                className="w-full mt-1 p-4 bg-slate-50 border rounded-2xl font-bold outline-none text-sm resize-none"
+                rows={2}
+              />
+            </div>
             <button onClick={handleSend} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-base mt-2">Invia Richiesta</button>
             <button onClick={() => setSelection(null)} className="w-full bg-slate-100 text-slate-400 py-4 rounded-2xl font-black uppercase text-sm">Annulla</button>
           </div>
@@ -754,12 +775,18 @@ export default function App() {
                       <div key={di} onClick={() => handleCellClick(dStr, isWeekend, closure, dayReqs)} className={'h-16 border border-slate-100 p-1 rounded-xl transition-all flex flex-col ' + cellBg + ((!isWeekend && !closure && user.role !== 'CEO') ? ' cursor-pointer active:bg-blue-50' : ' cursor-default')}>
                         <span className={'text-[12px] font-bold shrink-0 ' + (isWeekend ? 'text-red-300' : closure ? (closure.contaComeFerie ? 'text-purple-400' : 'text-slate-400') : 'text-slate-400')}>{day}</span>
                         <div className="overflow-y-auto flex-1 space-y-0.5 mt-0.5">
-                          {closure && <div className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + (closure.contaComeFerie ? 'bg-purple-400' : 'bg-slate-400')}>{closure.descrizione || 'Chiusura'}</div>}
-                          {dayReqs.map(r => (
-                            <div key={r.id} className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + getTypeBadgeColor(r.type, r.status)}>
-                              {r.userName.split(' ')[0]}{r.type !== 'ferie' && r.type !== 'malattia' ? ' (' + getTypeLabel(r.type)[0] + ')' : ''}
-                            </div>
-                          ))}
+                          {closure && <div className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + (closure.contaComeFerie ? 'bg-purple-400' : 'bg-slate-400')}>Chiusura az.</div>}
+                          {dayReqs.map(r => {
+                            const sigla = getSigla(r);
+                            const label = isPersonalView
+                              ? getTypeLabel(r.type)
+                              : (r.userName.split(' ')[0] + (sigla ? ' ' + sigla : ''));
+                            return (
+                              <div key={r.id} className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + getTypeBadgeColor(r.type, r.status)}>
+                                {label}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -771,14 +798,21 @@ export default function App() {
         </div>
 
         {/* Legenda */}
-        <div className="flex gap-2 mt-3 flex-wrap">
-          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span className="w-3 h-3 rounded bg-green-500 inline-block"></span>Ferie appr.</span>
-          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span className="w-3 h-3 rounded bg-orange-500 inline-block"></span>In attesa</span>
-          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span className="w-3 h-3 rounded bg-yellow-500 inline-block"></span>Permesso</span>
-          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span className="w-3 h-3 rounded bg-teal-500 inline-block"></span>Fuori sede</span>
-          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span className="w-3 h-3 rounded bg-blue-600 inline-block"></span>Trasferta</span>
-          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span className="w-3 h-3 rounded bg-red-400 inline-block"></span>Malattia</span>
-          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span className="w-3 h-3 rounded bg-purple-400 inline-block"></span>Chiusura</span>
+        <div className="mt-3 space-y-2">
+          <div className="flex gap-3 flex-wrap">
+            <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span className="w-3 h-3 rounded bg-green-500 inline-block"></span>Approvato / Malattia</span>
+            <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span className="w-3 h-3 rounded bg-orange-500 inline-block"></span>In attesa</span>
+            <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span className="w-3 h-3 rounded bg-red-500 inline-block"></span>Rifiutato</span>
+            <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span className="w-3 h-3 rounded bg-purple-400 inline-block"></span>Chiusura az.</span>
+          </div>
+          {!isPersonalView && (
+            <div className="flex gap-3 flex-wrap border-t border-slate-100 pt-2">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Sigle:</span>
+              {[['F','Ferie'],['P','Permesso'],['M','Malattia'],['T','Trasferta'],['FS','Fuori sede'],['MR','Mancata marcatura']].map(([s,l]) => (
+                <span key={s} className="text-[10px] font-bold text-slate-500"><span className="font-black text-slate-700">{s}</span> = {l}</span>
+              ))}
+            </div>
+          )}
         </div>
 
         {selection && renderRequestForm()}
@@ -869,6 +903,7 @@ export default function App() {
   };
 
   const NotificationsView = () => {
+    const [approvalNotes, setApprovalNotes] = useState({});
     const myPending = requests.filter(r => r.assignedTo === user.name && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco'));
     const myHistory = notifications.filter(n => n.to === user.name);
 
@@ -899,7 +934,8 @@ export default function App() {
             ? (req.dates.length === 1 ? ' del ' + formatDate(req.dates[0]) : ' dal ' + formatDate(req.dates[0]) + ' al ' + formatDate(req.dates[req.dates.length - 1]) + ' (' + req.dates.length + ' gg)')
             : '';
           const statusLabel = status === 'approvato' ? 'APPROVATA' : 'RIFIUTATA';
-          return 'Richiesta di ' + typeLabel + dateInfo + ' ' + statusLabel;
+          const nota = approvalNotes[req.id] || '';
+          return 'Richiesta di ' + typeLabel + dateInfo + ' ' + statusLabel + (nota ? ' — ' + nota : '');
         })(),
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
       });
@@ -925,12 +961,13 @@ export default function App() {
         <h2 className="text-xl font-black uppercase italic">Centro Notifiche</h2>
         {myPending.length === 0 && <p className="text-slate-400 text-sm font-bold">Nessuna richiesta in attesa.</p>}
         {myPending.map(r => (
-          <div key={r.id} className="bg-white p-5 rounded-3xl border-2 border-blue-100 shadow-sm">
+          <div key={r.id} className="bg-white p-5 rounded-3xl border-2 border-blue-100 shadow-sm space-y-3">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-black text-slate-800 uppercase text-sm">{r.userName}</p>
                 <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{getPendingLabel(r)}</p>
                 {r.timeFrom && <p className="text-[10px] font-bold text-slate-500 mt-0.5">{r.dates?.[0]} · {r.timeFrom} - {r.timeTo}</p>}
+                {r.nota && <p className="text-xs text-blue-600 font-bold mt-1 italic">"{r.nota}"</p>}
               </div>
               <div className="flex gap-2 shrink-0">
                 {r.type === 'fuorisede' && r.mancataTimbratura ? (
@@ -943,6 +980,13 @@ export default function App() {
                 )}
               </div>
             </div>
+            <textarea
+              placeholder="Nota opzionale (visibile al dipendente)..."
+              value={approvalNotes[r.id] || ''}
+              onChange={e => setApprovalNotes(n => ({...n, [r.id]: e.target.value}))}
+              className="w-full p-3 bg-slate-50 border rounded-2xl font-bold outline-none text-xs resize-none"
+              rows={2}
+            />
           </div>
         ))}
         <div className="bg-white rounded-3xl border p-5 space-y-4">
