@@ -442,6 +442,8 @@ export default function App() {
     const [recipientModal, setRecipientModal] = useState(null);
     const [trasfertaStep, setTrasfertaStep] = useState(null);
     const [dayDetailModal, setDayDetailModal] = useState(null);
+    const [dayActionReq, setDayActionReq] = useState(null);
+    const [dayActionNote, setDayActionNote] = useState('');
 
     const month = currentDate.getMonth();
     const year = currentDate.getFullYear();
@@ -850,37 +852,114 @@ export default function App() {
         {selection && renderRequestForm()}
 
         {dayDetailModal && (
-          <BottomSheet onClose={() => setDayDetailModal(null)}>
+          <BottomSheet onClose={() => { setDayDetailModal(null); setDayActionReq(null); setDayActionNote(''); }}>
             <h3 className="text-xl font-black uppercase italic mb-1">Dettaglio giorno</h3>
             <p className="text-xs text-slate-400 font-bold uppercase mb-5">
               {new Date(dayDetailModal.date + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
             <div className="space-y-3">
-              {dayDetailModal.reqs.map(r => (
-                <div key={r.id} className={'p-4 rounded-2xl border-l-4 ' + (r.status === 'approvato' ? 'border-green-500 bg-green-50' : r.status === 'comunicato' ? 'border-teal-500 bg-teal-50' : r.type === 'trasferta' ? 'border-blue-500 bg-blue-50' : 'border-orange-400 bg-orange-50')}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-black text-slate-800 text-sm uppercase">{r.userName}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={'px-2 py-0.5 rounded-full text-[10px] font-black uppercase text-white ' + getTypeBadgeColor(r.type, r.status)}>
-                          {getTypeLabel(r.type)}
-                        </span>
-                        <span className={'text-[10px] font-black uppercase ' + (r.status === 'approvato' ? 'text-green-600' : r.status === 'comunicato' ? 'text-teal-600' : r.status === 'pendente_mirco' ? 'text-blue-500' : r.status === 'pendente_responsabile' ? 'text-blue-400' : 'text-orange-500')}>
-                          {r.status === 'pendente_responsabile' ? 'Att. responsabile' : r.status === 'pendente_mirco' ? 'Att. Mirco' : r.status === 'comunicato' ? 'Comunicato' : r.status}
-                        </span>
+              {dayDetailModal.reqs.map(r => {
+                const canAct = user.role === 'CEO' || user.role === 'amministratore' || r.assignedTo === user.name;
+                const isSelected = dayActionReq === r.id;
+                const statusColor = r.status === 'approvato' ? 'border-green-500 bg-green-50' : r.status === 'rifiutato' ? 'border-red-400 bg-red-50' : r.status === 'comunicato' ? 'border-teal-500 bg-teal-50' : 'border-orange-400 bg-orange-50';
+                const statusLabel = r.status === 'pendente_responsabile' ? 'Att. responsabile' : r.status === 'pendente_mirco' ? 'Att. Mirco' : r.status === 'comunicato' ? 'Comunicato' : r.status === 'approvato' ? '✓ Approvato' : r.status === 'rifiutato' ? '✗ Rifiutato' : r.status;
+                const statusTextColor = r.status === 'approvato' ? 'text-green-600' : r.status === 'rifiutato' ? 'text-red-500' : r.status === 'comunicato' ? 'text-teal-600' : 'text-orange-500';
+                return (
+                  <div key={r.id} className={'rounded-2xl border-l-4 overflow-hidden transition-all ' + statusColor + (canAct ? ' cursor-pointer' : '')}>
+                    <div
+                      className="p-4"
+                      onClick={() => {
+                        if (!canAct) return;
+                        setDayActionReq(isSelected ? null : r.id);
+                        setDayActionNote('');
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-black text-slate-800 text-sm uppercase">{r.userName}</p>
+                            {canAct && <span className="text-[9px] text-slate-400 font-bold">{isSelected ? '▲ chiudi' : '▼ gestisci'}</span>}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={'px-2 py-0.5 rounded-full text-[10px] font-black uppercase text-white ' + getTypeBadgeColor(r.type, r.status)}>
+                              {getTypeLabel(r.type)}
+                            </span>
+                            <span className={'text-[10px] font-black uppercase ' + statusTextColor}>{statusLabel}</span>
+                          </div>
+                          {r.timeFrom && <p className="text-xs text-slate-500 font-bold mt-1">{r.timeFrom} → {r.timeTo} · {formatMinutes(r.durationMinutes || 0)}</p>}
+                          {r.mancataTimbratura && <p className="text-[10px] text-teal-600 font-black mt-0.5">⚠ Mancata timbratura</p>}
+                          {r.nota && <p className="text-xs text-blue-600 font-bold mt-1 italic">Nota: "{r.nota}"</p>}
+                          {r.notaResponsabile && <p className="text-xs text-slate-500 font-bold mt-0.5 italic">Resp.: "{r.notaResponsabile}"</p>}
+                        </div>
                       </div>
-                      {r.timeFrom && (
-                        <p className="text-xs text-slate-500 font-bold mt-1">{r.timeFrom} → {r.timeTo} · {formatMinutes(r.durationMinutes || 0)}</p>
-                      )}
-                      {r.mancataTimbratura && (
-                        <p className="text-[10px] text-teal-600 font-black mt-0.5">⚠ Mancata timbratura</p>
-                      )}
                     </div>
+
+                    {/* Pannello azioni — visibile solo se selezionato */}
+                    {isSelected && canAct && (
+                      <div className="px-4 pb-4 space-y-3 border-t border-white/50 pt-3 bg-white/60">
+                        <textarea
+                          placeholder="Nota opzionale per il dipendente..."
+                          value={dayActionNote}
+                          onChange={e => setDayActionNote(e.target.value)}
+                          className="w-full p-3 bg-white border border-slate-200 rounded-2xl font-bold outline-none text-xs resize-none"
+                          rows={2}
+                          onClick={e => e.stopPropagation()}
+                        />
+                        <div className="flex gap-2">
+                          {/* Approva (se non già approvato) */}
+                          {r.status !== 'approvato' && (
+                            <button
+                              className="flex-1 flex items-center justify-center gap-1 bg-green-500 text-white py-3 rounded-2xl font-black text-xs uppercase"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await updateDoc(doc(db, 'requests', r.id), { status: 'approvato', ...(dayActionNote ? { notaResponsabile: dayActionNote } : {}) });
+                                await writeAuditLog({ action: r.status === 'rifiutato' ? 'rivalutata→approvata' : 'approvata', fromUser: user, toUser: r.userName, type: r.type, nota: dayActionNote });
+                                const typeLabel = r.type === 'permesso' ? 'permesso' : r.type === 'trasferta' ? 'trasferta' : r.type === 'fuorisede' ? 'fuori sede' : r.type === 'malattia' ? 'malattia' : 'ferie';
+                                const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
+                                await addDoc(collection(db, 'notifications'), {
+                                  to: r.userName,
+                                  message: 'Richiesta di ' + typeLabel + dateInfo + ' APPROVATA' + (dayActionNote ? ' — ' + dayActionNote : '') + (r.status === 'rifiutato' ? ' (rivalutazione)' : ''),
+                                  date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
+                                });
+                                setDayActionReq(null); setDayActionNote('');
+                                setDayDetailModal(prev => prev ? { ...prev, reqs: prev.reqs.map(x => x.id === r.id ? { ...x, status: 'approvato', notaResponsabile: dayActionNote } : x) } : null);
+                              }}
+                            >
+                              <CheckCircle size={14}/> {r.status === 'rifiutato' ? 'Rivaluta' : 'Approva'}
+                            </button>
+                          )}
+                          {/* Rifiuta (se non già rifiutato) */}
+                          {r.status !== 'rifiutato' && (
+                            <button
+                              className="flex-1 flex items-center justify-center gap-1 bg-red-500 text-white py-3 rounded-2xl font-black text-xs uppercase"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await updateDoc(doc(db, 'requests', r.id), { status: 'rifiutato', ...(dayActionNote ? { notaResponsabile: dayActionNote } : {}) });
+                                await writeAuditLog({ action: 'rifiutata', fromUser: user, toUser: r.userName, type: r.type, nota: dayActionNote });
+                                const typeLabel = r.type === 'permesso' ? 'permesso' : r.type === 'trasferta' ? 'trasferta' : r.type === 'fuorisede' ? 'fuori sede' : r.type === 'malattia' ? 'malattia' : 'ferie';
+                                const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
+                                await addDoc(collection(db, 'notifications'), {
+                                  to: r.userName,
+                                  message: 'Richiesta di ' + typeLabel + dateInfo + ' RIFIUTATA' + (dayActionNote ? ' — ' + dayActionNote : ''),
+                                  date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
+                                });
+                                setDayActionReq(null); setDayActionNote('');
+                                setDayDetailModal(prev => prev ? { ...prev, reqs: prev.reqs.map(x => x.id === r.id ? { ...x, status: 'rifiutato', notaResponsabile: dayActionNote } : x) } : null);
+                              }}
+                            >
+                              <XCircle size={14}/> Rifiuta
+                            </button>
+                          )}
+                          {/* Se già approvato: mostra solo rifiuta */}
+                          {/* Se già rifiutato: mostra solo approva (rivaluta) */}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-            <button onClick={() => setDayDetailModal(null)} className="w-full bg-slate-100 text-slate-400 py-4 rounded-2xl font-black uppercase text-sm mt-5">Chiudi</button>
+            <button onClick={() => { setDayDetailModal(null); setDayActionReq(null); setDayActionNote(''); }} className="w-full bg-slate-100 text-slate-400 py-4 rounded-2xl font-black uppercase text-sm mt-5">Chiudi</button>
           </BottomSheet>
         )}
 
