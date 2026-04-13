@@ -432,7 +432,12 @@ export default function App() {
   };
 
   const CalendarView = () => {
-    const [calFilter, setCalFilter] = useState('mine');
+    const initialFilter = () => {
+      if (user.role === 'CEO' || user.role === 'amministratore') return 'all';
+      if (user.role === 'responsabile') return 'all_mine';
+      return 'mine';
+    };
+    const [calFilter, setCalFilter] = useState(initialFilter());
     const [selection, setSelection] = useState(null);
     const [requestType, setRequestType] = useState('ferie');
     const [form, setForm] = useState({ end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '' });
@@ -499,8 +504,8 @@ export default function App() {
       const dates = buildDates(selection, form.end);
       if (dates.length === 0) return alert('Seleziona giorni lavorativi');
       const newReq = {
-        userId: user.id, userName: user.name, type: form.type, dates,
-        status: form.type === 'malattia' ? 'approvato' : 'pendente',
+        userId: user.id, userName: user.name, type: requestType, dates,
+        status: requestType === 'malattia' ? 'approvato' : 'pendente',
         assignedTo, createdAt: new Date().toISOString(),
         ...(form.nota ? { nota: form.nota } : {})
       };
@@ -511,12 +516,12 @@ export default function App() {
           : 'dal ' + formatDate(dates[0]) + ' al ' + formatDate(dates[dates.length - 1]) + ' (' + dates.length + ' giorni)';
         await addDoc(collection(db, 'notifications'), {
           to: assignedTo,
-          message: 'Richiesta di ' + form.type + ' di ' + user.name + ' ' + dateRange + (form.nota ? ' — Nota: ' + form.nota : ''),
+          message: 'Richiesta di ' + requestType + ' di ' + user.name + ' ' + dateRange + (form.nota ? ' — Nota: ' + form.nota : ''),
           date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), requestId: reqRef.id, read: false
         });
       }
       await checkPolivalenza(dates, user);
-      await writeAuditLog({ action: 'inviata', fromUser: user, toUser: assignedTo, type: form.type, nota: form.nota || '' });
+      await writeAuditLog({ action: 'inviata', fromUser: user, toUser: assignedTo, type: requestType, nota: form.nota || '' });
       setSelection(null); setRecipientModal(null);
     };
 
