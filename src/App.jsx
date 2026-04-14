@@ -440,6 +440,8 @@ export default function App() {
       return 'mine';
     };
     const [calFilter, setCalFilter] = useState(initialFilter());
+    const [typeFilter, setTypeFilter] = useState('tutti');
+    const [typeFilter, setTypeFilter] = useState('tutti');
     const [selection, setSelection] = useState(null);
     const [requestType, setRequestType] = useState('ferie');
     const [form, setForm] = useState({ end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '' });
@@ -459,14 +461,22 @@ export default function App() {
     const subordinates = user ? users.filter(u => u.resp1 === user.name) : [];
 
     const visibleRequests = requests.filter(r => {
-      if (user.role === 'dipendente') return r.userId === user.id;
-      if (user.role === 'responsabile') {
-        if (calFilter === 'mine') return r.userId === user.id;
-        if (calFilter === 'all_mine') return r.userId === user.id || subordinates.some(s => s.id === r.userId);
-        return r.userName === calFilter;
+      // Filtro dipendente/vista
+      let passUser = false;
+      if (user.role === 'dipendente') passUser = r.userId === user.id;
+      else if (user.role === 'responsabile') {
+        if (calFilter === 'mine') passUser = r.userId === user.id;
+        else if (calFilter === 'all_mine') passUser = r.userId === user.id || subordinates.some(s => s.id === r.userId);
+        else passUser = r.userName === calFilter;
+      } else {
+        if (calFilter === 'all') passUser = true;
+        else passUser = r.userName === calFilter;
       }
-      if (calFilter === 'all') return true;
-      return r.userName === calFilter;
+      if (!passUser) return false;
+      // Filtro tipo richiesta
+      if (typeFilter === 'tutti') return true;
+      if (typeFilter === 'mancata_marcatura') return r.type === 'fuorisede' && r.mancataTimbratura;
+      return r.type === typeFilter;
     });
 
     const buildDates = (start, end) => {
@@ -762,9 +772,18 @@ export default function App() {
     return (
       <div className="pb-2">
         {opts.length > 0 && (
-          <div className="mb-4">
-            <select value={calFilter} onChange={e => setCalFilter(e.target.value)} className="w-full p-4 bg-white border-2 border-blue-100 rounded-2xl font-black text-blue-600 outline-none text-sm">
+          <div className="mb-4 flex gap-2">
+            <select value={calFilter} onChange={e => setCalFilter(e.target.value)} className="flex-1 p-4 bg-white border-2 border-blue-100 rounded-2xl font-black text-blue-600 outline-none text-sm">
               {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="flex-1 p-4 bg-white border-2 border-slate-100 rounded-2xl font-black text-slate-600 outline-none text-sm">
+              <option value="tutti">Tutti i tipi</option>
+              <option value="ferie">Ferie</option>
+              <option value="permesso">Permesso</option>
+              <option value="malattia">Malattia</option>
+              <option value="trasferta">Trasferta</option>
+              <option value="fuorisede">Fuori sede</option>
+              <option value="mancata_marcatura">Mancata marcatura</option>
             </select>
           </div>
         )}
