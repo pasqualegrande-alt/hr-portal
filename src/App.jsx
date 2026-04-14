@@ -83,6 +83,8 @@ export default function App() {
   const [polivalenze, setPolivalenze] = useState([]);
   const [loading, setLoading] = useState(true);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [calFilter, setCalFilter] = useState(null); // inizializzato dopo login
+  const [typeFilter, setTypeFilter] = useState('tutti');
 
   useEffect(() => {
     const initUsers = async () => {
@@ -453,13 +455,11 @@ export default function App() {
   };
 
   const CalendarView = () => {
-    const initialFilter = () => {
-      if (user.role === 'CEO' || user.role === 'amministratore') return 'all';
-      if (user.role === 'responsabile') return 'all_mine';
-      return 'mine';
-    };
-    const [calFilter, setCalFilter] = useState(initialFilter());
-    const [typeFilter, setTypeFilter] = useState('tutti');
+    // calFilter e typeFilter sono gestiti a livello App per persistere tra re-render
+    const effectiveFilter = calFilter ?? (
+      user.role === 'CEO' || user.role === 'amministratore' ? 'all' :
+      user.role === 'responsabile' ? 'all_mine' : 'mine'
+    );
     const [selection, setSelection] = useState(null);
     const [requestType, setRequestType] = useState('ferie');
     const [form, setForm] = useState({ end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '' });
@@ -483,11 +483,11 @@ export default function App() {
       let passUser = false;
       if (user.role === 'dipendente') passUser = r.userId === user.id;
       else if (user.role === 'responsabile') {
-        if (calFilter === 'mine') passUser = r.userId === user.id;
-        else if (calFilter === 'all_mine') passUser = r.userId === user.id || subordinates.some(s => s.id === r.userId);
+        if (effectiveFilter === 'mine') passUser = r.userId === user.id;
+        else if (effectiveFilter === 'all_mine') passUser = r.userId === user.id || subordinates.some(s => s.id === r.userId);
         else passUser = r.userName === calFilter;
       } else {
-        if (calFilter === 'all') passUser = true;
+        if (effectiveFilter === 'all') passUser = true;
         else passUser = r.userName === calFilter;
       }
       if (!passUser) return false;
@@ -528,7 +528,7 @@ export default function App() {
       return '';
     };
 
-    const isPersonalView = user.role === 'dipendente' || calFilter === 'mine';
+    const isPersonalView = user.role === 'dipendente' || effectiveFilter === 'mine';
 
     const doSendFerie = async (assignedTo) => {
       const dates = buildDates(selection, form.end);
@@ -676,7 +676,7 @@ export default function App() {
 
       const isViewingOthers = user.role === 'CEO' ||
         (user.role === 'amministratore') ||
-        (user.role === 'responsabile' && calFilter !== 'mine');
+        (user.role === 'responsabile' && effectiveFilter !== 'mine');
 
       if (isViewingOthers && dayReqs.length > 0) {
         setDayDetailModal({ date: dStr, reqs: dayReqs });
@@ -791,7 +791,7 @@ export default function App() {
       <div className="pb-2">
         {opts.length > 0 && (
           <div className="mb-4 flex gap-2">
-            <select value={calFilter} onChange={e => setCalFilter(e.target.value)} className="flex-1 p-4 bg-white border-2 border-blue-100 rounded-2xl font-black text-blue-600 outline-none text-sm">
+            <select value={effectiveFilter} onChange={e => setCalFilter(e.target.value)} className="flex-1 p-4 bg-white border-2 border-blue-100 rounded-2xl font-black text-blue-600 outline-none text-sm">
               {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="flex-1 p-4 bg-white border-2 border-slate-100 rounded-2xl font-black text-slate-600 outline-none text-sm">
@@ -1385,7 +1385,12 @@ export default function App() {
             const u = document.getElementById('un').value;
             const p = document.getElementById('pw').value;
             const f = users.find(x => x.username === u && x.password === p);
-            if (f) setUser(f); else alert('Credenziali non valide');
+            if (f) {
+              setUser(f);
+              if (f.role === 'CEO' || f.role === 'amministratore') setCalFilter('all');
+              else if (f.role === 'responsabile') setCalFilter('all_mine');
+              else setCalFilter('mine');
+            } else alert('Credenziali non valide');
           }}>Accedi</button>
         </div>
       </div>
@@ -1404,7 +1409,7 @@ export default function App() {
             <p className="font-black text-xs uppercase leading-tight">{user.name}</p>
             <p className="text-[10px] text-blue-400 font-bold uppercase">{user.role}</p>
           </div>
-          <button onClick={() => setUser(null)} className="p-2 text-red-400"><LogOut size={20}/></button>
+          <button onClick={() => { setUser(null); setCalFilter(null); setTypeFilter('tutti'); }} className="p-2 text-red-400"><LogOut size={20}/></button>
         </div>
       </header>
       <main className="flex-1 pt-16 pb-24 px-4 overflow-y-auto">
