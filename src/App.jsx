@@ -460,7 +460,6 @@ export default function App() {
     };
     const [calFilter, setCalFilter] = useState(initialFilter());
     const [typeFilter, setTypeFilter] = useState('tutti');
-    const [typeFilter, setTypeFilter] = useState('tutti');
     const [selection, setSelection] = useState(null);
     const [requestType, setRequestType] = useState('ferie');
     const [form, setForm] = useState({ end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '' });
