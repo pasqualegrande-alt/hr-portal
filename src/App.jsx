@@ -110,6 +110,14 @@ const SectionDivider = ({ label, count }) => (
 const LogView = ({ auditLogs, db }) => {
   const [filters, setFilters] = useState({ username: '', date: '', recipient: '', type: '', action: '' });
   const [resetKey, setResetKey] = useState(0);
+  const debounceRef = React.useRef({});
+
+  const handleFilterChange = (col, value) => {
+    clearTimeout(debounceRef.current[col]);
+    debounceRef.current[col] = setTimeout(() => {
+      setFilters(f => ({ ...f, [col]: value }));
+    }, 400);
+  };
   const [sortCol, setSortCol] = useState('code');
   const [sortDir, setSortDir] = useState('desc');
 
@@ -153,6 +161,8 @@ const LogView = ({ auditLogs, db }) => {
 
   const hasFilters = Object.values(filters).some(v => v !== '');
   const resetFilters = () => {
+    Object.values(debounceRef.current).forEach(clearTimeout);
+    debounceRef.current = {};
     setFilters({ username: '', date: '', recipient: '', type: '', action: '' });
     setResetKey(k => k + 1);
   };
@@ -205,7 +215,7 @@ const LogView = ({ auditLogs, db }) => {
                     key={resetKey + '-username'}
                     type="text"
                     defaultValue={filters.username}
-                    onChange={e => setFilters(f => ({...f, username: e.target.value}))}
+                    onChange={e => handleFilterChange('username', e.target.value)}
                     placeholder="Filtra..."
                     className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
                   />
@@ -217,7 +227,7 @@ const LogView = ({ auditLogs, db }) => {
                     key={resetKey + '-date'}
                     type="text"
                     defaultValue={filters.date}
-                    onChange={e => setFilters(f => ({...f, date: e.target.value}))}
+                    onChange={e => handleFilterChange('date', e.target.value)}
                     placeholder="gg/mm/aaaa"
                     className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
                   />
@@ -233,7 +243,7 @@ const LogView = ({ auditLogs, db }) => {
                     key={resetKey + '-recipient'}
                     type="text"
                     defaultValue={filters.recipient}
-                    onChange={e => setFilters(f => ({...f, recipient: e.target.value}))}
+                    onChange={e => handleFilterChange('recipient', e.target.value)}
                     placeholder="Filtra..."
                     className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
                   />
@@ -245,7 +255,7 @@ const LogView = ({ auditLogs, db }) => {
                     key={resetKey + '-type'}
                     type="text"
                     defaultValue={filters.type}
-                    onChange={e => setFilters(f => ({...f, type: e.target.value}))}
+                    onChange={e => handleFilterChange('type', e.target.value)}
                     placeholder="ferie..."
                     className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
                   />
@@ -257,7 +267,7 @@ const LogView = ({ auditLogs, db }) => {
                     key={resetKey + '-action'}
                     type="text"
                     defaultValue={filters.action}
-                    onChange={e => setFilters(f => ({...f, action: e.target.value}))}
+                    onChange={e => handleFilterChange('action', e.target.value)}
                     placeholder="appr..."
                     className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
                   />
