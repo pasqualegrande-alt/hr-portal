@@ -149,16 +149,7 @@ const LogView = ({ auditLogs, db }) => {
     });
 
   // FilterInput uncontrolled: usa defaultValue invece di value → nessun re-mount
-  const FilterInput = ({ col, placeholder }) => (
-    <input
-      key={resetKey + '-' + col}
-      type="text"
-      defaultValue={filters[col]}
-      onChange={e => setFilters(f => ({ ...f, [col]: e.target.value }))}
-      placeholder={placeholder}
-      className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
-    />
-  );
+  
 
   const hasFilters = Object.values(filters).some(v => v !== '');
   const resetFilters = () => {
@@ -210,12 +201,26 @@ const LogView = ({ auditLogs, db }) => {
                 {/* Username */}
                 <th className="px-3 py-2 w-32">
                   <div className="cursor-pointer select-none" onClick={() => handleSort('username')}>Username <SortIcon col="username"/></div>
-                  <FilterInput col="username" placeholder="Filtra..."/>
+                  <input
+                    key={resetKey + '-username'}
+                    type="text"
+                    defaultValue={filters.username}
+                    onChange={e => setFilters(f => ({...f, username: e.target.value}))}
+                    placeholder="Filtra..."
+                    className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
+                  />
                 </th>
                 {/* Data */}
                 <th className="px-3 py-2 w-28">
                   <div className="cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('date')}>Data <SortIcon col="date"/></div>
-                  <FilterInput col="date" placeholder="gg/mm/aaaa"/>
+                  <input
+                    key={resetKey + '-date'}
+                    type="text"
+                    defaultValue={filters.date}
+                    onChange={e => setFilters(f => ({...f, date: e.target.value}))}
+                    placeholder="gg/mm/aaaa"
+                    className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
+                  />
                 </th>
                 {/* Orario */}
                 <th className="px-3 py-2 w-24 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('time')}>
@@ -224,17 +229,38 @@ const LogView = ({ auditLogs, db }) => {
                 {/* Destinatario */}
                 <th className="px-3 py-2 w-36">
                   <div className="cursor-pointer select-none" onClick={() => handleSort('recipient')}>Destinatario <SortIcon col="recipient"/></div>
-                  <FilterInput col="recipient" placeholder="Filtra..."/>
+                  <input
+                    key={resetKey + '-recipient'}
+                    type="text"
+                    defaultValue={filters.recipient}
+                    onChange={e => setFilters(f => ({...f, recipient: e.target.value}))}
+                    placeholder="Filtra..."
+                    className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
+                  />
                 </th>
                 {/* Tipo */}
                 <th className="px-3 py-2 w-28">
                   <div className="cursor-pointer select-none" onClick={() => handleSort('type')}>Tipo <SortIcon col="type"/></div>
-                  <FilterInput col="type" placeholder="ferie..."/>
+                  <input
+                    key={resetKey + '-type'}
+                    type="text"
+                    defaultValue={filters.type}
+                    onChange={e => setFilters(f => ({...f, type: e.target.value}))}
+                    placeholder="ferie..."
+                    className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
+                  />
                 </th>
                 {/* Azione */}
                 <th className="px-3 py-2 w-44">
                   <div className="cursor-pointer select-none" onClick={() => handleSort('action')}>Azione <SortIcon col="action"/></div>
-                  <FilterInput col="action" placeholder="appr..."/>
+                  <input
+                    key={resetKey + '-action'}
+                    type="text"
+                    defaultValue={filters.action}
+                    onChange={e => setFilters(f => ({...f, action: e.target.value}))}
+                    placeholder="appr..."
+                    className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
+                  />
                 </th>
                 {/* Nota */}
                 <th className="px-3 py-2">Nota</th>
