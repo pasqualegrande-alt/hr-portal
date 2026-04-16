@@ -1356,24 +1356,27 @@ export default function App() {
         value={filters[col]}
         onChange={e => setFilters(f => ({ ...f, [col]: e.target.value }))}
         placeholder={placeholder}
-        className="w-full mt-1 p-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold outline-none placeholder-slate-300"
+        className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
       />
     );
 
     const hasFilters = Object.values(filters).some(v => v !== '');
 
     return (
-      <div className="space-y-4 pb-6">
+      <div className="space-y-3 pb-6 px-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-black uppercase italic">Registro Operazioni</h2>
+          <div>
+            <h2 className="text-xl font-black uppercase italic">Registro Operazioni</h2>
+            <p className="text-[10px] text-slate-400 font-bold mt-0.5">Vista ottimizzata per monitor — {auditLogs.length} operazioni totali</p>
+          </div>
           <div className="flex gap-2">
             {hasFilters && (
               <button onClick={() => setFilters({ username: '', date: '', recipient: '', type: '', action: '' })}
-                className="flex items-center gap-1 bg-slate-100 text-slate-500 px-3 py-2 rounded-2xl font-black uppercase text-xs">
+                className="flex items-center gap-1 bg-slate-100 text-slate-500 px-3 py-2 rounded-xl font-black uppercase text-xs">
                 <X size={12}/> Reset filtri
               </button>
             )}
-            <button onClick={handleClearLog} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-2xl font-black uppercase text-xs">
+            <button onClick={handleClearLog} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
               <Trash2 size={14}/> Svuota
             </button>
           </div>
@@ -1395,43 +1398,42 @@ export default function App() {
           ].filter(s => s.items.length > 0);
 
           const TableHead = () => (
-            <thead className="bg-slate-50 border-b">
-                <tr className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                  {/* Codice — solo sort */}
-                  <th className="p-3 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('code')}>
+            <thead className="bg-slate-900 border-b sticky top-0 z-10">
+                <tr className="text-[9px] font-black uppercase tracking-widest text-slate-300">
+                  <th className="px-2 py-2 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('code')}>
                     Codice <SortIcon col="code"/>
                   </th>
                   {/* Username */}
-                  <th className="p-3 min-w-[110px]">
+                  <th className="px-2 py-2">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('username')}>Username <SortIcon col="username"/></div>
                     <FilterInput col="username" placeholder="Filtra..."/>
                   </th>
                   {/* Data */}
-                  <th className="p-3 min-w-[100px]">
+                  <th className="px-2 py-2">
                     <div className="cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('date')}>Data <SortIcon col="date"/></div>
                     <FilterInput col="date" placeholder="gg/mm/aaaa"/>
                   </th>
                   {/* Orario */}
-                  <th className="p-3 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('time')}>
+                  <th className="px-2 py-2 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('time')}>
                     Orario <SortIcon col="time"/>
                   </th>
                   {/* Destinatario */}
-                  <th className="p-3 min-w-[110px]">
+                  <th className="px-2 py-2">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('recipient')}>Destinatario <SortIcon col="recipient"/></div>
                     <FilterInput col="recipient" placeholder="Filtra..."/>
                   </th>
                   {/* Tipo */}
-                  <th className="p-3 min-w-[90px]">
+                  <th className="px-2 py-2">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('type')}>Tipo <SortIcon col="type"/></div>
                     <FilterInput col="type" placeholder="ferie..."/>
                   </th>
                   {/* Azione */}
-                  <th className="p-3 min-w-[120px]">
+                  <th className="px-2 py-2">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('action')}>Azione <SortIcon col="action"/></div>
                     <FilterInput col="action" placeholder="appr..."/>
                   </th>
                   {/* Nota */}
-                  <th className="p-3">Nota</th>
+                  <th className="px-2 py-2">Nota</th>
                 </tr>
               </thead>
           );
@@ -1448,21 +1450,21 @@ export default function App() {
                     ? <p className={'text-[10px] font-black uppercase tracking-widest mb-2 ' + color}>{label} ({items.length})</p>
                     : <SectionDivider label={label} count={items.length}/>
                   }
-                  <div className="bg-white rounded-3xl border overflow-hidden shadow-sm">
+                  <div className="bg-white border-y overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left" style={{minWidth: '750px'}}>
+                      <table className="w-full text-left text-[11px]">
                         <TableHead/>
                         <tbody className="divide-y divide-slate-50">
                           {items.map(l => (
-                            <tr key={l.id} className={'hover:bg-slate-50/50 text-xs ' + (si === 2 ? 'opacity-60' : '')}>
-                              <td className="p-3 font-mono text-[9px] text-slate-500 whitespace-nowrap">{l.code}</td>
-                              <td className="p-3 font-black text-slate-800 uppercase">{l.username}</td>
-                              <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{l.date}</td>
-                              <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{l.time}</td>
-                              <td className="p-3 font-bold text-slate-600">{l.recipient}</td>
-                              <td className="p-3"><span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[9px] font-black uppercase">{l.type}</span></td>
-                              <td className="p-3 whitespace-nowrap font-bold text-slate-700">{actionLabel(l.action)}</td>
-                              <td className="p-3 text-slate-500 italic max-w-[150px] truncate">{l.nota || '—'}</td>
+                            <tr key={l.id} className={'border-b border-slate-50 text-[11px] hover:bg-blue-50/30 transition-colors ' + (si === 2 ? 'opacity-50' : '')}>
+                              <td className="px-2 py-1.5 font-mono text-[9px] text-slate-400 whitespace-nowrap">{l.code}</td>
+                              <td className="px-2 py-1.5 font-black text-slate-800 uppercase whitespace-nowrap">{l.username}</td>
+                              <td className="px-2 py-1.5 font-bold text-slate-600 whitespace-nowrap">{l.date}</td>
+                              <td className="px-2 py-1.5 font-bold text-slate-500 whitespace-nowrap tabular-nums">{l.time}</td>
+                              <td className="px-2 py-1.5 font-bold text-slate-600 whitespace-nowrap">{l.recipient}</td>
+                              <td className="px-2 py-1.5"><span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">{l.type}</span></td>
+                              <td className="px-2 py-1.5 whitespace-nowrap font-bold text-slate-700">{actionLabel(l.action)}</td>
+                              <td className="px-2 py-1.5 text-slate-400 italic max-w-[200px] truncate text-[10px]">{l.nota || <span className="text-slate-200">—</span>}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1527,7 +1529,7 @@ export default function App() {
           {view === 'notifications' && <NotificationsView />}
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && showAdmin && <ClosuresView />}
-          {view === 'log' && showAdmin && <LogView />}
+          {view === 'log' && showAdmin && <div className="-mx-4"><LogView /></div>}
         </div>
       </main>
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white flex z-30 border-t border-slate-800">
