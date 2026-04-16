@@ -1310,18 +1310,9 @@ export default function App() {
     );
   };
 
-  const FilterInput = React.useCallback(({ value, onChange, placeholder }) => (
-    <input
-      type="text"
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
-    />
-  ), []);
-
   const LogView = () => {
     const [filters, setFilters] = useState({ username: '', date: '', recipient: '', type: '', action: '' });
+    const [resetKey, setResetKey] = useState(0);
     const [sortCol, setSortCol] = useState('code');
     const [sortDir, setSortDir] = useState('desc');
 
@@ -1360,9 +1351,23 @@ export default function App() {
         return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
       });
 
-    // FilterInput definito fuori da LogView per evitare re-mount ad ogni render
+    // FilterInput uncontrolled: usa defaultValue invece di value → nessun re-mount
+    const FilterInput = ({ col, placeholder }) => (
+      <input
+        key={resetKey + '-' + col}
+        type="text"
+        defaultValue={filters[col]}
+        onChange={e => setFilters(f => ({ ...f, [col]: e.target.value }))}
+        placeholder={placeholder}
+        className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
+      />
+    );
 
     const hasFilters = Object.values(filters).some(v => v !== '');
+    const resetFilters = () => {
+      setFilters({ username: '', date: '', recipient: '', type: '', action: '' });
+      setResetKey(k => k + 1);
+    };
 
     return (
       <div className="space-y-3 pb-6 px-6">
@@ -1373,7 +1378,7 @@ export default function App() {
           </div>
           <div className="flex gap-2">
             {hasFilters && (
-              <button onClick={() => setFilters({ username: '', date: '', recipient: '', type: '', action: '' })}
+              <button onClick={resetFilters}
                 className="flex items-center gap-1 bg-slate-100 text-slate-500 px-3 py-2 rounded-xl font-black uppercase text-xs">
                 <X size={12}/> Reset filtri
               </button>
@@ -1408,14 +1413,12 @@ export default function App() {
                   {/* Username */}
                   <th className="px-3 py-2 w-32">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('username')}>Username <SortIcon col="username"/></div>
-                    <FilterInput value={filters.username} onChange={e => setFilters(f => ({...f, username: e.target.value}))}
-                    placeholder="Filtra..."/>
+                    <FilterInput col="username" placeholder="Filtra..."/>
                   </th>
                   {/* Data */}
                   <th className="px-3 py-2 w-28">
                     <div className="cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('date')}>Data <SortIcon col="date"/></div>
-                    <FilterInput value={filters.date} onChange={e => setFilters(f => ({...f, date: e.target.value}))}
-                    placeholder="gg/mm/aaaa"/>
+                    <FilterInput col="date" placeholder="gg/mm/aaaa"/>
                   </th>
                   {/* Orario */}
                   <th className="px-3 py-2 w-24 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('time')}>
@@ -1424,20 +1427,17 @@ export default function App() {
                   {/* Destinatario */}
                   <th className="px-3 py-2 w-36">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('recipient')}>Destinatario <SortIcon col="recipient"/></div>
-                    <FilterInput value={filters.recipient} onChange={e => setFilters(f => ({...f, recipient: e.target.value}))}
-                    placeholder="Filtra..."/>
+                    <FilterInput col="recipient" placeholder="Filtra..."/>
                   </th>
                   {/* Tipo */}
                   <th className="px-3 py-2 w-28">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('type')}>Tipo <SortIcon col="type"/></div>
-                    <FilterInput value={filters.type} onChange={e => setFilters(f => ({...f, type: e.target.value}))}
-                    placeholder="ferie..."/>
+                    <FilterInput col="type" placeholder="ferie..."/>
                   </th>
                   {/* Azione */}
                   <th className="px-3 py-2 w-44">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('action')}>Azione <SortIcon col="action"/></div>
-                    <FilterInput value={filters.action} onChange={e => setFilters(f => ({...f, action: e.target.value}))}
-                    placeholder="appr..."/>
+                    <FilterInput col="action" placeholder="appr..."/>
                   </th>
                   {/* Nota */}
                   <th className="px-3 py-2">Nota</th>
