@@ -462,7 +462,7 @@ export default function App() {
     );
     const [selection, setSelection] = useState(null);
     const [requestType, setRequestType] = useState('ferie');
-    const [form, setForm] = useState({ end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '' });
+    const [form, setForm] = useState({ end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '', recuperoOre: false });
     const [reqModal, setReqModal] = useState(null);
     const [modifyMode, setModifyMode] = useState(false);
     const [modifyForm, setModifyForm] = useState({ start: '', end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00' });
@@ -564,12 +564,13 @@ export default function App() {
         dates: [selection], timeFrom: form.timeFrom, timeTo: form.timeTo,
         durationMinutes: mins, status: 'pendente', assignedTo,
         createdAt: new Date().toISOString(),
-        ...(form.nota ? { nota: form.nota } : {})
+        ...(form.nota ? { nota: form.nota } : {}),
+        recuperoOre: form.recuperoOre || false
       };
       const reqRef = await addDoc(collection(db, 'requests'), newReq);
       await addDoc(collection(db, 'notifications'), {
         to: assignedTo,
-        message: 'Richiesta di permesso di ' + user.name + ' il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + ' (' + formatMinutes(mins) + ')' + (form.nota ? ' — Nota: ' + form.nota : ''),
+        message: 'Richiesta di permesso di ' + user.name + ' il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + ' (' + formatMinutes(mins) + ')' + (form.recuperoOre ? ' [DISPONIBILE AL RECUPERO ORE]' : '') + (form.nota ? ' — Nota: ' + form.nota : ''),
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), requestId: reqRef.id, read: false
       });
       await writeAuditLog({ action: 'inviata', fromUser: user, toUser: assignedTo, type: 'permesso', nota: form.nota || '' });
@@ -580,17 +581,17 @@ export default function App() {
       const mins = calcMinutesExcludingLunch(form.timeFrom, form.timeTo);
       if (mins <= 0) return alert('Orario non valido');
       const assignedTo = user && user.resp1 && user.resp1 !== '/' ? user.resp1 : 'Mirco Ronci';
-      const status = form.mancataTimbratura ? 'pendente' : 'comunicato';
       const newReq = {
         userId: user.id, userName: user.name, type: 'fuorisede',
         dates: [selection], timeFrom: form.timeFrom, timeTo: form.timeTo,
         durationMinutes: mins, mancataTimbratura: form.mancataTimbratura,
-        status, assignedTo, createdAt: new Date().toISOString()
+        status: 'pendente', assignedTo, createdAt: new Date().toISOString(),
+        ...(form.nota ? { nota: form.nota } : {})
       };
       await addDoc(collection(db, 'requests'), newReq);
       const msg = form.mancataTimbratura
-        ? 'ATTENZIONE! ' + user.name + ' ha una mancata timbratura il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + '. Approva per giustificarla.'
-        : 'Fuori sede di ' + user.name + ' il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + ' (' + formatMinutes(calcMinutesExcludingLunch(form.timeFrom, form.timeTo)) + ')';
+        ? 'ATTENZIONE! ' + user.name + ' ha una mancata timbratura il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + '. Approva per giustificarla.' + (form.nota ? ' — Nota: ' + form.nota : '')
+        : 'Uscita fuori sede di ' + user.name + ' il ' + formatDate(selection) + ' dalle ' + form.timeFrom + ' alle ' + form.timeTo + ' (' + formatMinutes(calcMinutesExcludingLunch(form.timeFrom, form.timeTo)) + ').' + (form.nota ? ' Motivo: ' + form.nota : '') + ' In attesa di approvazione.';
       await addDoc(collection(db, 'notifications'), {
         to: assignedTo, message: msg,
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
@@ -690,7 +691,7 @@ export default function App() {
         setReqModal(myReq); setModifyMode(false);
         setModifyForm({ start: myReq.dates[0], end: myReq.dates[myReq.dates.length - 1], type: myReq.type, timeFrom: myReq.timeFrom || '09:00', timeTo: myReq.timeTo || '10:00' });
       } else {
-        setForm({ end: '', type: requestType, timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '' });
+        setForm({ end: '', type: requestType, timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '', recuperoOre: false });
         setSelection(dStr);
       }
     };
@@ -752,15 +753,29 @@ export default function App() {
                   Durata: {formatMinutes(calcMinutesExcludingLunch(form.timeFrom, form.timeTo))} (pausa pranzo esclusa)
                 </p>
               )}
-
-              {isFuoriSede && (
-                <label className="flex items-center gap-4 p-4 bg-slate-50 border rounded-2xl cursor-pointer mt-3">
-                  <input type="checkbox" checked={form.mancataTimbratura} onChange={e => setForm({...form, mancataTimbratura: e.target.checked})} className="w-6 h-6 accent-teal-600" />
+              {isPermesso && (
+                <label className="flex items-center gap-4 p-4 bg-amber-50 border border-amber-100 rounded-2xl cursor-pointer mt-3">
+                  <input type="checkbox" checked={form.recuperoOre} onChange={e => setForm({...form, recuperoOre: e.target.checked})} className="w-6 h-6 accent-amber-500" />
                   <div>
-                    <p className="font-black text-slate-800 text-sm">Mancata timbratura</p>
-                    <p className="text-[11px] text-slate-400 font-bold">Richiede approvazione del responsabile</p>
+                    <p className="font-black text-slate-800 text-sm">Richiedo possibilità di recupero ore</p>
+                    <p className="text-[11px] text-slate-400 font-bold">Disponibilità a recuperare le ore di permesso</p>
                   </div>
                 </label>
+              )}
+
+              {isFuoriSede && (
+                <div className="mt-3 space-y-2">
+                  <div className="p-3 bg-teal-50 border border-teal-100 rounded-2xl">
+                    <p className="text-xs font-black text-teal-600">Tutte le uscite fuori sede richiedono approvazione del responsabile</p>
+                  </div>
+                  <label className="flex items-center gap-4 p-4 bg-slate-50 border rounded-2xl cursor-pointer">
+                    <input type="checkbox" checked={form.mancataTimbratura} onChange={e => setForm({...form, mancataTimbratura: e.target.checked})} className="w-6 h-6 accent-teal-600" />
+                    <div>
+                      <p className="font-black text-slate-800 text-sm">Mancata timbratura</p>
+                      <p className="text-[11px] text-slate-400 font-bold">Spunta se non hai timbrato l'uscita</p>
+                    </div>
+                  </label>
+                </div>
               )}
 
               {isTrasferta && (
@@ -1077,6 +1092,40 @@ export default function App() {
     );
   };
 
+  // ─── Helpers suddivisione temporale ───────────────────────────────────────
+  const getWeekBounds = () => {
+    const now = new Date();
+    const day = now.getDay(); // 0=Dom
+    const diffToMon = day === 0 ? -6 : 1 - day;
+    const mon = new Date(now); mon.setDate(now.getDate() + diffToMon); mon.setHours(0,0,0,0);
+    const sat = new Date(mon); sat.setDate(mon.getDate() + 5); sat.setHours(23,59,59,999);
+    return { mon, sat };
+  };
+
+  const classifyByTime = (items, getDateFn) => {
+    const { mon, sat } = getWeekBounds();
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
+    const thisWeek = [], lastThirty = [], older = [];
+    for (const item of items) {
+      const d = new Date(getDateFn(item));
+      if (d >= mon && d <= sat) thisWeek.push(item);
+      else if (d >= thirtyDaysAgo) lastThirty.push(item);
+      else older.push(item);
+    }
+    return { thisWeek, lastThirty, older };
+  };
+
+  const SectionDivider = ({ label, count }) => (
+    <div className="flex items-center gap-3 my-4">
+      <div className="flex-1 h-px bg-slate-200"></div>
+      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap px-2">
+        {label} {count !== undefined && <span className="text-slate-300">({count})</span>}
+      </span>
+      <div className="flex-1 h-px bg-slate-200"></div>
+    </div>
+  );
+
   const NotificationsView = () => {
     const [approvalNotes, setApprovalNotes] = useState({});
     const myPending = requests.filter(r => r.assignedTo === user.name && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco'));
@@ -1140,6 +1189,11 @@ export default function App() {
       <div className="space-y-4 pb-6">
         <h2 className="text-xl font-black uppercase italic">Centro Notifiche</h2>
         {myPending.length === 0 && <p className="text-slate-400 text-sm font-bold">Nessuna richiesta in attesa.</p>}
+        {myPending.length > 0 && (() => {
+          const { thisWeek: pw, lastThirty: p30, older: pOld } = classifyByTime(myPending, r => r.createdAt || new Date().toISOString());
+          if (pw.length > 0) return <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2">Questa settimana</p>;
+          return null;
+        })()}
         {myPending.map(r => (
           <div key={r.id} className="bg-white p-5 rounded-3xl border-2 border-blue-100 shadow-sm space-y-3">
             <div className="flex items-start justify-between gap-4">
@@ -1207,13 +1261,12 @@ export default function App() {
           </div>
         )}
 
-        <div className="bg-white rounded-3xl border p-5 space-y-4">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-3">Cronologia</p>
-          {myHistory.length === 0 && <p className="text-slate-400 text-sm font-bold">Nessuna notifica.</p>}
-          {myHistory.map(n => {
+        {(() => {
+          const { thisWeek, lastThirty, older } = classifyByTime(myHistory, n => n.createdAt || new Date().toISOString());
+          const NotifItem = ({ n }) => {
             const isAlert = n.message && n.message.startsWith('ATTENZIONE!!!');
             return (
-              <div key={n.id} className={'flex gap-3 border-b pb-3 last:border-0 ' + (isAlert ? 'border-red-100 bg-red-50 rounded-2xl px-3 py-2' : 'border-slate-50')}>
+              <div className={'flex gap-3 border-b pb-3 last:border-0 ' + (isAlert ? 'border-red-100 bg-red-50 rounded-2xl px-3 py-2' : 'border-slate-50')}>
                 <div className={'w-2 h-2 rounded-full mt-1.5 shrink-0 ' + (isAlert ? 'bg-red-500' : 'bg-blue-500')}></div>
                 <div>
                   <p className={'text-sm font-bold ' + (isAlert ? 'text-red-600' : 'text-slate-700')}>{n.message}</p>
@@ -1221,8 +1274,38 @@ export default function App() {
                 </div>
               </div>
             );
-          })}
-        </div>
+          };
+          return (
+            <div className="bg-white rounded-3xl border p-5 space-y-1">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-3 mb-3">Cronologia</p>
+              {myHistory.length === 0 && <p className="text-slate-400 text-sm font-bold py-2">Nessuna notifica.</p>}
+
+              {/* Questa settimana */}
+              {thisWeek.length > 0 && (
+                <>
+                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest pt-1 pb-2">Questa settimana</p>
+                  <div className="space-y-1">{thisWeek.map(n => <NotifItem key={n.id} n={n}/>)}</div>
+                </>
+              )}
+
+              {/* Ultimi 30 giorni */}
+              {lastThirty.length > 0 && (
+                <>
+                  <SectionDivider label="Ultimi 30 giorni" count={lastThirty.length}/>
+                  <div className="space-y-1">{lastThirty.map(n => <NotifItem key={n.id} n={n}/>)}</div>
+                </>
+              )}
+
+              {/* Archivio precedente */}
+              {older.length > 0 && (
+                <>
+                  <SectionDivider label="Archivio precedente" count={older.length}/>
+                  <div className="space-y-1 opacity-60">{older.map(n => <NotifItem key={n.id} n={n}/>)}</div>
+                </>
+              )}
+            </div>
+          );
+        })()}
       </div>
     );
   };
@@ -1303,10 +1386,16 @@ export default function App() {
 
         {auditLogs.length === 0 && <p className="text-slate-400 text-sm font-bold text-center py-8">Nessuna operazione registrata.</p>}
 
-        <div className="bg-white rounded-3xl border overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left" style={{minWidth: '750px'}}>
-              <thead className="bg-slate-50 border-b">
+        {(() => {
+          const { thisWeek, lastThirty, older } = classifyByTime(filtered, l => l.createdAt || new Date().toISOString());
+          const sections = [
+            { items: thisWeek, label: 'Questa settimana', color: 'text-blue-500' },
+            { items: lastThirty, label: 'Ultimi 30 giorni', color: 'text-slate-400' },
+            { items: older, label: 'Archivio precedente', color: 'text-slate-300' },
+          ].filter(s => s.items.length > 0);
+
+          const TableHead = () => (
+            <thead className="bg-slate-50 border-b">
                 <tr className="text-[9px] font-black uppercase tracking-widest text-slate-400">
                   {/* Codice — solo sort */}
                   <th className="p-3 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('code')}>
@@ -1345,26 +1434,46 @@ export default function App() {
                   <th className="p-3">Nota</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="p-6 text-center text-slate-400 text-sm font-bold">Nessun risultato per i filtri applicati.</td></tr>
-                )}
-                {filtered.map(l => (
-                  <tr key={l.id} className="hover:bg-slate-50/50 text-xs">
-                    <td className="p-3 font-mono text-[9px] text-slate-500 whitespace-nowrap">{l.code}</td>
-                    <td className="p-3 font-black text-slate-800 uppercase">{l.username}</td>
-                    <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{l.date}</td>
-                    <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{l.time}</td>
-                    <td className="p-3 font-bold text-slate-600">{l.recipient}</td>
-                    <td className="p-3"><span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[9px] font-black uppercase">{l.type}</span></td>
-                    <td className="p-3 whitespace-nowrap font-bold text-slate-700">{actionLabel(l.action)}</td>
-                    <td className="p-3 text-slate-500 italic max-w-[150px] truncate">{l.nota || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          );
+
+          if (filtered.length === 0) return (
+            <p className="text-center text-slate-400 text-sm font-bold py-6">Nessun risultato per i filtri applicati.</p>
+          );
+
+          return (
+            <div className="space-y-2">
+              {sections.map(({ items, label, color }, si) => (
+                <div key={si}>
+                  {si === 0
+                    ? <p className={'text-[10px] font-black uppercase tracking-widest mb-2 ' + color}>{label} ({items.length})</p>
+                    : <SectionDivider label={label} count={items.length}/>
+                  }
+                  <div className="bg-white rounded-3xl border overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left" style={{minWidth: '750px'}}>
+                        <TableHead/>
+                        <tbody className="divide-y divide-slate-50">
+                          {items.map(l => (
+                            <tr key={l.id} className={'hover:bg-slate-50/50 text-xs ' + (si === 2 ? 'opacity-60' : '')}>
+                              <td className="p-3 font-mono text-[9px] text-slate-500 whitespace-nowrap">{l.code}</td>
+                              <td className="p-3 font-black text-slate-800 uppercase">{l.username}</td>
+                              <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{l.date}</td>
+                              <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{l.time}</td>
+                              <td className="p-3 font-bold text-slate-600">{l.recipient}</td>
+                              <td className="p-3"><span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[9px] font-black uppercase">{l.type}</span></td>
+                              <td className="p-3 whitespace-nowrap font-bold text-slate-700">{actionLabel(l.action)}</td>
+                              <td className="p-3 text-slate-500 italic max-w-[150px] truncate">{l.nota || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
     );
   };
