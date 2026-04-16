@@ -1310,6 +1310,16 @@ export default function App() {
     );
   };
 
+  const FilterInput = React.useCallback(({ value, onChange, placeholder }) => (
+    <input
+      type="text"
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
+    />
+  ), []);
+
   const LogView = () => {
     const [filters, setFilters] = useState({ username: '', date: '', recipient: '', type: '', action: '' });
     const [sortCol, setSortCol] = useState('code');
@@ -1350,15 +1360,7 @@ export default function App() {
         return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
       });
 
-    const FilterInput = ({ col, placeholder }) => (
-      <input
-        type="text"
-        value={filters[col]}
-        onChange={e => setFilters(f => ({ ...f, [col]: e.target.value }))}
-        placeholder={placeholder}
-        className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
-      />
-    );
+    // FilterInput definito fuori da LogView per evitare re-mount ad ogni render
 
     const hasFilters = Object.values(filters).some(v => v !== '');
 
@@ -1406,12 +1408,14 @@ export default function App() {
                   {/* Username */}
                   <th className="px-3 py-2 w-32">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('username')}>Username <SortIcon col="username"/></div>
-                    <FilterInput col="username" placeholder="Filtra..."/>
+                    <FilterInput value={filters.username} onChange={e => setFilters(f => ({...f, username: e.target.value}))}
+                    placeholder="Filtra..."/>
                   </th>
                   {/* Data */}
                   <th className="px-3 py-2 w-28">
                     <div className="cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('date')}>Data <SortIcon col="date"/></div>
-                    <FilterInput col="date" placeholder="gg/mm/aaaa"/>
+                    <FilterInput value={filters.date} onChange={e => setFilters(f => ({...f, date: e.target.value}))}
+                    placeholder="gg/mm/aaaa"/>
                   </th>
                   {/* Orario */}
                   <th className="px-3 py-2 w-24 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('time')}>
@@ -1420,17 +1424,20 @@ export default function App() {
                   {/* Destinatario */}
                   <th className="px-3 py-2 w-36">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('recipient')}>Destinatario <SortIcon col="recipient"/></div>
-                    <FilterInput col="recipient" placeholder="Filtra..."/>
+                    <FilterInput value={filters.recipient} onChange={e => setFilters(f => ({...f, recipient: e.target.value}))}
+                    placeholder="Filtra..."/>
                   </th>
                   {/* Tipo */}
                   <th className="px-3 py-2 w-28">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('type')}>Tipo <SortIcon col="type"/></div>
-                    <FilterInput col="type" placeholder="ferie..."/>
+                    <FilterInput value={filters.type} onChange={e => setFilters(f => ({...f, type: e.target.value}))}
+                    placeholder="ferie..."/>
                   </th>
                   {/* Azione */}
                   <th className="px-3 py-2 w-44">
                     <div className="cursor-pointer select-none" onClick={() => handleSort('action')}>Azione <SortIcon col="action"/></div>
-                    <FilterInput col="action" placeholder="appr..."/>
+                    <FilterInput value={filters.action} onChange={e => setFilters(f => ({...f, action: e.target.value}))}
+                    placeholder="appr..."/>
                   </th>
                   {/* Nota */}
                   <th className="px-3 py-2">Nota</th>
