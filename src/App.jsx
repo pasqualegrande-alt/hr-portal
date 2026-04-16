@@ -72,6 +72,219 @@ const formatDate = (isoStr) => {
   return d + '/' + m + '/' + y;
 };
 
+// ─── Helpers suddivisione temporale ───────────────────────────────────────
+const getWeekBounds = () => {
+  const now = new Date();
+  const day = now.getDay(); // 0=Dom
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const mon = new Date(now); mon.setDate(now.getDate() + diffToMon); mon.setHours(0,0,0,0);
+  const sat = new Date(mon); sat.setDate(mon.getDate() + 5); sat.setHours(23,59,59,999);
+  return { mon, sat };
+};
+
+const classifyByTime = (items, getDateFn) => {
+  const { mon, sat } = getWeekBounds();
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
+  const thisWeek = [], lastThirty = [], older = [];
+  for (const item of items) {
+    const d = new Date(getDateFn(item));
+    if (d >= mon && d <= sat) thisWeek.push(item);
+    else if (d >= thirtyDaysAgo) lastThirty.push(item);
+    else older.push(item);
+  }
+  return { thisWeek, lastThirty, older };
+};
+
+const SectionDivider = ({ label, count }) => (
+  <div className="flex items-center gap-3 my-4">
+    <div className="flex-1 h-px bg-slate-200"></div>
+    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap px-2">
+      {label} {count !== undefined && <span className="text-slate-300">({count})</span>}
+    </span>
+    <div className="flex-1 h-px bg-slate-200"></div>
+  </div>
+);
+
+
+const LogView = ({ auditLogs, db }) => {
+  const [filters, setFilters] = useState({ username: '', date: '', recipient: '', type: '', action: '' });
+  const [resetKey, setResetKey] = useState(0);
+  const [sortCol, setSortCol] = useState('code');
+  const [sortDir, setSortDir] = useState('desc');
+
+  const handleClearLog = async () => {
+    if (!window.confirm('Cancellare tutto il registro operazioni?')) return;
+    const snap = await getDocs(collection(db, 'auditLog'));
+    await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'auditLog', d.id))));
+  };
+
+  const actionLabel = (a) => {
+    const map = { inviata: '📤 Inviata', approvata: '✅ Approvata', rifiutata: '❌ Rifiutata', cancellata: '🗑 Cancellata', modificata: '✏️ Modificata', 'rivalutata→approvata': '🔄 Rivalutata→Appr.' };
+    return map[a] || a;
+  };
+
+  const handleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  const SortIcon = ({ col }) => {
+    if (sortCol !== col) return <span className="text-slate-300 ml-1">↕</span>;
+    return <span className="text-blue-500 ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  };
+
+  const filtered = auditLogs
+    .filter(l =>
+      (!filters.username || (l.username||'').toLowerCase().includes(filters.username.toLowerCase())) &&
+      (!filters.date     || (l.date||'').includes(filters.date)) &&
+      (!filters.recipient|| (l.recipient||'').toLowerCase().includes(filters.recipient.toLowerCase())) &&
+      (!filters.type     || (l.type||'').toLowerCase().includes(filters.type.toLowerCase())) &&
+      (!filters.action   || (l.action||'').toLowerCase().includes(filters.action.toLowerCase()))
+    )
+    .sort((a, b) => {
+      const va = (a[sortCol] || '').toString();
+      const vb = (b[sortCol] || '').toString();
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+
+  // FilterInput uncontrolled: usa defaultValue invece di value → nessun re-mount
+  const FilterInput = ({ col, placeholder }) => (
+    <input
+      key={resetKey + '-' + col}
+      type="text"
+      defaultValue={filters[col]}
+      onChange={e => setFilters(f => ({ ...f, [col]: e.target.value }))}
+      placeholder={placeholder}
+      className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
+    />
+  );
+
+  const hasFilters = Object.values(filters).some(v => v !== '');
+  const resetFilters = () => {
+    setFilters({ username: '', date: '', recipient: '', type: '', action: '' });
+    setResetKey(k => k + 1);
+  };
+
+  return (
+    <div className="space-y-3 pb-6 px-6">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black uppercase italic">Registro Operazioni</h2>
+          <p className="text-[10px] text-slate-400 font-bold mt-0.5">Vista ottimizzata per monitor — {auditLogs.length} operazioni totali</p>
+        </div>
+        <div className="flex gap-2">
+          {hasFilters && (
+            <button onClick={resetFilters}
+              className="flex items-center gap-1 bg-slate-100 text-slate-500 px-3 py-2 rounded-xl font-black uppercase text-xs">
+              <X size={12}/> Reset filtri
+            </button>
+          )}
+          <button onClick={handleClearLog} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
+            <Trash2 size={14}/> Svuota
+          </button>
+        </div>
+      </div>
+
+      <p className="text-[10px] font-bold text-slate-400">
+        {filtered.length} di {auditLogs.length} operazioni
+        {hasFilters && ' (filtrate)'}
+      </p>
+
+      {auditLogs.length === 0 && <p className="text-slate-400 text-sm font-bold text-center py-8">Nessuna operazione registrata.</p>}
+
+      {(() => {
+        const { thisWeek, lastThirty, older } = classifyByTime(filtered, l => l.createdAt || new Date().toISOString());
+        const sections = [
+          { items: thisWeek, label: 'Questa settimana', color: 'text-blue-500' },
+          { items: lastThirty, label: 'Ultimi 30 giorni', color: 'text-slate-400' },
+          { items: older, label: 'Archivio precedente', color: 'text-slate-300' },
+        ].filter(s => s.items.length > 0);
+
+        const TableHead = () => (
+          <thead className="bg-slate-900 border-b sticky top-0 z-10">
+              <tr className="text-[9px] font-black uppercase tracking-widest text-slate-300">
+                <th className="px-3 py-2 cursor-pointer select-none whitespace-nowrap w-48" onClick={() => handleSort('code')}>
+                  Codice <SortIcon col="code"/>
+                </th>
+                {/* Username */}
+                <th className="px-3 py-2 w-32">
+                  <div className="cursor-pointer select-none" onClick={() => handleSort('username')}>Username <SortIcon col="username"/></div>
+                  <FilterInput col="username" placeholder="Filtra..."/>
+                </th>
+                {/* Data */}
+                <th className="px-3 py-2 w-28">
+                  <div className="cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('date')}>Data <SortIcon col="date"/></div>
+                  <FilterInput col="date" placeholder="gg/mm/aaaa"/>
+                </th>
+                {/* Orario */}
+                <th className="px-3 py-2 w-24 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('time')}>
+                  Orario <SortIcon col="time"/>
+                </th>
+                {/* Destinatario */}
+                <th className="px-3 py-2 w-36">
+                  <div className="cursor-pointer select-none" onClick={() => handleSort('recipient')}>Destinatario <SortIcon col="recipient"/></div>
+                  <FilterInput col="recipient" placeholder="Filtra..."/>
+                </th>
+                {/* Tipo */}
+                <th className="px-3 py-2 w-28">
+                  <div className="cursor-pointer select-none" onClick={() => handleSort('type')}>Tipo <SortIcon col="type"/></div>
+                  <FilterInput col="type" placeholder="ferie..."/>
+                </th>
+                {/* Azione */}
+                <th className="px-3 py-2 w-44">
+                  <div className="cursor-pointer select-none" onClick={() => handleSort('action')}>Azione <SortIcon col="action"/></div>
+                  <FilterInput col="action" placeholder="appr..."/>
+                </th>
+                {/* Nota */}
+                <th className="px-3 py-2">Nota</th>
+              </tr>
+            </thead>
+        );
+
+        if (filtered.length === 0) return (
+          <p className="text-center text-slate-400 text-sm font-bold py-6">Nessun risultato per i filtri applicati.</p>
+        );
+
+        return (
+          <div className="space-y-2">
+            {sections.map(({ items, label, color }, si) => (
+              <div key={si}>
+                {si === 0
+                  ? <p className={'text-[10px] font-black uppercase tracking-widest mb-2 ' + color}>{label} ({items.length})</p>
+                  : <SectionDivider label={label} count={items.length}/>
+                }
+                <div className="bg-white border-y overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-[11px]">
+                      <TableHead/>
+                      <tbody className="divide-y divide-slate-50">
+                        {items.map(l => (
+                          <tr key={l.id} className={'border-b border-slate-100 text-[11px] hover:bg-blue-50/40 transition-colors ' + (si === 2 ? 'opacity-50' : '')}>
+                            <td className="px-3 py-2 font-mono text-[9px] text-slate-400 whitespace-nowrap">{l.code}</td>
+                            <td className="px-3 py-2 font-black text-slate-800 uppercase whitespace-nowrap">{l.username}</td>
+                            <td className="px-3 py-2 font-bold text-slate-600 whitespace-nowrap">{l.date}</td>
+                            <td className="px-3 py-2 font-bold text-slate-500 whitespace-nowrap tabular-nums">{l.time}</td>
+                            <td className="px-3 py-2 font-bold text-slate-600 whitespace-nowrap">{l.recipient}</td>
+                            <td className="px-3 py-2"><span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">{l.type}</span></td>
+                            <td className="px-3 py-2 whitespace-nowrap font-bold text-slate-700">{actionLabel(l.action)}</td>
+                            <td className="px-3 py-2 text-slate-500 italic">{l.nota || <span className="text-slate-200">—</span>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+    </div>
+  );
+};
+
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('calendar');
@@ -1092,40 +1305,6 @@ export default function App() {
     );
   };
 
-  // ─── Helpers suddivisione temporale ───────────────────────────────────────
-  const getWeekBounds = () => {
-    const now = new Date();
-    const day = now.getDay(); // 0=Dom
-    const diffToMon = day === 0 ? -6 : 1 - day;
-    const mon = new Date(now); mon.setDate(now.getDate() + diffToMon); mon.setHours(0,0,0,0);
-    const sat = new Date(mon); sat.setDate(mon.getDate() + 5); sat.setHours(23,59,59,999);
-    return { mon, sat };
-  };
-
-  const classifyByTime = (items, getDateFn) => {
-    const { mon, sat } = getWeekBounds();
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
-    const thisWeek = [], lastThirty = [], older = [];
-    for (const item of items) {
-      const d = new Date(getDateFn(item));
-      if (d >= mon && d <= sat) thisWeek.push(item);
-      else if (d >= thirtyDaysAgo) lastThirty.push(item);
-      else older.push(item);
-    }
-    return { thisWeek, lastThirty, older };
-  };
-
-  const SectionDivider = ({ label, count }) => (
-    <div className="flex items-center gap-3 my-4">
-      <div className="flex-1 h-px bg-slate-200"></div>
-      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap px-2">
-        {label} {count !== undefined && <span className="text-slate-300">({count})</span>}
-      </span>
-      <div className="flex-1 h-px bg-slate-200"></div>
-    </div>
-  );
-
   const NotificationsView = () => {
     const [approvalNotes, setApprovalNotes] = useState({});
     const myPending = requests.filter(r => r.assignedTo === user.name && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco'));
@@ -1310,182 +1489,6 @@ export default function App() {
     );
   };
 
-  const LogView = () => {
-    const [filters, setFilters] = useState({ username: '', date: '', recipient: '', type: '', action: '' });
-    const [resetKey, setResetKey] = useState(0);
-    const [sortCol, setSortCol] = useState('code');
-    const [sortDir, setSortDir] = useState('desc');
-
-    const handleClearLog = async () => {
-      if (!window.confirm('Cancellare tutto il registro operazioni?')) return;
-      const snap = await getDocs(collection(db, 'auditLog'));
-      await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'auditLog', d.id))));
-    };
-
-    const actionLabel = (a) => {
-      const map = { inviata: '📤 Inviata', approvata: '✅ Approvata', rifiutata: '❌ Rifiutata', cancellata: '🗑 Cancellata', modificata: '✏️ Modificata', 'rivalutata→approvata': '🔄 Rivalutata→Appr.' };
-      return map[a] || a;
-    };
-
-    const handleSort = (col) => {
-      if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-      else { setSortCol(col); setSortDir('asc'); }
-    };
-
-    const SortIcon = ({ col }) => {
-      if (sortCol !== col) return <span className="text-slate-300 ml-1">↕</span>;
-      return <span className="text-blue-500 ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>;
-    };
-
-    const filtered = auditLogs
-      .filter(l =>
-        (!filters.username || (l.username||'').toLowerCase().includes(filters.username.toLowerCase())) &&
-        (!filters.date     || (l.date||'').includes(filters.date)) &&
-        (!filters.recipient|| (l.recipient||'').toLowerCase().includes(filters.recipient.toLowerCase())) &&
-        (!filters.type     || (l.type||'').toLowerCase().includes(filters.type.toLowerCase())) &&
-        (!filters.action   || (l.action||'').toLowerCase().includes(filters.action.toLowerCase()))
-      )
-      .sort((a, b) => {
-        const va = (a[sortCol] || '').toString();
-        const vb = (b[sortCol] || '').toString();
-        return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-      });
-
-    // FilterInput uncontrolled: usa defaultValue invece di value → nessun re-mount
-    const FilterInput = ({ col, placeholder }) => (
-      <input
-        key={resetKey + '-' + col}
-        type="text"
-        defaultValue={filters[col]}
-        onChange={e => setFilters(f => ({ ...f, [col]: e.target.value }))}
-        placeholder={placeholder}
-        className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
-      />
-    );
-
-    const hasFilters = Object.values(filters).some(v => v !== '');
-    const resetFilters = () => {
-      setFilters({ username: '', date: '', recipient: '', type: '', action: '' });
-      setResetKey(k => k + 1);
-    };
-
-    return (
-      <div className="space-y-3 pb-6 px-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-black uppercase italic">Registro Operazioni</h2>
-            <p className="text-[10px] text-slate-400 font-bold mt-0.5">Vista ottimizzata per monitor — {auditLogs.length} operazioni totali</p>
-          </div>
-          <div className="flex gap-2">
-            {hasFilters && (
-              <button onClick={resetFilters}
-                className="flex items-center gap-1 bg-slate-100 text-slate-500 px-3 py-2 rounded-xl font-black uppercase text-xs">
-                <X size={12}/> Reset filtri
-              </button>
-            )}
-            <button onClick={handleClearLog} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
-              <Trash2 size={14}/> Svuota
-            </button>
-          </div>
-        </div>
-
-        <p className="text-[10px] font-bold text-slate-400">
-          {filtered.length} di {auditLogs.length} operazioni
-          {hasFilters && ' (filtrate)'}
-        </p>
-
-        {auditLogs.length === 0 && <p className="text-slate-400 text-sm font-bold text-center py-8">Nessuna operazione registrata.</p>}
-
-        {(() => {
-          const { thisWeek, lastThirty, older } = classifyByTime(filtered, l => l.createdAt || new Date().toISOString());
-          const sections = [
-            { items: thisWeek, label: 'Questa settimana', color: 'text-blue-500' },
-            { items: lastThirty, label: 'Ultimi 30 giorni', color: 'text-slate-400' },
-            { items: older, label: 'Archivio precedente', color: 'text-slate-300' },
-          ].filter(s => s.items.length > 0);
-
-          const TableHead = () => (
-            <thead className="bg-slate-900 border-b sticky top-0 z-10">
-                <tr className="text-[9px] font-black uppercase tracking-widest text-slate-300">
-                  <th className="px-3 py-2 cursor-pointer select-none whitespace-nowrap w-48" onClick={() => handleSort('code')}>
-                    Codice <SortIcon col="code"/>
-                  </th>
-                  {/* Username */}
-                  <th className="px-3 py-2 w-32">
-                    <div className="cursor-pointer select-none" onClick={() => handleSort('username')}>Username <SortIcon col="username"/></div>
-                    <FilterInput col="username" placeholder="Filtra..."/>
-                  </th>
-                  {/* Data */}
-                  <th className="px-3 py-2 w-28">
-                    <div className="cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('date')}>Data <SortIcon col="date"/></div>
-                    <FilterInput col="date" placeholder="gg/mm/aaaa"/>
-                  </th>
-                  {/* Orario */}
-                  <th className="px-3 py-2 w-24 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('time')}>
-                    Orario <SortIcon col="time"/>
-                  </th>
-                  {/* Destinatario */}
-                  <th className="px-3 py-2 w-36">
-                    <div className="cursor-pointer select-none" onClick={() => handleSort('recipient')}>Destinatario <SortIcon col="recipient"/></div>
-                    <FilterInput col="recipient" placeholder="Filtra..."/>
-                  </th>
-                  {/* Tipo */}
-                  <th className="px-3 py-2 w-28">
-                    <div className="cursor-pointer select-none" onClick={() => handleSort('type')}>Tipo <SortIcon col="type"/></div>
-                    <FilterInput col="type" placeholder="ferie..."/>
-                  </th>
-                  {/* Azione */}
-                  <th className="px-3 py-2 w-44">
-                    <div className="cursor-pointer select-none" onClick={() => handleSort('action')}>Azione <SortIcon col="action"/></div>
-                    <FilterInput col="action" placeholder="appr..."/>
-                  </th>
-                  {/* Nota */}
-                  <th className="px-3 py-2">Nota</th>
-                </tr>
-              </thead>
-          );
-
-          if (filtered.length === 0) return (
-            <p className="text-center text-slate-400 text-sm font-bold py-6">Nessun risultato per i filtri applicati.</p>
-          );
-
-          return (
-            <div className="space-y-2">
-              {sections.map(({ items, label, color }, si) => (
-                <div key={si}>
-                  {si === 0
-                    ? <p className={'text-[10px] font-black uppercase tracking-widest mb-2 ' + color}>{label} ({items.length})</p>
-                    : <SectionDivider label={label} count={items.length}/>
-                  }
-                  <div className="bg-white border-y overflow-hidden shadow-sm">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-[11px]">
-                        <TableHead/>
-                        <tbody className="divide-y divide-slate-50">
-                          {items.map(l => (
-                            <tr key={l.id} className={'border-b border-slate-100 text-[11px] hover:bg-blue-50/40 transition-colors ' + (si === 2 ? 'opacity-50' : '')}>
-                              <td className="px-3 py-2 font-mono text-[9px] text-slate-400 whitespace-nowrap">{l.code}</td>
-                              <td className="px-3 py-2 font-black text-slate-800 uppercase whitespace-nowrap">{l.username}</td>
-                              <td className="px-3 py-2 font-bold text-slate-600 whitespace-nowrap">{l.date}</td>
-                              <td className="px-3 py-2 font-bold text-slate-500 whitespace-nowrap tabular-nums">{l.time}</td>
-                              <td className="px-3 py-2 font-bold text-slate-600 whitespace-nowrap">{l.recipient}</td>
-                              <td className="px-3 py-2"><span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">{l.type}</span></td>
-                              <td className="px-3 py-2 whitespace-nowrap font-bold text-slate-700">{actionLabel(l.action)}</td>
-                              <td className="px-3 py-2 text-slate-500 italic">{l.nota || <span className="text-slate-200">—</span>}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-      </div>
-    );
-  };
 
   if (loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><p className="text-white font-black text-xl animate-pulse">Caricamento...</p></div>;
 
@@ -1536,7 +1539,7 @@ export default function App() {
           {view === 'notifications' && <NotificationsView />}
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && showAdmin && <ClosuresView />}
-          {view === 'log' && showAdmin && <LogView />}
+          {view === 'log' && showAdmin && <LogView auditLogs={auditLogs} db={db} />}
         </div>
       </main>
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white flex z-30 border-t border-slate-800">
