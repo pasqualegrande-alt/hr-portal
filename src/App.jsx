@@ -1748,7 +1748,7 @@ export default function App() {
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && showAdmin && <ClosuresView />}
           {view === 'log' && showAdmin && <LogView auditLogs={auditLogs} db={db} />}
-          {view === 'overview' && showAdmin && <OverviewView users={users} requests={requests} closures={closures} />}
+          {view === 'overview' && (showAdmin || user.role === 'responsabile') && <OverviewView users={users} requests={requests} closures={closures} />}
         </div>
       </main>
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white flex z-30 border-t border-slate-800">
@@ -1774,7 +1774,7 @@ export default function App() {
             <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Registro</span>
           </button>
         )}
-        {showAdmin && (
+        {(showAdmin || user.role === 'responsabile') && (
           <button onClick={() => setView('overview')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'overview' ? 'text-blue-400' : 'text-slate-500')}>
             <LayoutGrid size={22}/><span className="text-[10px] font-black uppercase">Overview</span>
           </button>
