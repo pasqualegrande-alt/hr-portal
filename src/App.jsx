@@ -353,7 +353,7 @@ const OverviewView = ({ users, requests, closures }) => {
 
   // Dipendenti ordinati per cognome (escludi CEO)
   const sorted = [...users]
-    .filter(u => u.role !== 'CEO' && u.lastName)
+    .filter(u => u.role !== 'CEO' && u.role !== 'amministratore' && u.lastName)
     .sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '', 'it'))
     .filter(u => {
       if (!nameFilter) return true;
@@ -426,7 +426,7 @@ const OverviewView = ({ users, requests, closures }) => {
                 const weekGroups = [];
                 let currentWeek = null;
                 for (const d of days) {
-                  const w = getISOWeek(new Date(year, month, d.day));
+                  const w = getISOWeek(new Date(d.iso + 'T12:00:00'));
                   if (currentWeek && currentWeek.week === w) {
                     currentWeek.count++;
                   } else {
@@ -490,7 +490,7 @@ const OverviewView = ({ users, requests, closures }) => {
                   {/* Nome sticky */}
                   <td className={'sticky left-0 z-10 px-3 py-1 font-bold text-slate-700 border-r border-slate-100 whitespace-nowrap ' + (ri % 2 === 0 ? 'bg-white' : 'bg-slate-50')}>
                     <span className="text-[9px] text-slate-400 font-black uppercase mr-1">{u.username}</span>
-                    <span className="text-[10px]">{u.firstName} {u.lastName}</span>
+                    <span className="text-[10px]">{(u.firstName + ' ' + u.lastName).toLowerCase()}</span>
                   </td>
                   {/* Celle giorni */}
                   {days.map(({ iso, dow, month: dm }, idx) => {
