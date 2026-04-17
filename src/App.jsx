@@ -406,6 +406,32 @@ const OverviewView = ({ users, requests, closures }) => {
         <div className="overflow-x-auto">
           <table className="text-[10px] border-collapse" style={{minWidth: 'max-content'}}>
             <thead>
+              {/* Riga numero settimane */}
+              {(() => {
+                // Raggruppa i giorni per settimana ISO
+                const weekGroups = [];
+                let currentWeek = null;
+                for (const d of days) {
+                  const w = getISOWeek(new Date(year, month, d.day));
+                  if (currentWeek && currentWeek.week === w) {
+                    currentWeek.count++;
+                  } else {
+                    currentWeek = { week: w, count: 1 };
+                    weekGroups.push(currentWeek);
+                  }
+                }
+                return (
+                  <tr className="bg-slate-800">
+                    <th className="sticky left-0 z-20 bg-slate-800"></th>
+                    {weekGroups.map((wg, i) => (
+                      <th key={i} colSpan={wg.count}
+                        className="text-center border-x border-slate-700 py-1">
+                        <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">W{wg.week}</span>
+                      </th>
+                    ))}
+                  </tr>
+                );
+              })()}
               <tr className="bg-slate-900">
                 {/* Colonna nome + filtro */}
                 <th className="sticky left-0 z-20 bg-slate-900 px-3 py-1 text-left min-w-[160px]">
@@ -426,7 +452,6 @@ const OverviewView = ({ users, requests, closures }) => {
                     <th key={iso}
                       className={'px-0 py-1 text-center font-black ' + (isWe ? 'bg-slate-700' : closure ? 'bg-purple-800' : 'bg-slate-900')}
                       style={{width: '28px', minWidth: '28px'}}>
-                      {/* Data verticale */}
                       <div className="flex flex-col items-center gap-0">
                         <span className={'text-[8px] ' + (isWe ? 'text-slate-400' : 'text-slate-300')}>{DOW_LABELS[dow]}</span>
                         <span className={'font-black ' + (isWe ? 'text-slate-400' : 'text-slate-200')} style={{fontSize:'9px'}}>{String(day).padStart(2,'0')}</span>
@@ -1742,7 +1767,7 @@ export default function App() {
         </div>
       </header>
       <main className="flex-1 pt-16 pb-24 px-4 overflow-y-auto">
-        <div className={view === 'log' ? "pt-5" : "max-w-2xl mx-auto pt-5"}>
+        <div className={view === 'log' || view === 'overview' ? "pt-5 px-4" : "max-w-2xl mx-auto pt-5"}>
           {view === 'calendar' && <CalendarView />}
           {view === 'notifications' && <NotificationsView />}
           {view === 'users' && showAdmin && <AdminUsersView />}
