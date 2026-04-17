@@ -336,14 +336,20 @@ const OverviewView = ({ users, requests, closures }) => {
 
   const year  = overviewDate.getFullYear();
   const month = overviewDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  // Genera array di date del mese
-  const days = Array.from({ length: daysInMonth }, (_, i) => {
-    const d = new Date(year, month, i + 1);
-    const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;
-    return { day: i + 1, iso, dow: d.getDay() }; // dow: 0=dom,6=sab
-  });
+  // Genera array di date per 2 mesi (mese corrente + successivo)
+  const buildDaysForMonth = (y, m) => {
+    const dim = new Date(y, m + 1, 0).getDate();
+    return Array.from({ length: dim }, (_, i) => {
+      const d = new Date(y, m, i + 1);
+      const iso = `${y}-${String(m+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;
+      return { day: i + 1, iso, dow: d.getDay(), month: m, year: y };
+    });
+  };
+  const nextYear  = month === 11 ? year + 1 : year;
+  const nextMonth = month === 11 ? 0 : month + 1;
+  const days = [...buildDaysForMonth(year, month), ...buildDaysForMonth(nextYear, nextMonth)];
+  const daysInMonth = days.length;
 
   // Dipendenti ordinati per cognome (escludi CEO)
   const sorted = [...users]
@@ -369,8 +375,15 @@ const OverviewView = ({ users, requests, closures }) => {
   // Chiusure aziendali
   const getClosureForDate = (iso) => closures.find(c => iso >= c.dal && iso <= c.al) || null;
 
-  // Mese in italiano
-  const monthLabel = overviewDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' }).toUpperCase();
+  // Etichetta mesi
+  const monthLabel = (
+    overviewDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' }).toUpperCase() +
+    '  →  ' +
+    new Date(nextYear, nextMonth).toLocaleString('it-IT', { month: 'long', year: 'numeric' }).toUpperCase()
+  );
+
+  // Oggi
+  const todayISO = new Date().toISOString().split('T')[0];
 
   // Nomi giorni brevi
   const DOW_LABELS = ['D','L','M','M','G','V','S'];
@@ -446,17 +459,23 @@ const OverviewView = ({ users, requests, closures }) => {
                   />
                 </th>
                 {/* Colonne giorni */}
-                {days.map(({ day, iso, dow }) => {
+                {days.map(({ day, iso, dow, month: dm }, idx) => {
                   const isWe = dow === 0 || dow === 6;
+                  const isToday = iso === todayISO;
+                  const isMonthBoundary = idx > 0 && dm !== days[idx-1].month;
                   const closure = getClosureForDate(iso);
+                  let thBg = isWe ? 'bg-slate-700' : closure ? 'bg-purple-800' : 'bg-slate-900';
+                  if (isToday) thBg = 'bg-blue-600';
                   return (
                     <th key={iso}
-                      className={'px-0 py-1 text-center font-black ' + (isWe ? 'bg-slate-700' : closure ? 'bg-purple-800' : 'bg-slate-900')}
+                      className={'px-0 py-1 text-center font-black ' + thBg + (isMonthBoundary ? ' border-l-2 border-blue-400' : '')}
                       style={{width: '28px', minWidth: '28px'}}>
+                      {isToday && <div className="w-full h-0.5 bg-blue-300 mb-0.5 rounded-full"/>}
                       <div className="flex flex-col items-center gap-0">
-                        <span className={'text-[8px] ' + (isWe ? 'text-slate-400' : 'text-slate-300')}>{DOW_LABELS[dow]}</span>
-                        <span className={'font-black ' + (isWe ? 'text-slate-400' : 'text-slate-200')} style={{fontSize:'9px'}}>{String(day).padStart(2,'0')}</span>
+                        <span className={'text-[8px] ' + (isToday ? 'text-white font-black' : isWe ? 'text-slate-400' : 'text-slate-300')}>{DOW_LABELS[dow]}</span>
+                        <span className={'font-black ' + (isToday ? 'text-white' : isWe ? 'text-slate-400' : 'text-slate-200')} style={{fontSize:'9px'}}>{String(day).padStart(2,'0')}</span>
                       </div>
+                      {isToday && <div className="w-full h-0.5 bg-blue-300 mt-0.5 rounded-full"/>}
                     </th>
                   );
                 })}
@@ -474,32 +493,37 @@ const OverviewView = ({ users, requests, closures }) => {
                     <span className="text-[10px]">{u.firstName} {u.lastName}</span>
                   </td>
                   {/* Celle giorni */}
-                  {days.map(({ iso, dow }) => {
+                  {days.map(({ iso, dow, month: dm }, idx) => {
                     const isWe = dow === 0 || dow === 6;
+                    const isToday = iso === todayISO;
+                    const isMonthBoundary = idx > 0 && dm !== days[idx-1].month;
                     const closure = getClosureForDate(iso);
                     const reqs = reqMap[`${u.id}_${iso}`] || [];
-                    // Priorità visualizzazione: ferie > trasferta > malattia > permesso > fuorisede
                     const order = ['ferie','trasferta','malattia','permesso','fuorisede'];
                     const req = reqs.sort((a,b) => order.indexOf(a.type) - order.indexOf(b.type))[0];
+                    const borderLeft = isMonthBoundary ? 'border-l-2 border-blue-400' : '';
+                    const todayBg = isToday ? 'bg-blue-50' : '';
 
                     if (isWe) return (
-                      <td key={iso} className="bg-slate-100 border border-slate-200" style={{width:'28px',minWidth:'28px'}}></td>
+                      <td key={iso} className={'bg-slate-100 border border-slate-200 ' + borderLeft + (isToday ? ' bg-blue-200' : '')} style={{width:'28px',minWidth:'28px'}}>
+                        {isToday && <div className="w-full h-full flex items-center justify-center"><span className="text-[7px] text-blue-400 font-black">●</span></div>}
+                      </td>
                     );
                     if (closure) return (
-                      <td key={iso} className="bg-purple-100 border border-purple-200 text-center" style={{width:'28px',minWidth:'28px'}}>
+                      <td key={iso} className={'bg-purple-100 border border-purple-200 text-center ' + borderLeft} style={{width:'28px',minWidth:'28px'}}>
                         <span className="text-[7px] font-black text-purple-400">C</span>
                       </td>
                     );
                     if (!req) return (
-                      <td key={iso} className="border border-slate-100" style={{width:'28px',minWidth:'28px'}}></td>
+                      <td key={iso} className={'border border-slate-100 ' + todayBg + ' ' + borderLeft} style={{width:'28px',minWidth:'28px'}}>
+                        {isToday && <div className="w-full h-full flex items-center justify-center py-1"><span className="text-[7px] text-blue-400 font-black">●</span></div>}
+                      </td>
                     );
-
                     const colors = TYPE_COLORS[req.type] || { bg: 'bg-slate-300', text: 'text-white', label: '?' };
-                    // Rifiutato → croce
                     const isRejected = req.status === 'rifiutato';
                     return (
                       <td key={iso}
-                        className={'border border-white text-center ' + (isRejected ? 'bg-slate-200' : colors.bg)}
+                        className={'border text-center ' + (isToday ? 'border-blue-400 border-2' : 'border-white') + ' ' + (isRejected ? 'bg-slate-200' : colors.bg) + ' ' + borderLeft}
                         style={{width:'28px',minWidth:'28px'}}
                         title={`${u.firstName} ${u.lastName} — ${req.type} (${req.status})`}>
                         {isRejected
