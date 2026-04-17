@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, Bell, LogOut, ChevronLeft, ChevronRight, Trash2, Edit3, CheckCircle, XCircle, UserPlus, Save, X, Building2, GitBranch, Briefcase, Clock, ClipboardList, RefreshCw } from 'lucide-react';
+import { Calendar, Users, Bell, LogOut, ChevronLeft, ChevronRight, Trash2, Edit3, CheckCircle, XCircle, UserPlus, Save, X, Building2, GitBranch, Briefcase, Clock, ClipboardList, RefreshCw, LayoutGrid } from 'lucide-react';
 import { db, getMessagingInstance } from './firebase';
 import { collection, doc, setDoc, getDocs, onSnapshot, deleteDoc, updateDoc, addDoc, query, orderBy } from 'firebase/firestore';
 import { getToken, onMessage } from 'firebase/messaging';
@@ -320,6 +320,178 @@ const LogView = ({ auditLogs, db }) => {
   );
 };
 
+
+const TYPE_COLORS = {
+  ferie:     { bg: 'bg-red-500',    text: 'text-white',      label: 'F' },
+  malattia:  { bg: 'bg-orange-400', text: 'text-white',      label: 'M' },
+  trasferta: { bg: 'bg-blue-500',   text: 'text-white',      label: 'T' },
+  permesso:  { bg: 'bg-slate-400',  text: 'text-white',      label: 'P' },
+  fuorisede: { bg: 'bg-teal-500',   text: 'text-white',      label: 'FS' },
+};
+
+const OverviewView = ({ users, requests, closures }) => {
+  const [overviewDate, setOverviewDate] = useState(new Date());
+  const [nameFilter, setNameFilter] = useState('');
+
+  const year  = overviewDate.getFullYear();
+  const month = overviewDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // Genera array di date del mese
+  const days = Array.from({ length: daysInMonth }, (_, i) => {
+    const d = new Date(year, month, i + 1);
+    const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;
+    return { day: i + 1, iso, dow: d.getDay() }; // dow: 0=dom,6=sab
+  });
+
+  // Dipendenti ordinati per cognome (escludi CEO)
+  const sorted = [...users]
+    .filter(u => u.role !== 'CEO' && u.lastName)
+    .sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '', 'it'))
+    .filter(u => {
+      if (!nameFilter) return true;
+      const full = `${u.firstName} ${u.lastName}`.toLowerCase();
+      return full.includes(nameFilter.toLowerCase());
+    });
+
+  // Mappa richieste per userId+date
+  const reqMap = {};
+  for (const r of requests) {
+    if (!r.dates) continue;
+    for (const d of r.dates) {
+      const key = `${r.userId}_${d}`;
+      if (!reqMap[key]) reqMap[key] = [];
+      reqMap[key].push(r);
+    }
+  }
+
+  // Chiusure aziendali
+  const getClosureForDate = (iso) => closures.find(c => iso >= c.dal && iso <= c.al) || null;
+
+  // Mese in italiano
+  const monthLabel = overviewDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' }).toUpperCase();
+
+  // Nomi giorni brevi
+  const DOW_LABELS = ['D','L','M','M','G','V','S'];
+
+  return (
+    <div className="pb-6">
+      {/* Header navigazione mese */}
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <button onClick={() => setOverviewDate(new Date(year, month - 1))}
+          className="p-3 bg-white border rounded-2xl shadow-sm"><ChevronLeft size={18}/></button>
+        <span className="font-black uppercase italic text-sm">{monthLabel}</span>
+        <button onClick={() => setOverviewDate(new Date(year, month + 1))}
+          className="p-3 bg-white border rounded-2xl shadow-sm"><ChevronRight size={18}/></button>
+      </div>
+
+      {/* Legenda */}
+      <div className="flex gap-2 flex-wrap mb-4">
+        {Object.entries(TYPE_COLORS).map(([type, c]) => (
+          <span key={type} className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+            <span className={`w-4 h-4 rounded ${c.bg} inline-block`}></span>
+            {type === 'ferie' ? 'Ferie/In attesa' : type === 'malattia' ? 'Malattia' : type === 'trasferta' ? 'Trasferta' : type === 'permesso' ? 'Permesso' : 'Fuori sede'}
+          </span>
+        ))}
+        <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+          <span className="w-4 h-4 rounded bg-purple-300 inline-block"></span>Chiusura az.
+        </span>
+        <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+          <span className="w-4 h-4 rounded bg-slate-100 border inline-block"></span>Weekend
+        </span>
+      </div>
+
+      {/* Tabella */}
+      <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="text-[10px] border-collapse" style={{minWidth: 'max-content'}}>
+            <thead>
+              <tr className="bg-slate-900">
+                {/* Colonna nome + filtro */}
+                <th className="sticky left-0 z-20 bg-slate-900 px-3 py-1 text-left min-w-[160px]">
+                  <div className="text-[9px] font-black text-slate-300 uppercase mb-1">Dipendente</div>
+                  <input
+                    type="text"
+                    placeholder="Filtra..."
+                    value={nameFilter}
+                    onChange={e => setNameFilter(e.target.value)}
+                    className="w-full p-1 bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200 outline-none placeholder-slate-500"
+                  />
+                </th>
+                {/* Colonne giorni */}
+                {days.map(({ day, iso, dow }) => {
+                  const isWe = dow === 0 || dow === 6;
+                  const closure = getClosureForDate(iso);
+                  return (
+                    <th key={iso}
+                      className={'px-0 py-1 text-center font-black ' + (isWe ? 'bg-slate-700' : closure ? 'bg-purple-800' : 'bg-slate-900')}
+                      style={{width: '28px', minWidth: '28px'}}>
+                      {/* Data verticale */}
+                      <div className="flex flex-col items-center gap-0">
+                        <span className={'text-[8px] ' + (isWe ? 'text-slate-400' : 'text-slate-300')}>{DOW_LABELS[dow]}</span>
+                        <span className={'font-black ' + (isWe ? 'text-slate-400' : 'text-slate-200')} style={{fontSize:'9px'}}>{String(day).padStart(2,'0')}</span>
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0 && (
+                <tr><td colSpan={daysInMonth + 1} className="p-6 text-center text-slate-400 font-bold">Nessun dipendente trovato.</td></tr>
+              )}
+              {sorted.map((u, ri) => (
+                <tr key={u.id} className={ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                  {/* Nome sticky */}
+                  <td className={'sticky left-0 z-10 px-3 py-1 font-bold text-slate-700 border-r border-slate-100 whitespace-nowrap ' + (ri % 2 === 0 ? 'bg-white' : 'bg-slate-50')}>
+                    <span className="text-[9px] text-slate-400 font-black uppercase mr-1">{u.username}</span>
+                    <span className="text-[10px]">{u.firstName} {u.lastName}</span>
+                  </td>
+                  {/* Celle giorni */}
+                  {days.map(({ iso, dow }) => {
+                    const isWe = dow === 0 || dow === 6;
+                    const closure = getClosureForDate(iso);
+                    const reqs = reqMap[`${u.id}_${iso}`] || [];
+                    // Priorità visualizzazione: ferie > trasferta > malattia > permesso > fuorisede
+                    const order = ['ferie','trasferta','malattia','permesso','fuorisede'];
+                    const req = reqs.sort((a,b) => order.indexOf(a.type) - order.indexOf(b.type))[0];
+
+                    if (isWe) return (
+                      <td key={iso} className="bg-slate-100 border border-slate-200" style={{width:'28px',minWidth:'28px'}}></td>
+                    );
+                    if (closure) return (
+                      <td key={iso} className="bg-purple-100 border border-purple-200 text-center" style={{width:'28px',minWidth:'28px'}}>
+                        <span className="text-[7px] font-black text-purple-400">C</span>
+                      </td>
+                    );
+                    if (!req) return (
+                      <td key={iso} className="border border-slate-100" style={{width:'28px',minWidth:'28px'}}></td>
+                    );
+
+                    const colors = TYPE_COLORS[req.type] || { bg: 'bg-slate-300', text: 'text-white', label: '?' };
+                    // Rifiutato → croce
+                    const isRejected = req.status === 'rifiutato';
+                    return (
+                      <td key={iso}
+                        className={'border border-white text-center ' + (isRejected ? 'bg-slate-200' : colors.bg)}
+                        style={{width:'28px',minWidth:'28px'}}
+                        title={`${u.firstName} ${u.lastName} — ${req.type} (${req.status})`}>
+                        {isRejected
+                          ? <span className="text-[7px] font-black text-slate-400">✕</span>
+                          : <span className={'text-[7px] font-black ' + colors.text}>{colors.label}</span>
+                        }
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -1576,6 +1748,7 @@ export default function App() {
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && showAdmin && <ClosuresView />}
           {view === 'log' && showAdmin && <LogView auditLogs={auditLogs} db={db} />}
+          {view === 'overview' && showAdmin && <OverviewView users={users} requests={requests} closures={closures} />}
         </div>
       </main>
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white flex z-30 border-t border-slate-800">
@@ -1599,6 +1772,11 @@ export default function App() {
         {showAdmin && (
           <button onClick={() => setView('log')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'log' ? 'text-blue-400' : 'text-slate-500')}>
             <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Registro</span>
+          </button>
+        )}
+        {showAdmin && (
+          <button onClick={() => setView('overview')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'overview' ? 'text-blue-400' : 'text-slate-500')}>
+            <LayoutGrid size={22}/><span className="text-[10px] font-black uppercase">Overview</span>
           </button>
         )}
       </nav>
