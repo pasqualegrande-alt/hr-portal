@@ -122,6 +122,7 @@ const LogView = ({ auditLogs, db }) => {
   const [sortDir, setSortDir] = useState('desc');
 
   const handleClearLog = async () => {
+    if (!checkResetPassword()) { alert('Password errata o operazione annullata.'); return; }
     if (!window.confirm('Cancellare tutto il registro operazioni?')) return;
     const snap = await getDocs(collection(db, 'auditLog'));
     await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'auditLog', d.id))));
@@ -518,6 +519,14 @@ const OverviewView = ({ users, requests, closures }) => {
   );
 };
 
+const RESET_PWD_HASH = btoa('Excogita!234'); // offuscata, non sicurezza vera
+
+const checkResetPassword = () => {
+  const pwd = window.prompt('Inserisci la password di autorizzazione per procedere:');
+  if (pwd === null) return false; // annullato
+  return btoa(pwd) === RESET_PWD_HASH;
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('calendar');
@@ -685,6 +694,7 @@ export default function App() {
     };
 
     const handleResetAll = async () => {
+      if (!checkResetPassword()) { alert('Password errata o operazione annullata.'); return; }
       if (!window.confirm('Sei sicuro di voler cancellare TUTTE le richieste e le notifiche?')) return;
       const [reqSnap, notifSnap] = await Promise.all([getDocs(collection(db, 'requests')), getDocs(collection(db, 'notifications'))]);
       await Promise.all([...reqSnap.docs.map(d => deleteDoc(doc(db, 'requests', d.id))), ...notifSnap.docs.map(d => deleteDoc(doc(db, 'notifications', d.id)))]);
