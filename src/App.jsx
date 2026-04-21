@@ -370,32 +370,33 @@ const HOURS_PER_DAY = 7;
 
 const HRView = ({ users, requests, closures }) => {
   const [hrDate, setHrDate] = useState(new Date());
+  const [nameFilter, setNameFilter] = useState('');
+
   const year  = hrDate.getFullYear();
   const month = hrDate.getMonth();
 
   const workingDays = getWorkingDays(year, month);
   const theoreticalHours = workingDays * HOURS_PER_DAY;
-
   const monthLabel = hrDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
 
-  // Dipendenti ordinati per cognome (escludi CEO, admin, hrmanager)
+  // Dipendenti ordinati per cognome, con filtro
   const employees = [...users]
     .filter(u => !['CEO','amministratore','hrmanager'].includes(u.role) && u.lastName)
+    .filter(u => {
+      if (!nameFilter) return true;
+      return (u.firstName + ' ' + u.lastName + ' ' + u.username).toLowerCase().includes(nameFilter.toLowerCase());
+    })
     .sort((a,b) => (a.lastName||'').localeCompare(b.lastName||'', 'it'));
 
-  // ISO del mese
   const monthISO = `${year}-${String(month+1).padStart(2,'0')}`;
 
-  // Calcola ore per dipendente nel mese
   const calcHours = (userId) => {
     const myReqs = requests.filter(r =>
       r.userId === userId &&
       r.status !== 'rifiutato' &&
       r.dates && r.dates.some(d => d.startsWith(monthISO))
     );
-
     let ferie = 0, trasferta = 0, malattia = 0, permesso = 0, fuorisede = 0, recupero = 0;
-
     for (const r of myReqs) {
       const daysInMonth = (r.dates || []).filter(d => d.startsWith(monthISO)).length;
       if (r.type === 'ferie')     ferie     += daysInMonth * HOURS_PER_DAY;
@@ -403,88 +404,122 @@ const HRView = ({ users, requests, closures }) => {
       if (r.type === 'malattia')  malattia  += daysInMonth * HOURS_PER_DAY;
       if (r.type === 'permesso')  permesso  += Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
       if (r.type === 'fuorisede') fuorisede += Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
-      // Recupero ore approvate
-      if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved) {
+      if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved)
         recupero += Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
-      }
     }
     return { ferie, trasferta, malattia, permesso, fuorisede, recupero };
   };
 
   const COLS = [
-    { key: 'ferie',     label: 'Ferie',          color: 'bg-red-50 text-red-700' },
-    { key: 'trasferta', label: 'Trasferta',       color: 'bg-blue-50 text-blue-700' },
-    { key: 'malattia',  label: 'Malattia',        color: 'bg-orange-50 text-orange-700' },
-    { key: 'permesso',  label: 'Permesso',        color: 'bg-slate-50 text-slate-700' },
-    { key: 'fuorisede', label: 'Fuori sede',      color: 'bg-teal-50 text-teal-700' },
-    { key: 'recupero',  label: 'Ore recupero aut.', color: 'bg-amber-50 text-amber-700' },
+    { key: 'ferie',     label: 'Ferie',               bg: 'bg-red-50',    text: 'text-red-700',    dot: 'bg-red-500'    },
+    { key: 'trasferta', label: 'Trasferta',            bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-500'   },
+    { key: 'malattia',  label: 'Malattia',             bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-400' },
+    { key: 'permesso',  label: 'Permesso',             bg: 'bg-slate-50',  text: 'text-slate-700',  dot: 'bg-slate-400'  },
+    { key: 'fuorisede', label: 'Fuori sede',           bg: 'bg-teal-50',   text: 'text-teal-700',   dot: 'bg-teal-500'   },
+    { key: 'recupero',  label: 'Ore recupero aut.',    bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500'  },
   ];
 
   return (
-    <div className="pb-6 px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+    <div className="pb-6 px-6">
+      {/* Header navigazione */}
+      <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <button onClick={() => setHrDate(new Date(year, month-1))}
-            className="p-3 bg-white border rounded-2xl shadow-sm"><ChevronLeft size={18}/></button>
-          <div className="text-center">
-            <p className="font-black uppercase italic text-base">{monthLabel}</p>
-            <p className="text-[10px] text-slate-400 font-bold">
-              Giorni lavorativi: <span className="text-slate-700 font-black">{workingDays}</span>
+            className="p-2.5 bg-white border rounded-xl shadow-sm hover:bg-slate-50"><ChevronLeft size={18}/></button>
+          <div>
+            <p className="font-black uppercase italic text-lg capitalize">{monthLabel}</p>
+            <p className="text-[11px] text-slate-500 font-bold mt-0.5">
+              <span className="text-slate-700 font-black">{workingDays}</span> giorni lavorativi
               &nbsp;·&nbsp;
-              Ore teoriche lavorative: <span className="text-blue-600 font-black text-sm">{theoreticalHours}h</span>
+              Ore teoriche: <span className="text-blue-600 font-black text-sm">{theoreticalHours}h</span>
             </p>
           </div>
           <button onClick={() => setHrDate(new Date(year, month+1))}
-            className="p-3 bg-white border rounded-2xl shadow-sm"><ChevronRight size={18}/></button>
+            className="p-2.5 bg-white border rounded-xl shadow-sm hover:bg-slate-50"><ChevronRight size={18}/></button>
         </div>
-        <div className="text-[10px] text-slate-400 font-bold bg-amber-50 border border-amber-100 rounded-2xl px-4 py-2">
-          📌 {HOURS_PER_DAY}h/giorno · Festività italiane escluse
+
+        {/* Filtro dipendenti + legenda */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <input
+            type="text"
+            placeholder="🔍 Filtra dipendente..."
+            value={nameFilter}
+            onChange={e => setNameFilter(e.target.value)}
+            className="p-2.5 bg-white border-2 border-slate-100 rounded-xl font-bold text-sm outline-none w-52 focus:border-blue-200"
+          />
+          {nameFilter && (
+            <button onClick={() => setNameFilter('')}
+              className="text-[10px] font-black text-slate-400 bg-slate-100 px-3 py-2 rounded-xl uppercase">
+              <X size={12} className="inline mr-1"/>Reset
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Tabella */}
-      <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
+      {/* Legenda colori */}
+      <div className="flex gap-3 flex-wrap mb-4 bg-white border rounded-2xl px-4 py-3">
+        {COLS.map(c => (
+          <span key={c.key} className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
+            <span className={`w-3.5 h-3.5 rounded-sm ${c.dot} inline-block shrink-0`}></span>
+            {c.label}
+          </span>
+        ))}
+        <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 ml-2">
+          · {HOURS_PER_DAY}h/giorno · Festività italiane escluse
+        </span>
+      </div>
+
+      {/* Tabella con header sticky */}
+      <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+        <div className="overflow-auto" style={{maxHeight: 'calc(100vh - 260px)'}}>
+          <table className="w-full text-sm border-collapse" style={{minWidth: '800px'}}>
+            <thead className="sticky top-0 z-20">
               <tr className="bg-slate-900">
-                <th className="sticky left-0 z-10 bg-slate-900 px-4 py-3 text-left text-[10px] font-black text-slate-300 uppercase tracking-widest min-w-[180px]">
+                <th className="sticky left-0 z-30 bg-slate-900 px-4 py-3 text-left text-[10px] font-black text-slate-300 uppercase tracking-widest border-r border-slate-700" style={{minWidth:'200px'}}>
+                  <div className="text-[9px] font-black text-slate-400 mb-1">
+                    {employees.length} dipendenti
+                    {nameFilter && <span className="text-blue-400 ml-1">(filtrati)</span>}
+                  </div>
                   Dipendente
                 </th>
                 {COLS.map(c => (
-                  <th key={c.key} className="px-4 py-3 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest whitespace-nowrap">
+                  <th key={c.key} className="px-5 py-3 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest whitespace-nowrap border-r border-slate-800">
+                    <span className={`inline-block w-2.5 h-2.5 rounded-sm mr-1.5 ${c.dot}`}></span>
                     {c.label}
                   </th>
                 ))}
-                <th className="px-4 py-3 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                <th className="px-5 py-3 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest whitespace-nowrap">
                   Totale ass.
                 </th>
               </tr>
             </thead>
             <tbody>
               {employees.length === 0 && (
-                <tr><td colSpan={8} className="p-6 text-center text-slate-400 font-bold">Nessun dipendente.</td></tr>
+                <tr><td colSpan={8} className="p-8 text-center text-slate-400 font-bold">Nessun dipendente trovato.</td></tr>
               )}
               {employees.map((u, ri) => {
                 const h = calcHours(u.id);
-                const totalAss = h.ferie + h.trasferta + h.malattia + h.permesso + h.fuorisede;
+                const totalAss = Math.round((h.ferie + h.trasferta + h.malattia + h.permesso + h.fuorisede) * 10) / 10;
                 const valMap = { ferie: h.ferie, trasferta: h.trasferta, malattia: h.malattia, permesso: h.permesso, fuorisede: h.fuorisede, recupero: h.recupero };
+                const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
                 return (
-                  <tr key={u.id} className={ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}>
+                  <tr key={u.id} className={rowBg + ' hover:bg-blue-50/30 transition-colors'}>
                     <td className={'sticky left-0 z-10 px-4 py-2.5 border-r border-slate-100 ' + (ri % 2 === 0 ? 'bg-white' : 'bg-slate-50')}>
-                      <p className="font-black text-slate-800 text-xs uppercase">{u.firstName} {u.lastName}</p>
-                      <p className="text-[9px] text-slate-400 font-bold">{u.username}</p>
+                      <span className="text-[9px] font-black text-slate-400 uppercase mr-1.5">{u.username}</span>
+                      <span className="text-[11px] font-bold text-slate-700">{u.firstName} {u.lastName}</span>
                     </td>
-                    {COLS.map(c => (
-                      <td key={c.key} className={'px-4 py-2.5 text-center border-r border-slate-50 ' + c.color}>
-                        <span className="font-black text-sm">
-                          {valMap[c.key] > 0 ? valMap[c.key] + 'h' : <span className="text-slate-300 font-normal">—</span>}
-                        </span>
-                      </td>
-                    ))}
-                    <td className="px-4 py-2.5 text-center">
-                      <span className={'font-black text-sm ' + (totalAss > 0 ? 'text-slate-800' : 'text-slate-300')}>
+                    {COLS.map(c => {
+                      const v = valMap[c.key];
+                      return (
+                        <td key={c.key} className={'px-5 py-2.5 text-center border-r border-slate-100 ' + (v > 0 ? c.bg : '')}>
+                          <span className={'font-black text-sm ' + (v > 0 ? c.text : 'text-slate-200')}>
+                            {v > 0 ? v + 'h' : '—'}
+                          </span>
+                        </td>
+                      );
+                    })}
+                    <td className="px-5 py-2.5 text-center">
+                      <span className={'font-black text-sm ' + (totalAss > 0 ? 'text-slate-800' : 'text-slate-200')}>
                         {totalAss > 0 ? totalAss + 'h' : '—'}
                       </span>
                     </td>
@@ -496,29 +531,29 @@ const HRView = ({ users, requests, closures }) => {
                 const totals = employees.reduce((acc, u) => {
                   const h = calcHours(u.id);
                   return {
-                    ferie: acc.ferie + h.ferie,
+                    ferie:     acc.ferie     + h.ferie,
                     trasferta: acc.trasferta + h.trasferta,
-                    malattia: acc.malattia + h.malattia,
-                    permesso: acc.permesso + h.permesso,
+                    malattia:  acc.malattia  + h.malattia,
+                    permesso:  acc.permesso  + h.permesso,
                     fuorisede: acc.fuorisede + h.fuorisede,
-                    recupero: acc.recupero + h.recupero,
+                    recupero:  acc.recupero  + h.recupero,
                   };
                 }, { ferie:0, trasferta:0, malattia:0, permesso:0, fuorisede:0, recupero:0 });
-                const totAss = totals.ferie + totals.trasferta + totals.malattia + totals.permesso + totals.fuorisede;
+                const totAss = Math.round((totals.ferie + totals.trasferta + totals.malattia + totals.permesso + totals.fuorisede) * 10) / 10;
                 return (
-                  <tr className="bg-slate-900 border-t-2 border-slate-700">
-                    <td className="sticky left-0 z-10 bg-slate-900 px-4 py-3">
+                  <tr className="bg-slate-900 border-t-2 border-slate-700 sticky bottom-0">
+                    <td className="sticky left-0 z-10 bg-slate-900 px-4 py-3 border-r border-slate-700">
                       <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Totali mese</span>
                     </td>
                     {COLS.map(c => {
-                      const v = totals[c.key];
+                      const v = Math.round(totals[c.key] * 10) / 10;
                       return (
-                        <td key={c.key} className="px-4 py-3 text-center">
+                        <td key={c.key} className="px-5 py-3 text-center border-r border-slate-800">
                           <span className="font-black text-white text-sm">{v > 0 ? v + 'h' : '—'}</span>
                         </td>
                       );
                     })}
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-5 py-3 text-center">
                       <span className="font-black text-white text-sm">{totAss > 0 ? totAss + 'h' : '—'}</span>
                     </td>
                   </tr>
