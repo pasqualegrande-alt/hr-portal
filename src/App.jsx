@@ -501,10 +501,10 @@ const HRView = ({ users, requests, closures }) => {
                 const h = calcHours(u.id);
                 const totalAss = Math.round((h.ferie + h.trasferta + h.malattia + h.permesso + h.fuorisede) * 10) / 10;
                 const valMap = { ferie: h.ferie, trasferta: h.trasferta, malattia: h.malattia, permesso: h.permesso, fuorisede: h.fuorisede, recupero: h.recupero };
-                const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
+                const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-slate-100';
                 return (
                   <tr key={u.id} className={rowBg + ' hover:bg-blue-50/30 transition-colors'}>
-                    <td className={'sticky left-0 z-10 px-4 py-2.5 border-r border-slate-100 ' + (ri % 2 === 0 ? 'bg-white' : 'bg-slate-50')}>
+                    <td className={'sticky left-0 z-10 px-4 py-2.5 border-r border-slate-200 ' + (ri % 2 === 0 ? 'bg-white' : 'bg-slate-100')}>
                       <span className="text-[9px] font-black text-slate-400 uppercase mr-1.5">{u.username}</span>
                       <span className="text-[11px] font-bold text-slate-700">{u.firstName} {u.lastName}</span>
                     </td>
@@ -2069,8 +2069,8 @@ export default function App() {
           <button onClick={() => { setUser(null); setCalFilter(null); setTypeFilter('tutti'); }} className="p-2 text-red-400"><LogOut size={20}/></button>
         </div>
       </header>
-      <main className="flex-1 pt-16 pb-24 px-4 overflow-y-auto">
-        <div className={view === 'log' || view === 'overview' ? "pt-5 px-4" : "max-w-2xl mx-auto pt-5"}>
+      <main className={"flex-1 pt-16 pb-24 overflow-y-auto " + (["log","overview","hr"].includes(view) ? "px-0" : "px-4")}>
+        <div className={view === 'log' || view === 'overview' || view === 'hr' ? "pt-5" : "max-w-2xl mx-auto pt-5"}>
           {view === 'calendar' && user.role !== 'hrmanager' && <CalendarView />}
           {view === 'hr' && user.role === 'hrmanager' && <HRView users={users} requests={requests} closures={closures} />}
           {view === 'hr' && (user.role === 'amministratore' || user.role === 'CEO') && <HRView users={users} requests={requests} closures={closures} />}
