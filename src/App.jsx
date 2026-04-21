@@ -546,14 +546,24 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
                       const reqIdList = h.reqIds[c.key] || [];
                       const handleDblClick = () => {
                         if (v <= 0 || status !== 'approvato') return;
+                        // Cerca per reqId (approvazioni recenti) oppure per username+tipo (approvazioni storiche)
+                        const reqUser = users.find(uu => uu.id === u.id);
                         const codes = (auditLogs || [])
-                          .filter(l => (l.action === 'approvata' || l.action === 'rivalutata→approvata') && reqIdList.includes(l.reqId))
+                          .filter(l => {
+                            const isApproval = l.action === 'approvato' || l.action === 'approvata' || l.action === 'rivalutata→approvata';
+                            if (!isApproval) return false;
+                            // Match per reqId (nuovo sistema)
+                            if (l.reqId && reqIdList.includes(l.reqId)) return true;
+                            // Fallback: match per destinatario + tipo (sistema vecchio senza reqId)
+                            if (l.recipient === u.name && l.type === c.key) return true;
+                            return false;
+                          })
                           .map(l => l.code)
                           .filter(Boolean);
                         if (codes.length > 0) {
                           alert('Codici approvazione:\n\n' + codes.join('\n'));
                         } else {
-                          alert('Nessun codice di approvazione trovato nel registro.\n(Le approvazioni precedenti all\'aggiornamento non hanno il codice.)');
+                          alert('Nessun codice trovato.\nVerifica nel Registro filtrando per: destinatario = ' + u.name + ', tipo = ' + c.key + ', azione = approvato');
                         }
                       };
                       return (
