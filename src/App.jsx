@@ -393,38 +393,51 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
   const calcHours = (userId) => {
     const myReqs = requests.filter(r =>
       r.userId === userId &&
-      r.status !== 'rifiutato' &&
       r.dates && r.dates.some(d => d.startsWith(monthISO))
     );
-    let ferie = 0, trasferta = 0, malattia = 0, permesso = 0, fuorisede = 0, recupero = 0;
-    // Traccia status per colorazione
-    const statusMap = { ferie: null, trasferta: null, malattia: null, permesso: null, fuorisede: null, recupero: null };
-    // Traccia requestId per ogni tipo (per audit codes)
+
+    const empty = () => ({ appr: 0, pend: 0, rif: 0 });
+    const byType = {
+      ferie: empty(), trasferta: empty(), malattia: empty(),
+      permesso: empty(), fuorisede: empty(), recupero: empty()
+    };
     const reqIds = { ferie: [], trasferta: [], malattia: [], permesso: [], fuorisede: [], recupero: [] };
+
+    const isApproved = s => s === 'approvato' || s === 'comunicato';
+    const isPending  = s => ['pendente','pendente_responsabile','pendente_mirco'].includes(s);
+    const isRejected = s => s === 'rifiutato';
+    const bucket = (s) => isApproved(s) ? 'appr' : isPending(s) ? 'pend' : isRejected(s) ? 'rif' : 'pend';
+
     for (const r of myReqs) {
       const daysInMonth = (r.dates || []).filter(d => d.startsWith(monthISO)).length;
-      const s = r.status; // approvato, pendente, comunicato, malattia...
-      if (r.type === 'ferie')     { ferie     += daysInMonth * HOURS_PER_DAY; statusMap.ferie = s; reqIds.ferie.push(r.id); }
-      if (r.type === 'trasferta') { trasferta += daysInMonth * HOURS_PER_DAY; statusMap.trasferta = s; reqIds.trasferta.push(r.id); }
-      if (r.type === 'malattia')  { malattia  += daysInMonth * HOURS_PER_DAY; statusMap.malattia = 'approvato'; reqIds.malattia.push(r.id); }
-      if (r.type === 'permesso')  { permesso  += Math.round((r.durationMinutes || 0) / 60 * 10) / 10; statusMap.permesso = s; reqIds.permesso.push(r.id); }
-      if (r.type === 'fuorisede') { fuorisede += Math.round((r.durationMinutes || 0) / 60 * 10) / 10; statusMap.fuorisede = s; reqIds.fuorisede.push(r.id); }
-      if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved) {
-        recupero += Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
-        statusMap.recupero = 'approvato';
-        reqIds.recupero.push(r.id);
-      }
+      if (daysInMonth === 0) continue;
+      const b = r.type === 'malattia' ? 'appr' : bucket(r.status);
+      const dayHrs = ['ferie','trasferta','malattia'].includes(r.type)
+        ? daysInMonth * HOURS_PER_DAY
+        : Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
+
+      if (r.type === 'ferie')     { byType.ferie[b]     += dayHrs; reqIds.ferie.push(r.id); }
+      if (r.type === 'trasferta') { byType.trasferta[b] += dayHrs; reqIds.trasferta.push(r.id); }
+      if (r.type === 'malattia')  { byType.malattia[b]  += dayHrs; reqIds.malattia.push(r.id); }
+      if (r.type === 'permesso')  { byType.permesso[b]  += dayHrs; reqIds.permesso.push(r.id); }
+      if (r.type === 'fuorisede') { byType.fuorisede[b] += dayHrs; reqIds.fuorisede.push(r.id); }
+      if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved)
+        byType.recupero.appr += dayHrs;
     }
-    return { ferie, trasferta, malattia, permesso, fuorisede, recupero, statusMap, reqIds };
+
+    const sum = t => t.appr + t.pend + t.rif;
+    return {
+      ferie:     sum(byType.ferie),
+      trasferta: sum(byType.trasferta),
+      malattia:  sum(byType.malattia),
+      permesso:  sum(byType.permesso),
+      fuorisede: sum(byType.fuorisede),
+      recupero:  byType.recupero.appr,
+      byType, reqIds
+    };
   };
 
-  // Colore cella in base allo status (come il calendario)
-  const getCellColor = (status) => {
-    if (!status) return { bg: '', text: 'text-slate-200' };
-    if (status === 'approvato' || status === 'comunicato') return { bg: 'bg-green-50', text: 'text-green-700' };
-    if (status === 'rifiutato') return { bg: 'bg-red-50', text: 'text-red-600' };
-    return { bg: 'bg-orange-50', text: 'text-orange-600' }; // pendente
-  };
+
 
   // Trova codici audit per una lista di requestId con azione 'approvata'
   const getAuditCodes = (reqIdList) => {
@@ -529,48 +542,60 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
                       <span className="text-[11px] font-bold text-slate-700">{u.firstName} {u.lastName}</span>
                     </td>
                     {COLS.map(c => {
-                      const v = valMap[c.key];
-                      const status = h.statusMap[c.key];
-                      const col = getCellColor(status);
+                      const bt = h.byType[c.key] || { appr: 0, pend: 0, rif: 0 };
                       const reqIdList = h.reqIds[c.key] || [];
+                      const hasAny = bt.appr > 0 || bt.pend > 0 || bt.rif > 0;
+                      const hasBg = bt.appr > 0 ? 'bg-green-50' : bt.pend > 0 ? 'bg-orange-50' : bt.rif > 0 ? 'bg-red-50' : '';
                       const handleDblClick = () => {
-                        if (v <= 0 || status !== 'approvato') return;
-                        // Cerca per reqId (approvazioni recenti) oppure per username+tipo (approvazioni storiche)
-                        const reqUser = users.find(uu => uu.id === u.id);
+                        if (bt.appr <= 0) return;
                         const codes = (auditLogs || [])
                           .filter(l => {
                             const isApproval = l.action === 'approvato' || l.action === 'approvata' || l.action === 'rivalutata→approvata';
                             if (!isApproval) return false;
-                            // Match per reqId (nuovo sistema)
                             if (l.reqId && reqIdList.includes(l.reqId)) return true;
-                            // Fallback: match per destinatario + tipo (sistema vecchio senza reqId)
                             if (l.recipient === u.name && l.type === c.key) return true;
                             return false;
                           })
-                          .map(l => l.code)
-                          .filter(Boolean);
-                        if (codes.length > 0) {
-                          alert('Codici approvazione:\n\n' + codes.join('\n'));
-                        } else {
-                          alert('Nessun codice trovato.\nVerifica nel Registro filtrando per: destinatario = ' + u.name + ', tipo = ' + c.key + ', azione = approvato');
-                        }
+                          .map(l => l.code).filter(Boolean);
+                        if (codes.length > 0) alert('Codici approvazione:\n\n' + codes.join('\n'));
+                        else alert('Nessun codice trovato.\nCerca nel Registro: destinatario = ' + u.name + ', tipo = ' + c.key);
                       };
                       return (
                         <td key={c.key}
-                          className={'px-5 py-2.5 text-center border-r border-slate-100 ' + (v > 0 ? col.bg : '') + (v > 0 && status === 'approvato' ? ' cursor-pointer' : '')}
+                          className={'px-4 py-2.5 text-center border-r border-slate-100 ' + hasBg + (bt.appr > 0 ? ' cursor-pointer' : '')}
                           onDoubleClick={handleDblClick}
-                          title={v > 0 && status === 'approvato' ? 'Doppio click per vedere i codici approvazione' : ''}>
-                          <span className={'font-black text-sm ' + (v > 0 ? col.text : 'text-slate-200')}>
-                            {v > 0 ? v + 'h' : '—'}
-                          </span>
+                          title={bt.appr > 0 ? 'Doppio click per codici approvazione' : ''}>
+                          {!hasAny
+                            ? <span className="text-slate-200 font-bold">—</span>
+                            : <span className="inline-flex items-center gap-1 text-xs font-black flex-wrap justify-center">
+                                {bt.appr > 0 && <span className="text-green-600">{bt.appr}h</span>}
+                                {bt.pend > 0 && <><span className="text-slate-300">+</span><span className="text-orange-500">{bt.pend}h</span></>}
+                                {bt.rif  > 0 && <><span className="text-slate-300">+</span><span className="text-red-500">{bt.rif}h</span></>}
+                              </span>
+                          }
                         </td>
                       );
                     })}
-                    <td className="px-5 py-2.5 text-center">
-                      <span className={'font-black text-sm ' + (totalAss > 0 ? 'text-slate-700' : 'text-slate-200')}>
-                        {totalAss > 0 ? totalAss + 'h' : '—'}
-                      </span>
-                    </td>
+                    {(() => {
+                      const totAppr = Object.values(h.byType).reduce((s,t) => s + (t.appr||0), 0);
+                      const totPend = Object.values(h.byType).reduce((s,t) => s + (t.pend||0), 0);
+                      const totRif  = Object.values(h.byType).reduce((s,t) => s + (t.rif||0), 0);
+                      const hasAny  = totAppr > 0 || totPend > 0 || totRif > 0;
+                      return (
+                        <td className="px-4 py-2.5 text-center">
+                          {!hasAny
+                            ? <span className="text-slate-200 font-bold">—</span>
+                            : <span className="inline-flex items-center gap-1 text-xs font-black flex-wrap justify-center">
+                                <span className={'text-green-600'}>{Math.round(totAppr*10)/10}h</span>
+                                <span className="text-slate-300">+</span>
+                                <span className={'text-orange-500'}>{Math.round(totPend*10)/10}h</span>
+                                <span className="text-slate-300">+</span>
+                                <span className={'text-red-500'}>{Math.round(totRif*10)/10}h</span>
+                              </span>
+                          }
+                        </td>
+                      );
+                    })()}
                   </tr>
                 );
               })}
@@ -2088,14 +2113,14 @@ export default function App() {
         </div>
       </header>
       <main className={"flex-1 pt-16 pb-24 overflow-y-auto " + (["log","overview","hr"].includes(view) ? "px-0" : "px-4")}>
-        <div className={view === 'log' || view === 'overview' || view === 'hr' ? "pt-5" : "max-w-2xl mx-auto pt-5"}>
+        <div className={["log","overview","hr"].includes(view) ? "pt-5" : "max-w-2xl mx-auto pt-5"}>
           {view === 'calendar' && user.role !== 'hrmanager' && <CalendarView />}
           {view === 'hr' && user.role === 'hrmanager' && <HRView users={users} requests={requests} closures={closures} auditLogs={auditLogs} />}
           {view === 'hr' && (user.role === 'amministratore' || user.role === 'CEO') && <HRView users={users} requests={requests} closures={closures} auditLogs={auditLogs} />}
           {view === 'notifications' && <NotificationsView />}
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && (showAdmin || user.role === 'hrmanager') && <ClosuresView />}
-          {view === 'log' && showAdmin && <LogView auditLogs={auditLogs} db={db} />}
+          {view === 'log' && (showAdmin || user.role === 'hrmanager') && <LogView auditLogs={auditLogs} db={db} />}
           {view === 'overview' && (showAdmin || user.role === 'responsabile') && <OverviewView users={users} requests={requests} closures={closures} />}
         </div>
       </main>
@@ -2108,6 +2133,11 @@ export default function App() {
         {user.role === 'hrmanager' && (
           <button onClick={() => setView('closures')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'closures' ? 'text-blue-400' : 'text-slate-500')}>
             <Building2 size={22}/><span className="text-[10px] font-black uppercase">Chiusure</span>
+          </button>
+        )}
+        {user.role === 'hrmanager' && (
+          <button onClick={() => setView('log')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'log' ? 'text-blue-400' : 'text-slate-500')}>
+            <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Registro</span>
           </button>
         )}
         {user.role !== 'hrmanager' && false && null}
