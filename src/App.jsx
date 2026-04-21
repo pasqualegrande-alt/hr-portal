@@ -551,13 +551,9 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
                           .map(l => l.code)
                           .filter(Boolean);
                         if (codes.length > 0) {
-                          alert('Codici approvazione:
-
-' + codes.join('
-'));
+                          alert('Codici approvazione:\n\n' + codes.join('\n'));
                         } else {
-                          alert('Nessun codice di approvazione trovato nel registro.
-(Le approvazioni precedenti all'aggiornamento non hanno il codice.)');
+                          alert('Nessun codice di approvazione trovato nel registro.\n(Le approvazioni precedenti all\'aggiornamento non hanno il codice.)');
                         }
                       };
                       return (
