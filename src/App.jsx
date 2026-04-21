@@ -788,6 +788,13 @@ export default function App() {
       const snap = await getDocs(collection(db, 'users'));
       if (snap.empty) {
         for (const u of INITIAL_USERS) await setDoc(doc(db, 'users', u.id), u);
+      } else {
+        // Assicura che hrmanager esista sempre, anche se il DB era già popolato
+        const existingIds = snap.docs.map(d => d.id);
+        const hrm = INITIAL_USERS.find(u => u.id === 'hrm');
+        if (hrm && !existingIds.includes('hrm')) {
+          await setDoc(doc(db, 'users', 'hrm'), hrm);
+        }
       }
       setLoading(false);
     };
@@ -917,7 +924,7 @@ export default function App() {
     const [poliEditId, setPoliEditId] = useState(null);
 
     const responsabili = users.filter(u => u.role === 'responsabile');
-    const dipendenti = users.filter(u => u.role !== 'CEO');
+    const dipendenti = users.filter(u => u.role !== 'CEO' && u.role !== 'hrmanager');
 
     const handleNameChange = (field, value) => {
       const updated = { ...formData, [field]: value };
@@ -983,6 +990,7 @@ export default function App() {
               <option value="responsabile">Responsabile</option>
               <option value="amministratore">Amministratore</option>
               <option value="CEO">CEO</option>
+              <option value="hrmanager">HR Manager</option>
             </select>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1019,7 +1027,7 @@ export default function App() {
                 {users.map(u => (
                   <tr key={u.id} className="hover:bg-slate-50/50">
                     <td className="p-4 font-black text-slate-800 uppercase text-sm">{u.firstName} {u.lastName}</td>
-                    <td className="p-4"><span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-full text-[9px] font-black uppercase">{u.role}</span></td>
+                    <td className="p-4"><span className={'px-2 py-1 rounded-full text-[9px] font-black uppercase ' + (u.role === 'hrmanager' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600')}>{u.role === 'hrmanager' ? 'HR Manager' : u.role}</span></td>
                     <td className="p-4 text-sm font-bold text-slate-600">{u.resp1 || '/'}</td>
                     <td className="p-4 text-sm font-bold text-slate-600">{u.resp2 || '/'}</td>
                     <td className="p-4 text-right space-x-1">
