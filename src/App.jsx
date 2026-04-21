@@ -368,7 +368,7 @@ const getWorkingDays = (year, month) => {
 
 const HOURS_PER_DAY = 7;
 
-const HRView = ({ users, requests, closures }) => {
+const HRView = ({ users, requests, closures, auditLogs }) => {
   const [hrDate, setHrDate] = useState(new Date());
   const [nameFilter, setNameFilter] = useState('');
 
@@ -397,17 +397,49 @@ const HRView = ({ users, requests, closures }) => {
       r.dates && r.dates.some(d => d.startsWith(monthISO))
     );
     let ferie = 0, trasferta = 0, malattia = 0, permesso = 0, fuorisede = 0, recupero = 0;
+    // Traccia status per colorazione
+    const statusMap = { ferie: null, trasferta: null, malattia: null, permesso: null, fuorisede: null, recupero: null };
+    // Traccia requestId per ogni tipo (per audit codes)
+    const reqIds = { ferie: [], trasferta: [], malattia: [], permesso: [], fuorisede: [], recupero: [] };
     for (const r of myReqs) {
       const daysInMonth = (r.dates || []).filter(d => d.startsWith(monthISO)).length;
-      if (r.type === 'ferie')     ferie     += daysInMonth * HOURS_PER_DAY;
-      if (r.type === 'trasferta') trasferta += daysInMonth * HOURS_PER_DAY;
-      if (r.type === 'malattia')  malattia  += daysInMonth * HOURS_PER_DAY;
-      if (r.type === 'permesso')  permesso  += Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
-      if (r.type === 'fuorisede') fuorisede += Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
-      if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved)
+      const s = r.status; // approvato, pendente, comunicato, malattia...
+      if (r.type === 'ferie')     { ferie     += daysInMonth * HOURS_PER_DAY; statusMap.ferie = s; reqIds.ferie.push(r.id); }
+      if (r.type === 'trasferta') { trasferta += daysInMonth * HOURS_PER_DAY; statusMap.trasferta = s; reqIds.trasferta.push(r.id); }
+      if (r.type === 'malattia')  { malattia  += daysInMonth * HOURS_PER_DAY; statusMap.malattia = 'approvato'; reqIds.malattia.push(r.id); }
+      if (r.type === 'permesso')  { permesso  += Math.round((r.durationMinutes || 0) / 60 * 10) / 10; statusMap.permesso = s; reqIds.permesso.push(r.id); }
+      if (r.type === 'fuorisede') { fuorisede += Math.round((r.durationMinutes || 0) / 60 * 10) / 10; statusMap.fuorisede = s; reqIds.fuorisede.push(r.id); }
+      if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved) {
         recupero += Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
+        statusMap.recupero = 'approvato';
+        reqIds.recupero.push(r.id);
+      }
     }
-    return { ferie, trasferta, malattia, permesso, fuorisede, recupero };
+    return { ferie, trasferta, malattia, permesso, fuorisede, recupero, statusMap, reqIds };
+  };
+
+  // Colore cella in base allo status (come il calendario)
+  const getCellColor = (status) => {
+    if (!status) return { bg: '', text: 'text-slate-200' };
+    if (status === 'approvato' || status === 'comunicato') return { bg: 'bg-green-50', text: 'text-green-700' };
+    if (status === 'rifiutato') return { bg: 'bg-red-50', text: 'text-red-600' };
+    return { bg: 'bg-orange-50', text: 'text-orange-600' }; // pendente
+  };
+
+  // Trova codici audit per una lista di requestId con azione 'approvata'
+  const getAuditCodes = (reqIdList) => {
+    return (auditLogs || [])
+      .filter(l => reqIdList.includes(l.id) || reqIdList.some(rid => l.action && l.action.includes('approv') && l.recipient))
+      .map(l => l.code)
+      .filter(Boolean);
+  };
+
+  const getAuditCodesForReqs = (reqIdList) => {
+    // Cerca nei log le entry che si riferiscono a queste richieste (tramite requestId se presente, altrimenti matching)
+    return (auditLogs || [])
+      .filter(l => (l.action === 'approvata' || l.action === 'rivalutata→approvata') && reqIdList.includes(l.reqId))
+      .map(l => l.code)
+      .filter(Boolean);
   };
 
   const COLS = [
@@ -484,7 +516,6 @@ const HRView = ({ users, requests, closures }) => {
                 </th>
                 {COLS.map(c => (
                   <th key={c.key} className="px-5 py-3 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest whitespace-nowrap border-r border-slate-800">
-                    <span className={`inline-block w-2.5 h-2.5 rounded-sm mr-1.5 ${c.dot}`}></span>
                     {c.label}
                   </th>
                 ))}
@@ -510,55 +541,45 @@ const HRView = ({ users, requests, closures }) => {
                     </td>
                     {COLS.map(c => {
                       const v = valMap[c.key];
+                      const status = h.statusMap[c.key];
+                      const col = getCellColor(status);
+                      const reqIdList = h.reqIds[c.key] || [];
+                      const handleDblClick = () => {
+                        if (v <= 0 || status !== 'approvato') return;
+                        const codes = (auditLogs || [])
+                          .filter(l => (l.action === 'approvata' || l.action === 'rivalutata→approvata') && reqIdList.includes(l.reqId))
+                          .map(l => l.code)
+                          .filter(Boolean);
+                        if (codes.length > 0) {
+                          alert('Codici approvazione:
+
+' + codes.join('
+'));
+                        } else {
+                          alert('Nessun codice di approvazione trovato nel registro.
+(Le approvazioni precedenti all'aggiornamento non hanno il codice.)');
+                        }
+                      };
                       return (
-                        <td key={c.key} className={'px-5 py-2.5 text-center border-r border-slate-100 ' + (v > 0 ? c.bg : '')}>
-                          <span className={'font-black text-sm ' + (v > 0 ? c.text : 'text-slate-200')}>
+                        <td key={c.key}
+                          className={'px-5 py-2.5 text-center border-r border-slate-100 ' + (v > 0 ? col.bg : '') + (v > 0 && status === 'approvato' ? ' cursor-pointer' : '')}
+                          onDoubleClick={handleDblClick}
+                          title={v > 0 && status === 'approvato' ? 'Doppio click per vedere i codici approvazione' : ''}>
+                          <span className={'font-black text-sm ' + (v > 0 ? col.text : 'text-slate-200')}>
                             {v > 0 ? v + 'h' : '—'}
                           </span>
                         </td>
                       );
                     })}
                     <td className="px-5 py-2.5 text-center">
-                      <span className={'font-black text-sm ' + (totalAss > 0 ? 'text-slate-800' : 'text-slate-200')}>
+                      <span className={'font-black text-sm ' + (totalAss > 0 ? 'text-slate-700' : 'text-slate-200')}>
                         {totalAss > 0 ? totalAss + 'h' : '—'}
                       </span>
                     </td>
                   </tr>
                 );
               })}
-              {/* Riga totali */}
-              {employees.length > 0 && (() => {
-                const totals = employees.reduce((acc, u) => {
-                  const h = calcHours(u.id);
-                  return {
-                    ferie:     acc.ferie     + h.ferie,
-                    trasferta: acc.trasferta + h.trasferta,
-                    malattia:  acc.malattia  + h.malattia,
-                    permesso:  acc.permesso  + h.permesso,
-                    fuorisede: acc.fuorisede + h.fuorisede,
-                    recupero:  acc.recupero  + h.recupero,
-                  };
-                }, { ferie:0, trasferta:0, malattia:0, permesso:0, fuorisede:0, recupero:0 });
-                const totAss = Math.round((totals.ferie + totals.trasferta + totals.malattia + totals.permesso + totals.fuorisede) * 10) / 10;
-                return (
-                  <tr className="bg-slate-900 border-t-2 border-slate-700 sticky bottom-0">
-                    <td className="sticky left-0 z-10 bg-slate-900 px-4 py-3 border-r border-slate-700">
-                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Totali mese</span>
-                    </td>
-                    {COLS.map(c => {
-                      const v = Math.round(totals[c.key] * 10) / 10;
-                      return (
-                        <td key={c.key} className="px-5 py-3 text-center border-r border-slate-800">
-                          <span className="font-black text-white text-sm">{v > 0 ? v + 'h' : '—'}</span>
-                        </td>
-                      );
-                    })}
-                    <td className="px-5 py-3 text-center">
-                      <span className="font-black text-white text-sm">{totAss > 0 ? totAss + 'h' : '—'}</span>
-                    </td>
-                  </tr>
-                );
-              })()}
+
             </tbody>
           </table>
         </div>
@@ -919,7 +940,7 @@ export default function App() {
     }
   };
 
-  const writeAuditLog = async ({ action, fromUser, toUser, type, nota = '' }) => {
+  const writeAuditLog = async ({ action, fromUser, toUser, type, nota = '', reqId = '' }) => {
     try {
       const now = new Date();
       const pad = (n) => String(n).padStart(2, '0');
@@ -936,6 +957,7 @@ export default function App() {
         type: type || '-',
         action: action || '-',
         nota: nota || '',
+        reqId: reqId || '',
         createdAt: now.toISOString()
       });
     } catch(e) { console.log('Audit log error:', e); }
@@ -1719,7 +1741,7 @@ export default function App() {
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 await updateDoc(doc(db, 'requests', r.id), { status: 'approvato', ...(dayActionNote ? { notaResponsabile: dayActionNote } : {}), ...(r.recuperoOre ? { recuperoApproved: true } : {}) });
-                                await writeAuditLog({ action: r.status === 'rifiutato' ? 'rivalutata→approvata' : 'approvata', fromUser: user, toUser: r.userName, type: r.type, nota: dayActionNote });
+                                await writeAuditLog({ action: r.status === 'rifiutato' ? 'rivalutata→approvata' : 'approvata', fromUser: user, toUser: r.userName, type: r.type, nota: dayActionNote, reqId: r.id });
                                 const typeLabel = r.type === 'permesso' ? 'permesso' : r.type === 'trasferta' ? 'trasferta' : r.type === 'fuorisede' ? 'fuori sede' : r.type === 'malattia' ? 'malattia' : 'ferie';
                                 const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
                                 await addDoc(collection(db, 'notifications'), {
@@ -1741,7 +1763,7 @@ export default function App() {
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 await updateDoc(doc(db, 'requests', r.id), { status: 'rifiutato', ...(dayActionNote ? { notaResponsabile: dayActionNote } : {}) });
-                                await writeAuditLog({ action: 'rifiutata', fromUser: user, toUser: r.userName, type: r.type, nota: dayActionNote });
+                                await writeAuditLog({ action: 'rifiutata', fromUser: user, toUser: r.userName, type: r.type, nota: dayActionNote, reqId: r.id });
                                 const typeLabel = r.type === 'permesso' ? 'permesso' : r.type === 'trasferta' ? 'trasferta' : r.type === 'fuorisede' ? 'fuori sede' : r.type === 'malattia' ? 'malattia' : 'ferie';
                                 const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
                                 await addDoc(collection(db, 'notifications'), {
@@ -1867,7 +1889,7 @@ export default function App() {
         ...(approvalNotes[req.id] ? { notaResponsabile: approvalNotes[req.id] } : {}),
         ...(req.recuperoOre && status === 'approvato' ? { recuperoApproved: true } : {})
       });
-      await writeAuditLog({ action: status, fromUser: user, toUser: req.userName, type: req.type, nota: approvalNotes[req.id] || '' });
+      await writeAuditLog({ action: status, fromUser: user, toUser: req.userName, type: req.type, nota: approvalNotes[req.id] || '', reqId: req.id });
       await addDoc(collection(db, 'notifications'), {
         to: req.userName,
         message: (() => {
@@ -2072,8 +2094,8 @@ export default function App() {
       <main className={"flex-1 pt-16 pb-24 overflow-y-auto " + (["log","overview","hr"].includes(view) ? "px-0" : "px-4")}>
         <div className={view === 'log' || view === 'overview' || view === 'hr' ? "pt-5" : "max-w-2xl mx-auto pt-5"}>
           {view === 'calendar' && user.role !== 'hrmanager' && <CalendarView />}
-          {view === 'hr' && user.role === 'hrmanager' && <HRView users={users} requests={requests} closures={closures} />}
-          {view === 'hr' && (user.role === 'amministratore' || user.role === 'CEO') && <HRView users={users} requests={requests} closures={closures} />}
+          {view === 'hr' && user.role === 'hrmanager' && <HRView users={users} requests={requests} closures={closures} auditLogs={auditLogs} />}
+          {view === 'hr' && (user.role === 'amministratore' || user.role === 'CEO') && <HRView users={users} requests={requests} closures={closures} auditLogs={auditLogs} />}
           {view === 'notifications' && <NotificationsView />}
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && (showAdmin || user.role === 'hrmanager') && <ClosuresView />}
