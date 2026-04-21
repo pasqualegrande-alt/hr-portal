@@ -33,6 +33,7 @@ const INITIAL_USERS = [
   { id: '1', firstName: 'Mirco', lastName: 'Ronci', name: 'Mirco Ronci', username: 'mirco.ceo', password: '123', role: 'CEO' },
   { id: '2', firstName: 'Admin', lastName: 'User', name: 'Admin User', username: 'admin', password: '123', role: 'amministratore' },
   { id: '3', firstName: 'Silvia', lastName: 'Cori', name: 'Silvia Cori', username: 's.cori', password: '123', role: 'dipendente', resp1: '', resp2: '/' },
+  { id: 'hrm', firstName: 'HR', lastName: 'Manager', name: 'HR Manager', username: 'hrmanager', password: 'Excogita!234', role: 'hrmanager', resp1: '/', resp2: '/' },
 ];
 
 const POLIVALENZA_MSG = 'ATTENZIONE!!! DEI DIPENDENTI CON MANSIONI EQUIVALENTI STANNO CHIEDENDO LE FERIE NELLO STESSO PERIODO. VERIFICA PRIMA DI APPROVARE PER EVITARE DI LASCIARE SCOPERTA UNA O PIÙ FUNZIONI!';
@@ -330,6 +331,207 @@ const TYPE_COLORS = {
   fuorisede: { bg: 'bg-teal-500',   text: 'text-white',      label: 'FS' },
 };
 
+
+// ─── Festività italiane fisse + Pasqua ────────────────────────────────────────
+const getItalianHolidays = (year) => {
+  // Calcolo Pasqua (algoritmo di Butcher)
+  const a = year % 19, b = Math.floor(year/100), c = year % 100;
+  const d = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25);
+  const g = Math.floor((b-f+1)/3), h = (19*a+b-d-g+15) % 30;
+  const i = Math.floor(c/4), k = c % 4;
+  const l = (32+2*e+2*i-h-k) % 7;
+  const m = Math.floor((a+11*h+22*l)/451);
+  const month = Math.floor((h+l-7*m+114)/31) - 1; // 0-based
+  const day   = ((h+l-7*m+114) % 31) + 1;
+  const easter     = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const easterMon  = (() => { const d2 = new Date(year, month, day+1); return `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}`; })();
+  const fixed = [
+    `${year}-01-01`, `${year}-01-06`,
+    `${year}-04-25`, `${year}-05-01`, `${year}-06-02`,
+    `${year}-08-15`, `${year}-11-01`,
+    `${year}-12-08`, `${year}-12-25`, `${year}-12-26`,
+  ];
+  return new Set([...fixed, easter, easterMon]);
+};
+
+const getWorkingDays = (year, month) => {
+  const holidays = getItalianHolidays(year);
+  let count = 0;
+  const dim = new Date(year, month+1, 0).getDate();
+  for (let d = 1; d <= dim; d++) {
+    const dow = new Date(year, month, d).getDay();
+    const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if (dow !== 0 && dow !== 6 && !holidays.has(iso)) count++;
+  }
+  return count;
+};
+
+const HOURS_PER_DAY = 7;
+
+const HRView = ({ users, requests, closures }) => {
+  const [hrDate, setHrDate] = useState(new Date());
+  const year  = hrDate.getFullYear();
+  const month = hrDate.getMonth();
+
+  const workingDays = getWorkingDays(year, month);
+  const theoreticalHours = workingDays * HOURS_PER_DAY;
+
+  const monthLabel = hrDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
+
+  // Dipendenti ordinati per cognome (escludi CEO, admin, hrmanager)
+  const employees = [...users]
+    .filter(u => !['CEO','amministratore','hrmanager'].includes(u.role) && u.lastName)
+    .sort((a,b) => (a.lastName||'').localeCompare(b.lastName||'', 'it'));
+
+  // ISO del mese
+  const monthISO = `${year}-${String(month+1).padStart(2,'0')}`;
+
+  // Calcola ore per dipendente nel mese
+  const calcHours = (userId) => {
+    const myReqs = requests.filter(r =>
+      r.userId === userId &&
+      r.status !== 'rifiutato' &&
+      r.dates && r.dates.some(d => d.startsWith(monthISO))
+    );
+
+    let ferie = 0, trasferta = 0, malattia = 0, permesso = 0, fuorisede = 0, recupero = 0;
+
+    for (const r of myReqs) {
+      const daysInMonth = (r.dates || []).filter(d => d.startsWith(monthISO)).length;
+      if (r.type === 'ferie')     ferie     += daysInMonth * HOURS_PER_DAY;
+      if (r.type === 'trasferta') trasferta += daysInMonth * HOURS_PER_DAY;
+      if (r.type === 'malattia')  malattia  += daysInMonth * HOURS_PER_DAY;
+      if (r.type === 'permesso')  permesso  += Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
+      if (r.type === 'fuorisede') fuorisede += Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
+      // Recupero ore approvate
+      if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved) {
+        recupero += Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
+      }
+    }
+    return { ferie, trasferta, malattia, permesso, fuorisede, recupero };
+  };
+
+  const COLS = [
+    { key: 'ferie',     label: 'Ferie',          color: 'bg-red-50 text-red-700' },
+    { key: 'trasferta', label: 'Trasferta',       color: 'bg-blue-50 text-blue-700' },
+    { key: 'malattia',  label: 'Malattia',        color: 'bg-orange-50 text-orange-700' },
+    { key: 'permesso',  label: 'Permesso',        color: 'bg-slate-50 text-slate-700' },
+    { key: 'fuorisede', label: 'Fuori sede',      color: 'bg-teal-50 text-teal-700' },
+    { key: 'recupero',  label: 'Ore recupero aut.', color: 'bg-amber-50 text-amber-700' },
+  ];
+
+  return (
+    <div className="pb-6 px-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setHrDate(new Date(year, month-1))}
+            className="p-3 bg-white border rounded-2xl shadow-sm"><ChevronLeft size={18}/></button>
+          <div className="text-center">
+            <p className="font-black uppercase italic text-base">{monthLabel}</p>
+            <p className="text-[10px] text-slate-400 font-bold">
+              Giorni lavorativi: <span className="text-slate-700 font-black">{workingDays}</span>
+              &nbsp;·&nbsp;
+              Ore teoriche lavorative: <span className="text-blue-600 font-black text-sm">{theoreticalHours}h</span>
+            </p>
+          </div>
+          <button onClick={() => setHrDate(new Date(year, month+1))}
+            className="p-3 bg-white border rounded-2xl shadow-sm"><ChevronRight size={18}/></button>
+        </div>
+        <div className="text-[10px] text-slate-400 font-bold bg-amber-50 border border-amber-100 rounded-2xl px-4 py-2">
+          📌 {HOURS_PER_DAY}h/giorno · Festività italiane escluse
+        </div>
+      </div>
+
+      {/* Tabella */}
+      <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-slate-900">
+                <th className="sticky left-0 z-10 bg-slate-900 px-4 py-3 text-left text-[10px] font-black text-slate-300 uppercase tracking-widest min-w-[180px]">
+                  Dipendente
+                </th>
+                {COLS.map(c => (
+                  <th key={c.key} className="px-4 py-3 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest whitespace-nowrap">
+                    {c.label}
+                  </th>
+                ))}
+                <th className="px-4 py-3 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                  Totale ass.
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {employees.length === 0 && (
+                <tr><td colSpan={8} className="p-6 text-center text-slate-400 font-bold">Nessun dipendente.</td></tr>
+              )}
+              {employees.map((u, ri) => {
+                const h = calcHours(u.id);
+                const totalAss = h.ferie + h.trasferta + h.malattia + h.permesso + h.fuorisede;
+                const valMap = { ferie: h.ferie, trasferta: h.trasferta, malattia: h.malattia, permesso: h.permesso, fuorisede: h.fuorisede, recupero: h.recupero };
+                return (
+                  <tr key={u.id} className={ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}>
+                    <td className={'sticky left-0 z-10 px-4 py-2.5 border-r border-slate-100 ' + (ri % 2 === 0 ? 'bg-white' : 'bg-slate-50')}>
+                      <p className="font-black text-slate-800 text-xs uppercase">{u.firstName} {u.lastName}</p>
+                      <p className="text-[9px] text-slate-400 font-bold">{u.username}</p>
+                    </td>
+                    {COLS.map(c => (
+                      <td key={c.key} className={'px-4 py-2.5 text-center border-r border-slate-50 ' + c.color}>
+                        <span className="font-black text-sm">
+                          {valMap[c.key] > 0 ? valMap[c.key] + 'h' : <span className="text-slate-300 font-normal">—</span>}
+                        </span>
+                      </td>
+                    ))}
+                    <td className="px-4 py-2.5 text-center">
+                      <span className={'font-black text-sm ' + (totalAss > 0 ? 'text-slate-800' : 'text-slate-300')}>
+                        {totalAss > 0 ? totalAss + 'h' : '—'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {/* Riga totali */}
+              {employees.length > 0 && (() => {
+                const totals = employees.reduce((acc, u) => {
+                  const h = calcHours(u.id);
+                  return {
+                    ferie: acc.ferie + h.ferie,
+                    trasferta: acc.trasferta + h.trasferta,
+                    malattia: acc.malattia + h.malattia,
+                    permesso: acc.permesso + h.permesso,
+                    fuorisede: acc.fuorisede + h.fuorisede,
+                    recupero: acc.recupero + h.recupero,
+                  };
+                }, { ferie:0, trasferta:0, malattia:0, permesso:0, fuorisede:0, recupero:0 });
+                const totAss = totals.ferie + totals.trasferta + totals.malattia + totals.permesso + totals.fuorisede;
+                return (
+                  <tr className="bg-slate-900 border-t-2 border-slate-700">
+                    <td className="sticky left-0 z-10 bg-slate-900 px-4 py-3">
+                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Totali mese</span>
+                    </td>
+                    {COLS.map(c => {
+                      const v = totals[c.key];
+                      return (
+                        <td key={c.key} className="px-4 py-3 text-center">
+                          <span className="font-black text-white text-sm">{v > 0 ? v + 'h' : '—'}</span>
+                        </td>
+                      );
+                    })}
+                    <td className="px-4 py-3 text-center">
+                      <span className="font-black text-white text-sm">{totAss > 0 ? totAss + 'h' : '—'}</span>
+                    </td>
+                  </tr>
+                );
+              })()}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const OverviewView = ({ users, requests, closures }) => {
   const [overviewDate, setOverviewDate] = useState(new Date());
   const [nameFilter, setNameFilter] = useState('');
@@ -353,7 +555,7 @@ const OverviewView = ({ users, requests, closures }) => {
 
   // Dipendenti ordinati per cognome (escludi CEO)
   const sorted = [...users]
-    .filter(u => u.role !== 'CEO' && u.role !== 'amministratore' && u.lastName)
+    .filter(u => u.role !== 'CEO' && u.role !== 'amministratore' && u.role !== 'hrmanager' && u.lastName)
     .sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '', 'it'))
     .filter(u => {
       if (!nameFilter) return true;
@@ -543,7 +745,23 @@ const OverviewView = ({ users, requests, closures }) => {
   );
 };
 
-const RESET_PWD_HASH = btoa('Excogita!234'); // offuscata, non sicurezza vera
+const RESET_PWD_HASH = btoa('Excogita!234');
+
+const playBip = () => {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch(e) {}
+}; // offuscata, non sicurezza vera
 
 const checkResetPassword = () => {
   const pwd = window.prompt('Inserisci la password di autorizzazione per procedere:');
@@ -579,7 +797,13 @@ export default function App() {
   useEffect(() => {
     const unsubUsers = onSnapshot(collection(db, 'users'), snap => setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubReqs = onSnapshot(query(collection(db, 'requests'), orderBy('createdAt', 'desc')), snap => setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubNotifs = onSnapshot(query(collection(db, 'notifications'), orderBy('createdAt', 'desc')), snap => setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    let firstNotifLoad = true;
+    const unsubNotifs = onSnapshot(query(collection(db, 'notifications'), orderBy('createdAt', 'desc')), snap => {
+      const newNotifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (!firstNotifLoad && snap.docChanges().some(c => c.type === 'added')) playBip();
+      firstNotifLoad = false;
+      setNotifications(newNotifs);
+    });
     const unsubClosures = onSnapshot(collection(db, 'closures'), snap => setClosures(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubPoli = onSnapshot(collection(db, 'polivalenze'), snap => setPolivalenze(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubAudit = onSnapshot(query(collection(db, 'auditLog'), orderBy('createdAt', 'desc')), snap => setAuditLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -1451,7 +1675,7 @@ export default function App() {
                               className="flex-1 flex items-center justify-center gap-1 bg-green-500 text-white py-3 rounded-2xl font-black text-xs uppercase"
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                await updateDoc(doc(db, 'requests', r.id), { status: 'approvato', ...(dayActionNote ? { notaResponsabile: dayActionNote } : {}) });
+                                await updateDoc(doc(db, 'requests', r.id), { status: 'approvato', ...(dayActionNote ? { notaResponsabile: dayActionNote } : {}), ...(r.recuperoOre ? { recuperoApproved: true } : {}) });
                                 await writeAuditLog({ action: r.status === 'rifiutato' ? 'rivalutata→approvata' : 'approvata', fromUser: user, toUser: r.userName, type: r.type, nota: dayActionNote });
                                 const typeLabel = r.type === 'permesso' ? 'permesso' : r.type === 'trasferta' ? 'trasferta' : r.type === 'fuorisede' ? 'fuori sede' : r.type === 'malattia' ? 'malattia' : 'ferie';
                                 const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
@@ -1597,7 +1821,8 @@ export default function App() {
       }
       await updateDoc(doc(db, 'requests', req.id), {
         status,
-        ...(approvalNotes[req.id] ? { notaResponsabile: approvalNotes[req.id] } : {})
+        ...(approvalNotes[req.id] ? { notaResponsabile: approvalNotes[req.id] } : {}),
+        ...(req.recuperoOre && status === 'approvato' ? { recuperoApproved: true } : {})
       });
       await writeAuditLog({ action: status, fromUser: user, toUser: req.userName, type: req.type, nota: approvalNotes[req.id] || '' });
       await addDoc(collection(db, 'notifications'), {
@@ -1775,9 +2000,10 @@ export default function App() {
             const f = users.find(x => x.username === u && x.password === p);
             if (f) {
               setUser(f);
-              if (f.role === 'CEO' || f.role === 'amministratore') setCalFilter('all');
-              else if (f.role === 'responsabile') setCalFilter('all_mine');
-              else setCalFilter('mine');
+              if (f.role === 'hrmanager') { setView('hr'); }
+              else if (f.role === 'CEO' || f.role === 'amministratore') { setCalFilter('all'); setView('calendar'); }
+              else if (f.role === 'responsabile') { setCalFilter('all_mine'); setView('calendar'); }
+              else { setCalFilter('mine'); setView('calendar'); }
             } else alert('Credenziali non valide');
           }}>Accedi</button>
         </div>
@@ -1802,7 +2028,9 @@ export default function App() {
       </header>
       <main className="flex-1 pt-16 pb-24 px-4 overflow-y-auto">
         <div className={view === 'log' || view === 'overview' ? "pt-5 px-4" : "max-w-2xl mx-auto pt-5"}>
-          {view === 'calendar' && <CalendarView />}
+          {view === 'calendar' && user.role !== 'hrmanager' && <CalendarView />}
+          {view === 'hr' && user.role === 'hrmanager' && <HRView users={users} requests={requests} closures={closures} />}
+          {view === 'hr' && (user.role === 'amministratore' || user.role === 'CEO') && <HRView users={users} requests={requests} closures={closures} />}
           {view === 'notifications' && <NotificationsView />}
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && showAdmin && <ClosuresView />}
@@ -1811,13 +2039,19 @@ export default function App() {
         </div>
       </main>
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white flex z-30 border-t border-slate-800">
-        <button onClick={() => setView('calendar')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'calendar' ? 'text-blue-400' : 'text-slate-500')}>
+        {user.role === 'hrmanager' && (
+          <button className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-blue-400">
+            <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Presenze</span>
+          </button>
+        )}
+        {user.role !== 'hrmanager' && false && null}
+        {user.role !== 'hrmanager' && <button onClick={() => setView('calendar')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'calendar' ? 'text-blue-400' : 'text-slate-500')}>
           <Calendar size={22}/><span className="text-[10px] font-black uppercase">Calendario</span>
-        </button>
-        <button onClick={() => setView('notifications')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
+        </button>}
+        {user.role !== 'hrmanager' && <button onClick={() => setView('notifications')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
           <Bell size={22}/><span className="text-[10px] font-black uppercase">Notifiche</span>
           {pendingCount > 0 && <span className="absolute top-2 right-[calc(50%-20px)] bg-red-500 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[9px] font-black px-1">{pendingCount}</span>}
-        </button>
+        </button>}
         {showAdmin && (
           <button onClick={() => setView('users')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'users' ? 'text-blue-400' : 'text-slate-500')}>
             <Users size={22}/><span className="text-[10px] font-black uppercase">Collaboratori</span>
@@ -1831,6 +2065,11 @@ export default function App() {
         {showAdmin && (
           <button onClick={() => setView('log')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'log' ? 'text-blue-400' : 'text-slate-500')}>
             <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Registro</span>
+          </button>
+        )}
+        {showAdmin && (
+          <button onClick={() => setView('hr')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'hr' ? 'text-blue-400' : 'text-slate-500')}>
+            <Briefcase size={22}/><span className="text-[10px] font-black uppercase">Presenze</span>
           </button>
         )}
         {(showAdmin || user.role === 'responsabile') && (
