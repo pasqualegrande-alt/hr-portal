@@ -2076,15 +2076,20 @@ export default function App() {
           {view === 'hr' && (user.role === 'amministratore' || user.role === 'CEO') && <HRView users={users} requests={requests} closures={closures} />}
           {view === 'notifications' && <NotificationsView />}
           {view === 'users' && showAdmin && <AdminUsersView />}
-          {view === 'closures' && showAdmin && <ClosuresView />}
+          {view === 'closures' && (showAdmin || user.role === 'hrmanager') && <ClosuresView />}
           {view === 'log' && showAdmin && <LogView auditLogs={auditLogs} db={db} />}
           {view === 'overview' && (showAdmin || user.role === 'responsabile') && <OverviewView users={users} requests={requests} closures={closures} />}
         </div>
       </main>
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white flex z-30 border-t border-slate-800">
         {user.role === 'hrmanager' && (
-          <button className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-blue-400">
+          <button onClick={() => setView('hr')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'hr' ? 'text-blue-400' : 'text-slate-500')}>
             <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Presenze</span>
+          </button>
+        )}
+        {user.role === 'hrmanager' && (
+          <button onClick={() => setView('closures')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'closures' ? 'text-blue-400' : 'text-slate-500')}>
+            <Building2 size={22}/><span className="text-[10px] font-black uppercase">Chiusure</span>
           </button>
         )}
         {user.role !== 'hrmanager' && false && null}
@@ -2100,11 +2105,7 @@ export default function App() {
             <Users size={22}/><span className="text-[10px] font-black uppercase">Collaboratori</span>
           </button>
         )}
-        {showAdmin && (
-          <button onClick={() => setView('closures')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'closures' ? 'text-blue-400' : 'text-slate-500')}>
-            <Building2 size={22}/><span className="text-[10px] font-black uppercase">Chiusure</span>
-          </button>
-        )}
+
         {showAdmin && (
           <button onClick={() => setView('log')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'log' ? 'text-blue-400' : 'text-slate-500')}>
             <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Registro</span>
