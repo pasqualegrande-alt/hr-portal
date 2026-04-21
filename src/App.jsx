@@ -503,6 +503,20 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
 
 
 
+      {/* Legenda colori */}
+      <div className="flex gap-4 flex-wrap mb-4 bg-white border rounded-2xl px-4 py-3">
+        <span className="flex items-center gap-2 text-[11px] font-bold text-slate-600">
+          <span className="w-3.5 h-3.5 rounded-sm bg-green-500 inline-block"></span>Approvato
+        </span>
+        <span className="flex items-center gap-2 text-[11px] font-bold text-slate-600">
+          <span className="w-3.5 h-3.5 rounded-sm bg-orange-400 inline-block"></span>In attesa di approvazione
+        </span>
+        <span className="flex items-center gap-2 text-[11px] font-bold text-slate-600">
+          <span className="w-3.5 h-3.5 rounded-sm bg-red-500 inline-block"></span>Rifiutato
+        </span>
+        <span className="text-[11px] text-slate-400 font-bold ml-2">· Doppio click su cella verde per vedere i codici approvazione</span>
+      </div>
+
       {/* Tabella con header sticky */}
       <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
         <div className="overflow-auto" style={{maxHeight: 'calc(100vh - 260px)'}}>
