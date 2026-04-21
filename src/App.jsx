@@ -488,18 +488,7 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         </div>
       </div>
 
-      {/* Legenda colori */}
-      <div className="flex gap-3 flex-wrap mb-4 bg-white border rounded-2xl px-4 py-3">
-        {COLS.map(c => (
-          <span key={c.key} className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
-            <span className={`w-3.5 h-3.5 rounded-sm ${c.dot} inline-block shrink-0`}></span>
-            {c.label}
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 ml-2">
-          · {HOURS_PER_DAY}h/giorno · Festività italiane escluse
-        </span>
-      </div>
+
 
       {/* Tabella con header sticky */}
       <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
