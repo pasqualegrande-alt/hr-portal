@@ -1875,6 +1875,7 @@ export default function App() {
     const resolve = async (req, status) => {
       if (req.type === 'trasferta' && status === 'approvato' && req.status === 'pendente_responsabile') {
         await updateDoc(doc(db, 'requests', req.id), { status: 'pendente_mirco', assignedTo: 'Mirco Ronci' });
+        await writeAuditLog({ action: 'approvato', fromUser: user, toUser: req.userName, type: req.type, nota: approvalNotes[req.id] || '', reqId: req.id });
         const trDateInfo = req.dates && req.dates.length > 0
           ? ' dal ' + formatDate(req.dates[0]) + ' al ' + formatDate(req.dates[req.dates.length - 1])
           : '';
