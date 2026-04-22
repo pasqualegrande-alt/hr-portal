@@ -374,6 +374,260 @@ const getWorkingDays = (year, month) => {
 
 const HOURS_PER_DAY = 7;
 
+
+const EmployeeCardView = ({ users, requests, closures }) => {
+  const employees = [...users]
+    .filter(u => !['CEO','amministratore','hrmanager'].includes(u.role) && u.lastName)
+    .sort((a,b) => (a.lastName||'').localeCompare(b.lastName||'', 'it'));
+
+  const [empIdx, setEmpIdx] = useState(0);
+  const [cardDate, setCardDate] = useState(new Date());
+  const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
+
+  const year  = cardDate.getFullYear();
+  const month = cardDate.getMonth();
+  const monthISO = `${year}-${String(month+1).padStart(2,'0')}`;
+  const monthLabel = cardDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
+
+  // Filtered list for search
+  const filtered = search
+    ? employees.filter(u => (u.firstName+' '+u.lastName+' '+u.username).toLowerCase().includes(search.toLowerCase()))
+    : employees;
+
+  const emp = employees[empIdx] || employees[0];
+
+  const workingDays = getWorkingDays(year, month);
+  const theoreticalHours = workingDays * HOURS_PER_DAY;
+
+  // Calcola ore per tipo/status per il dipendente corrente
+  const calcEmpHours = () => {
+    if (!emp) return {};
+    const myReqs = requests.filter(r =>
+      r.userId === emp.id &&
+      r.dates && r.dates.some(d => d.startsWith(monthISO))
+    );
+    const empty = () => ({ appr: 0, pend: 0, rif: 0 });
+    const byType = {
+      ferie: empty(), trasferta: empty(), malattia: empty(),
+      permesso: empty(), fuorisede: empty(), recupero: empty(),
+      permesso104: empty(), congedo: empty()
+    };
+    const isApproved = s => s === 'approvato' || s === 'comunicato';
+    const isPending  = s => ['pendente','pendente_responsabile','pendente_mirco'].includes(s);
+    const isRejected = s => s === 'rifiutato';
+    const bucket = s => isApproved(s) ? 'appr' : isPending(s) ? 'pend' : isRejected(s) ? 'rif' : 'pend';
+
+    // Chiusure conta come ferie
+    let closureFerieHours = 0;
+    for (const c of (closures || [])) {
+      if (!c.contaComeFerie) continue;
+      let curr = new Date(c.dal + 'T12:00:00');
+      const end = new Date(c.al + 'T12:00:00');
+      while (curr <= end) {
+        const iso = curr.toISOString().split('T')[0];
+        const dow = curr.getDay();
+        if (iso.startsWith(monthISO) && dow >= 1 && dow <= 5) closureFerieHours += HOURS_PER_DAY;
+        curr.setDate(curr.getDate() + 1);
+      }
+    }
+    byType.ferie.appr += closureFerieHours;
+
+    for (const r of myReqs) {
+      const daysInMonth = (r.dates||[]).filter(d => d.startsWith(monthISO)).length;
+      if (daysInMonth === 0) continue;
+      const b = r.type === 'malattia' ? 'appr' : bucket(r.status);
+      const dayHrs = ['ferie','trasferta','malattia'].includes(r.type)
+        ? daysInMonth * HOURS_PER_DAY
+        : Math.round((r.durationMinutes||0)/60*10)/10;
+
+      if (r.type === 'ferie')        { byType.ferie[b]        += dayHrs; }
+      if (r.type === 'trasferta')    { byType.trasferta[b]    += dayHrs; }
+      if (r.type === 'malattia')     { byType.malattia[b]     += dayHrs; }
+      if (r.type === 'permesso')     { byType.permesso[b]     += dayHrs; }
+      if (r.type === 'fuorisede')    { byType.fuorisede[b]    += dayHrs; }
+      if (r.type === 'permesso104')  { byType.permesso104[b]  += Math.round((r.durationMinutes||0)/60*10)/10; }
+      if (r.type === 'congedo')      { byType.congedo[b]      += Math.round((r.durationMinutes||0)/60*10)/10; }
+      if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved)
+        byType.recupero.appr += dayHrs;
+    }
+    return byType;
+  };
+
+  const byType = calcEmpHours();
+
+  const ROWS = [
+    { key: 'ferie',       label: 'Ferie',             color: 'text-red-600',    dot: 'bg-red-500'    },
+    { key: 'trasferta',   label: 'Trasferta',          color: 'text-blue-600',   dot: 'bg-blue-500'   },
+    { key: 'malattia',    label: 'Malattia',           color: 'text-orange-600', dot: 'bg-orange-400' },
+    { key: 'permesso',    label: 'Permesso',           color: 'text-slate-600',  dot: 'bg-slate-400'  },
+    { key: 'fuorisede',   label: 'Fuori sede',         color: 'text-teal-600',   dot: 'bg-teal-500'   },
+    { key: 'recupero',    label: 'Ore recupero aut.',  color: 'text-amber-600',  dot: 'bg-amber-500'  },
+    { key: 'permesso104', label: 'Permesso 104',       color: 'text-violet-600', dot: 'bg-violet-500' },
+    { key: 'congedo',     label: 'Congedo',            color: 'text-pink-600',   dot: 'bg-pink-500'   },
+  ];
+
+  const fmt = v => v > 0 ? v + 'h' : '—';
+
+  // Totali
+  const totAppr = Object.values(byType).reduce((s,t) => s+(t.appr||0), 0);
+  const totPend = Object.values(byType).reduce((s,t) => s+(t.pend||0), 0);
+  const totRif  = Object.values(byType).reduce((s,t) => s+(t.rif||0), 0);
+
+  return (
+    <div className="pb-6 px-6">
+      {/* Header navigazione dipendente */}
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        {/* Navigazione dipendente */}
+        <div className="flex items-center gap-2 flex-1">
+          <button onClick={() => setEmpIdx(i => Math.max(0, i-1))}
+            disabled={empIdx === 0}
+            className="p-2.5 bg-white border rounded-xl shadow-sm disabled:opacity-30"><ChevronLeft size={18}/></button>
+          <div className="flex-1 text-center">
+            {searching ? (
+              <div className="relative">
+                <input autoFocus type="text" value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  onBlur={() => { if (!search) setSearching(false); }}
+                  placeholder="Cerca dipendente..."
+                  className="w-full p-2 bg-white border-2 border-blue-200 rounded-xl font-bold text-sm outline-none text-center"
+                />
+                {filtered.length > 0 && search && (
+                  <div className="absolute top-full left-0 right-0 bg-white border rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto mt-1">
+                    {filtered.map(u => (
+                      <button key={u.id} className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm font-bold text-slate-700 border-b last:border-0"
+                        onMouseDown={() => {
+                          const idx = employees.findIndex(e => e.id === u.id);
+                          if (idx >= 0) setEmpIdx(idx);
+                          setSearch(''); setSearching(false);
+                        }}>
+                        <span className="text-[10px] text-slate-400 font-black mr-1">{u.username}</span>
+                        {u.firstName} {u.lastName}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button onClick={() => setSearching(true)} className="group w-full text-center">
+                <p className="font-black text-lg text-slate-800 uppercase leading-tight group-hover:text-blue-600 transition-colors">
+                  {emp?.firstName} {emp?.lastName}
+                </p>
+                <p className="text-[10px] text-slate-400 font-bold">{emp?.username} · {emp?.role} · click per cercare</p>
+              </button>
+            )}
+          </div>
+          <button onClick={() => setEmpIdx(i => Math.min(employees.length-1, i+1))}
+            disabled={empIdx >= employees.length-1}
+            className="p-2.5 bg-white border rounded-xl shadow-sm disabled:opacity-30"><ChevronRight size={18}/></button>
+        </div>
+
+        {/* Contatore */}
+        <div className="text-[10px] text-slate-400 font-bold text-center">
+          {empIdx+1} / {employees.length}
+        </div>
+
+        {/* Navigazione mese */}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setCardDate(new Date(year, month-1))}
+            className="p-2.5 bg-white border rounded-xl shadow-sm"><ChevronLeft size={18}/></button>
+          <div className="text-center min-w-[140px]">
+            <p className="font-black uppercase italic text-sm capitalize">{monthLabel}</p>
+            <p className="text-[10px] text-slate-400 font-bold">{workingDays} gg lav. · <span className="text-blue-600 font-black">{theoreticalHours}h teoriche</span></p>
+          </div>
+          <button onClick={() => setCardDate(new Date(year, month+1))}
+            className="p-2.5 bg-white border rounded-xl shadow-sm"><ChevronRight size={18}/></button>
+        </div>
+      </div>
+
+      {/* Scheda */}
+      <div className="bg-white rounded-2xl border shadow-sm overflow-hidden max-w-2xl mx-auto">
+        {/* Intestazione scheda */}
+        <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
+          <div>
+            <p className="font-black text-white uppercase text-base tracking-wide">{emp?.firstName} {emp?.lastName}</p>
+            <p className="text-[10px] text-slate-400 font-bold mt-0.5">{emp?.role} · {emp?.username}</p>
+          </div>
+          <div className="text-right">
+            <p className="font-black text-blue-400 uppercase text-sm italic">{monthLabel}</p>
+            <p className="text-[10px] text-slate-400 font-bold mt-0.5">{theoreticalHours}h teoriche</p>
+          </div>
+        </div>
+
+        {/* Tabella righe per tipo */}
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200">
+              <th className="px-6 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/2">Tipo assenza</th>
+              <th className="px-4 py-3 text-center text-[10px] font-black text-green-600 uppercase tracking-widest">✓ Approvato</th>
+              <th className="px-4 py-3 text-center text-[10px] font-black text-orange-500 uppercase tracking-widest">◷ In attesa</th>
+              <th className="px-4 py-3 text-center text-[10px] font-black text-red-500 uppercase tracking-widest">✕ Rifiutato</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ROWS.map((row, ri) => {
+              const t = byType[row.key] || { appr:0, pend:0, rif:0 };
+              const hasAny = t.appr > 0 || t.pend > 0 || t.rif > 0;
+              return (
+                <tr key={row.key} className={(ri%2===0 ? 'bg-white' : 'bg-slate-50/50') + ' border-b border-slate-100 hover:bg-blue-50/20 transition-colors'}>
+                  <td className="px-6 py-3.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-sm ${row.dot} shrink-0`}></span>
+                      <span className={'text-sm font-bold ' + (hasAny ? row.color : 'text-slate-400')}>{row.label}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <span className={'font-black text-sm ' + (t.appr > 0 ? 'text-green-600' : 'text-slate-200')}>{fmt(t.appr)}</span>
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <span className={'font-black text-sm ' + (t.pend > 0 ? 'text-orange-500' : 'text-slate-200')}>{fmt(t.pend)}</span>
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <span className={'font-black text-sm ' + (t.rif > 0 ? 'text-red-500' : 'text-slate-200')}>{fmt(t.rif)}</span>
+                  </td>
+                </tr>
+              );
+            })}
+            {/* Riga totali */}
+            <tr className="bg-slate-900 border-t-2 border-slate-700">
+              <td className="px-6 py-3.5">
+                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Totale assenze</span>
+              </td>
+              <td className="px-4 py-3.5 text-center">
+                <span className={'font-black text-sm ' + (totAppr > 0 ? 'text-green-400' : 'text-slate-600')}>{fmt(Math.round(totAppr*10)/10)}</span>
+              </td>
+              <td className="px-4 py-3.5 text-center">
+                <span className={'font-black text-sm ' + (totPend > 0 ? 'text-orange-400' : 'text-slate-600')}>{fmt(Math.round(totPend*10)/10)}</span>
+              </td>
+              <td className="px-4 py-3.5 text-center">
+                <span className={'font-black text-sm ' + (totRif > 0 ? 'text-red-400' : 'text-slate-600')}>{fmt(Math.round(totRif*10)/10)}</span>
+              </td>
+            </tr>
+            {/* Riga ore residue */}
+            <tr className="bg-blue-900/80">
+              <td className="px-6 py-3">
+                <span className="text-[10px] font-black text-blue-300 uppercase tracking-widest">Ore teoriche rimanenti</span>
+              </td>
+              <td className="px-4 py-3 text-center" colSpan={3}>
+                <span className="font-black text-blue-300 text-sm">
+                  {Math.round((theoreticalHours - totAppr - totPend)*10)/10}h
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Legenda */}
+      <div className="flex gap-4 mt-4 justify-center flex-wrap text-[11px]">
+        <span className="flex items-center gap-1.5 font-bold text-green-600"><span className="w-3 h-3 rounded-sm bg-green-500"></span>Approvato</span>
+        <span className="flex items-center gap-1.5 font-bold text-orange-500"><span className="w-3 h-3 rounded-sm bg-orange-400"></span>In attesa</span>
+        <span className="flex items-center gap-1.5 font-bold text-red-500"><span className="w-3 h-3 rounded-sm bg-red-500"></span>Rifiutato</span>
+      </div>
+    </div>
+  );
+};
+
 const HRView = ({ users, requests, closures, auditLogs }) => {
   const [hrDate, setHrDate] = useState(new Date());
   const [nameFilter, setNameFilter] = useState('');
@@ -2348,10 +2602,12 @@ export default function App() {
           <button onClick={() => { setUser(null); setCalFilter(null); setTypeFilter('tutti'); }} className="p-2 text-red-400"><LogOut size={20}/></button>
         </div>
       </header>
-      <main className={"flex-1 pt-16 pb-24 overflow-y-auto " + (["log","overview","hr"].includes(view) ? "px-0" : "px-4")}>
-        <div className={["log","overview","hr"].includes(view) ? "pt-5" : "max-w-2xl mx-auto pt-5"}>
+      <main className={"flex-1 pt-16 pb-24 overflow-y-auto " + (["log","overview","hr","card"].includes(view) ? "px-0" : "px-4")}>
+        <div className={["log","overview","hr","card"].includes(view) ? "pt-5" : "max-w-2xl mx-auto pt-5"}>
           {view === 'calendar' && user.role !== 'hrmanager' && <CalendarView />}
           {view === 'hr' && user.role === 'hrmanager' && <HRView users={users} requests={requests} closures={closures} auditLogs={auditLogs} />}
+          {view === 'card' && user.role === 'hrmanager' && <EmployeeCardView users={users} requests={requests} closures={closures} />}
+          {view === 'card' && (user.role === 'amministratore' || user.role === 'CEO') && <EmployeeCardView users={users} requests={requests} closures={closures} />}
           {view === 'hr' && (user.role === 'amministratore' || user.role === 'CEO') && <HRView users={users} requests={requests} closures={closures} auditLogs={auditLogs} />}
           {view === 'notifications' && <NotificationsView />}
           {view === 'users' && showAdmin && <AdminUsersView />}
@@ -2364,6 +2620,11 @@ export default function App() {
         {user.role === 'hrmanager' && (
           <button onClick={() => setView('hr')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'hr' ? 'text-blue-400' : 'text-slate-500')}>
             <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Presenze</span>
+          </button>
+        )}
+        {user.role === 'hrmanager' && (
+          <button onClick={() => setView('card')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'card' ? 'text-blue-400' : 'text-slate-500')}>
+            <Users size={22}/><span className="text-[10px] font-black uppercase">Scheda</span>
           </button>
         )}
         {user.role === 'hrmanager' && (
@@ -2398,6 +2659,11 @@ export default function App() {
         {showAdmin && (
           <button onClick={() => setView('hr')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'hr' ? 'text-blue-400' : 'text-slate-500')}>
             <Briefcase size={22}/><span className="text-[10px] font-black uppercase">Presenze</span>
+          </button>
+        )}
+        {showAdmin && (
+          <button onClick={() => setView('card')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'card' ? 'text-blue-400' : 'text-slate-500')}>
+            <Users size={22}/><span className="text-[10px] font-black uppercase">Scheda</span>
           </button>
         )}
         {(showAdmin || user.role === 'responsabile') && (
