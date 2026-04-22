@@ -1473,22 +1473,23 @@ export default function App() {
       let durationMinutes = 0;
 
       if (form.extraMode === 'ore') {
-        // Solo ore: Dal-Al obbligatori, ore manuali
-        if (!selection || !form.extraEnd) return alert('Inserisci le date Dal e Al');
-        if (!form.extraHours || isNaN(parseFloat(form.extraHours))) return alert('Inserisci le ore totali');
-        dates = buildDates(selection, form.extraEnd);
-        durationMinutes = Math.round(parseFloat(form.extraHours) * 60);
+        // Solo ore: singola data + orario Da-A
+        if (!selection) return alert('Seleziona una data');
+        if (!form.timeFrom || !form.timeTo) return alert('Inserisci orario dalle/alle');
+        dates = [selection];
+        durationMinutes = calcMinutesExcludingLunch(form.timeFrom, form.timeTo);
+        if (durationMinutes <= 0) return alert('Orario non valido');
       } else if (form.extraMode === 'giorni') {
         // Solo giorni: calcolo automatico 7h/giorno
         dates = buildDates(selection, form.end || selection);
         if (dates.length === 0) return alert('Seleziona almeno un giorno lavorativo');
         durationMinutes = dates.length * HOURS_PER_DAY * 60;
       } else {
-        // Giorni + ore extra
+        // Giorni + ore parziali (con orario)
         dates = buildDates(selection, form.end || selection);
         if (dates.length === 0) return alert('Seleziona almeno un giorno lavorativo');
-        const extra = parseFloat(form.extraHours) || 0;
-        durationMinutes = dates.length * HOURS_PER_DAY * 60 + Math.round(extra * 60);
+        const extraMins = (form.timeFrom && form.timeTo) ? calcMinutesExcludingLunch(form.timeFrom, form.timeTo) : 0;
+        durationMinutes = dates.length * HOURS_PER_DAY * 60 + extraMins;
       }
 
       const newReq = {
@@ -1654,8 +1655,8 @@ export default function App() {
 
               {(isPermesso || isFuoriSede) && (
                 <div className="grid grid-cols-2 gap-3 mt-3">
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase">Dalle</label><input type="time" value={form.timeFrom} onChange={e => setForm({...form, timeFrom: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase">Alle</label><input type="time" value={form.timeTo} onChange={e => setForm({...form, timeTo: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase">Dalle</label><input type="time" step="900" value={form.timeFrom} onChange={e => setForm({...form, timeFrom: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase">Alle</label><input type="time" step="900" value={form.timeTo} onChange={e => setForm({...form, timeTo: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
                 </div>
               )}
 
@@ -1728,21 +1729,28 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Modalità Solo ore */}
+                  {/* Modalità Solo ore — singola giornata */}
                   {form.extraMode === 'ore' && (
                     <div className="space-y-2">
                       <div className="p-3 bg-amber-50 border border-amber-100 rounded-2xl">
-                        <p className="text-[10px] font-black text-amber-700">Le date indicano il periodo di assenza. Le ore dichiarate sono il totale del periodo.</p>
+                        <p className="text-[10px] font-black text-amber-700">Assenza nella giornata selezionata. Indica l'orario di assenza.</p>
                       </div>
-                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Dal</label>
+                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Data</label>
                         <input type="date" value={selection} readOnly className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
                       </div>
-                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Al</label>
-                        <input type="date" min={selection} defaultValue={selection} onChange={e => setForm({...form, extraEnd: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className="text-[10px] font-black text-slate-400 uppercase">Dalle</label>
+                          <input type="time" step="900" value={form.timeFrom} onChange={e => setForm({...form, timeFrom: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
+                        </div>
+                        <div><label className="text-[10px] font-black text-slate-400 uppercase">Alle</label>
+                          <input type="time" step="900" value={form.timeTo} onChange={e => setForm({...form, timeTo: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
+                        </div>
                       </div>
-                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Ore totali</label>
-                        <input type="number" min="0.5" max="999" step="0.5" placeholder="es. 4" value={form.extraHours} onChange={e => setForm({...form, extraHours: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base outline-none"/>
-                      </div>
+                      {form.timeFrom && form.timeTo && calcMinutesExcludingLunch(form.timeFrom, form.timeTo) > 0 && (
+                        <p className="text-xs font-black text-amber-600 pl-1">
+                          Durata: {formatMinutes(calcMinutesExcludingLunch(form.timeFrom, form.timeTo))} (pausa pranzo esclusa)
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -1755,12 +1763,25 @@ export default function App() {
                       <div><label className="text-[10px] font-black text-slate-400 uppercase">Data fine (opzionale)</label>
                         <input type="date" min={selection} defaultValue={selection} onChange={e => setForm({...form, end: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
                       </div>
-                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Ore aggiuntive (frazioni di giornata)</label>
-                        <input type="number" min="0" max="7" step="0.5" placeholder="es. 3" value={form.extraHours} onChange={e => setForm({...form, extraHours: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base outline-none"/>
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Orario assenza parziale</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div><label className="text-[10px] font-black text-slate-400 uppercase">Dalle</label>
+                            <input type="time" step="900" value={form.timeFrom} onChange={e => setForm({...form, timeFrom: e.target.value})} className="w-full p-3 bg-white border rounded-xl font-bold mt-1 text-base"/>
+                          </div>
+                          <div><label className="text-[10px] font-black text-slate-400 uppercase">Alle</label>
+                            <input type="time" step="900" value={form.timeTo} onChange={e => setForm({...form, timeTo: e.target.value})} className="w-full p-3 bg-white border rounded-xl font-bold mt-1 text-base"/>
+                          </div>
+                        </div>
+                        {form.timeFrom && form.timeTo && calcMinutesExcludingLunch(form.timeFrom, form.timeTo) > 0 && (
+                          <p className="text-[10px] font-black text-slate-500 mt-2 pl-1">
+                            Ore parziali: {formatMinutes(calcMinutesExcludingLunch(form.timeFrom, form.timeTo))}
+                          </p>
+                        )}
                       </div>
                       {selection && <p className="text-xs font-black text-slate-500 pl-1">
                         Ore totali: <span className={requestType === 'permesso104' ? 'text-violet-600' : 'text-pink-600'}>
-                          {buildDates(selection, form.end || selection).length * HOURS_PER_DAY + (parseFloat(form.extraHours) || 0)}h
+                          {buildDates(selection, form.end || selection).length * HOURS_PER_DAY + Math.round(calcMinutesExcludingLunch(form.timeFrom || '00:00', form.timeTo || '00:00') / 60 * 10) / 10}h
                         </span>
                       </p>}
                     </div>
