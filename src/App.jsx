@@ -1887,7 +1887,7 @@ export default function App() {
         ...subordinates.map(s => ({ value: s.name, label: s.name })),
         ...(subordinates.length > 1 ? [{ value: 'all_mine', label: 'Tutti i miei dipendenti' }] : []),
       ];
-      if (user.role === 'amministratore' || user.role === 'CEO') return [
+      if (user.role === 'amministratore' || user.role === 'CEO' || user.role === 'hrmanager') return [
         { value: 'all', label: 'Tutti' },
         ...users.filter(u => u.role !== 'CEO').map(u => ({ value: u.name, label: u.name })),
       ];
