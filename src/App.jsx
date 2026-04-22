@@ -444,8 +444,27 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
       if (r.type === 'malattia')    byType.malattia[b]    += dayHrs;
       if (r.type === 'permesso')    byType.permesso[b]    += dayHrs;
       if (r.type === 'fuorisede')   byType.fuorisede[b]   += dayHrs;
-      if (r.type === 'permesso104') byType.permesso104[b] += Math.round((r.durationMinutes||0)/60*10)/10;
-      if (r.type === 'congedo')     byType.congedo[b]     += Math.round((r.durationMinutes||0)/60*10)/10;
+      if (r.type === 'permesso104' || r.type === 'congedo') {
+        let hrs;
+        if (r.extraMode === 'ore') {
+          // Solo ore: usa durationMinutes diretto (singola giornata)
+          hrs = Math.round((r.durationMinutes||0)/60*10)/10;
+        } else {
+          // Giorni o giorni+ore: proporziona per i giorni nel mese corrente
+          const totalDays = (r.dates||[]).length || 1;
+          const daysThisMonth = daysInMonth;
+          const totalHrs = Math.round((r.durationMinutes||0)/60*10)/10;
+          if (r.extraMode === 'giorni') {
+            hrs = daysInMonth * HOURS_PER_DAY;
+          } else {
+            // giorni+ore: proporziona le ore extra
+            const extraMins = (r.durationMinutes||0) - totalDays * HOURS_PER_DAY * 60;
+            hrs = daysInMonth * HOURS_PER_DAY + Math.round(extraMins/60*10)/10;
+          }
+        }
+        if (r.type === 'permesso104') byType.permesso104[b] += hrs;
+        if (r.type === 'congedo')     byType.congedo[b]     += hrs;
+      }
       if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved)
         byType.recupero.appr += dayHrs;
     }
@@ -466,9 +485,11 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
   ];
 
   const fmt = v => v > 0 ? (Math.round(v*10)/10)+'h' : '—';
-  const totAppr = Object.values(byType).reduce((s,t)=>s+(t.appr||0),0);
-  const totPend = Object.values(byType).reduce((s,t)=>s+(t.pend||0),0);
-  const totRif  = Object.values(byType).reduce((s,t)=>s+(t.rif||0),0);
+  // fuorisede NON conta come assenza (lavoro fuori sede)
+  const absenceKeys = ['ferie','trasferta','malattia','permesso','recupero','permesso104','congedo'];
+  const totAppr = absenceKeys.reduce((s,k)=>s+(byType[k]?.appr||0),0);
+  const totPend = absenceKeys.reduce((s,k)=>s+(byType[k]?.pend||0),0);
+  const totRif  = absenceKeys.reduce((s,k)=>s+(byType[k]?.rif||0),0);
 
   // Mini arrow button
   const Arr = ({ onClick, disabled, children }) => (
@@ -680,8 +701,20 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       if (r.type === 'malattia')  { byType.malattia[b]  += dayHrs; reqIds.malattia.push(r.id); }
       if (r.type === 'permesso')  { byType.permesso[b]  += dayHrs; reqIds.permesso.push(r.id); }
       if (r.type === 'fuorisede') { byType.fuorisede[b] += dayHrs; reqIds.fuorisede.push(r.id); }
-      if (r.type === 'permesso104') { byType.permesso104[b] += Math.round((r.durationMinutes||0)/60*10)/10; reqIds.permesso104.push(r.id); }
-      if (r.type === 'congedo')     { byType.congedo[b]     += Math.round((r.durationMinutes||0)/60*10)/10; reqIds.congedo.push(r.id); }
+      if (r.type === 'permesso104' || r.type === 'congedo') {
+        let hrs;
+        if (r.extraMode === 'ore') {
+          hrs = Math.round((r.durationMinutes||0)/60*10)/10;
+        } else if (r.extraMode === 'giorni') {
+          hrs = daysInMonth * HOURS_PER_DAY;
+        } else {
+          const totalDays = (r.dates||[]).length || 1;
+          const extraMins = (r.durationMinutes||0) - totalDays * HOURS_PER_DAY * 60;
+          hrs = daysInMonth * HOURS_PER_DAY + Math.round(extraMins/60*10)/10;
+        }
+        if (r.type === 'permesso104') { byType.permesso104[b] += hrs; reqIds.permesso104.push(r.id); }
+        if (r.type === 'congedo')     { byType.congedo[b]     += hrs; reqIds.congedo.push(r.id); }
+      }
       if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved)
         byType.recupero.appr += dayHrs;
     }
@@ -859,9 +892,10 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
                       );
                     })}
                     {(() => {
-                      const totAppr = Object.values(h.byType).reduce((s,t) => s + (t.appr||0), 0);
-                      const totPend = Object.values(h.byType).reduce((s,t) => s + (t.pend||0), 0);
-                      const totRif  = Object.values(h.byType).reduce((s,t) => s + (t.rif||0), 0);
+                      const absKeys = ['ferie','trasferta','malattia','permesso','recupero','permesso104','congedo'];
+                      const totAppr = absKeys.reduce((s,k)=>s+(h.byType[k]?.appr||0),0);
+                      const totPend = absKeys.reduce((s,k)=>s+(h.byType[k]?.pend||0),0);
+                      const totRif  = absKeys.reduce((s,k)=>s+(h.byType[k]?.rif||0),0);
                       const hasAny  = totAppr > 0 || totPend > 0 || totRif > 0;
                       return (
                         <td className="px-4 py-2.5 text-center">
@@ -2555,7 +2589,7 @@ export default function App() {
             const f = users.find(x => x.username === u && x.password === p);
             if (f) {
               setUser(f);
-              if (f.role === 'hrmanager') { setView('hr'); }
+              if (f.role === 'hrmanager') { setView('hr'); setCalFilter('all'); }
               else if (f.role === 'CEO' || f.role === 'amministratore') { setCalFilter('all'); setView('calendar'); }
               else if (f.role === 'responsabile') { setCalFilter('all_mine'); setView('calendar'); }
               else { setCalFilter('mine'); setView('calendar'); }
@@ -2583,7 +2617,7 @@ export default function App() {
       </header>
       <main className={"flex-1 pt-16 pb-24 overflow-y-auto " + (["log","overview","hr","card"].includes(view) ? "px-0" : "px-4")}>
         <div className={["log","overview","hr","card"].includes(view) ? "pt-5" : "max-w-2xl mx-auto pt-5"}>
-          {view === 'calendar' && user.role !== 'hrmanager' && <CalendarView />}
+          {view === 'calendar' && <CalendarView />}
           {view === 'card' && user.role === 'dipendente' && <EmployeeCardView users={users} requests={requests} closures={closures} currentUser={user} />}
           {view === 'card' && user.role === 'responsabile' && <EmployeeCardView users={users} requests={requests} closures={closures} currentUser={user} />}
           {view === 'hr' && user.role === 'hrmanager' && <HRView users={users} requests={requests} closures={closures} auditLogs={auditLogs} />}
@@ -2598,6 +2632,11 @@ export default function App() {
         </div>
       </main>
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white flex z-30 border-t border-slate-800">
+        {user.role === 'hrmanager' && (
+          <button onClick={() => setView('calendar')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'calendar' ? 'text-blue-400' : 'text-slate-500')}>
+            <Calendar size={22}/><span className="text-[10px] font-black uppercase">Calendario</span>
+          </button>
+        )}
         {user.role === 'hrmanager' && (
           <button onClick={() => setView('hr')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'hr' ? 'text-blue-400' : 'text-slate-500')}>
             <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Presenze</span>
