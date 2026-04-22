@@ -395,6 +395,9 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
   const monthLabel = cardDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
 
   const emp = employees[empIdx] || employees[0];
+  const filtered = search
+    ? employees.filter(u => (u.firstName+' '+u.lastName+' '+u.username).toLowerCase().includes(search.toLowerCase()))
+    : employees;
   const workingDays = getWorkingDays(year, month);
   const theoreticalHours = workingDays * HOURS_PER_DAY;
 
