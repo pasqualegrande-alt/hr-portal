@@ -1884,12 +1884,17 @@ export default function App() {
     const filterOptions = () => {
       if (user.role === 'responsabile') return [
         { value: 'mine', label: 'Le mie ferie' },
-        ...subordinates.map(s => ({ value: s.name, label: s.name })),
+        ...[...subordinates]
+          .sort((a,b) => (a.lastName||'').localeCompare(b.lastName||'', 'it'))
+          .map(s => ({ value: s.name, label: (s.firstName+' '+s.lastName).toLowerCase() })),
         ...(subordinates.length > 1 ? [{ value: 'all_mine', label: 'Tutti i miei dipendenti' }] : []),
       ];
       if (user.role === 'amministratore' || user.role === 'CEO' || user.role === 'hrmanager') return [
         { value: 'all', label: 'Tutti' },
-        ...users.filter(u => u.role !== 'CEO').map(u => ({ value: u.name, label: u.name })),
+        ...[...users]
+          .filter(u => u.role !== 'CEO' && u.role !== 'hrmanager')
+          .sort((a,b) => (a.lastName||'').localeCompare(b.lastName||'', 'it'))
+          .map(u => ({ value: u.name, label: (u.firstName+' '+u.lastName).toLowerCase() })),
       ];
       return [];
     };
