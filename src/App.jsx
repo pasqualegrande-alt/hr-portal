@@ -386,6 +386,7 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
 
   const initialIdx = isHR ? 0 : 0; // sempre 0 per dipendente (lista ha solo lui)
   const [empIdx, setEmpIdx] = useState(initialIdx);
+  const [search, setSearch] = useState('');
   const [cardDate, setCardDate] = useState(new Date());
 
   const year  = cardDate.getFullYear();
@@ -490,7 +491,7 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
                   <Arr onClick={() => setEmpIdx(i => Math.min(employees.length-1, i+1))} disabled={empIdx >= employees.length-1}>▼</Arr>
                 </div>
               )}
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="font-black text-white uppercase text-base leading-tight truncate">
                   {emp?.firstName} {emp?.lastName}
                 </p>
@@ -500,6 +501,35 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
                 </p>
               </div>
             </div>
+
+            {/* Campo filtro (solo HR) */}
+            {isHR && (
+              <div className="relative flex-1 max-w-[200px]">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="🔍 Cerca..."
+                  className="w-full px-3 py-1.5 bg-white/10 border border-white/20 rounded-xl text-[11px] font-bold text-white placeholder-slate-400 outline-none focus:bg-white/20"
+                />
+                {filtered.length > 0 && search && (
+                  <div className="absolute top-full left-0 right-0 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-30 max-h-48 overflow-y-auto mt-1">
+                    {filtered.map(u => (
+                      <button key={u.id}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-700 text-[11px] font-bold text-slate-200 border-b border-slate-700 last:border-0 transition-colors"
+                        onMouseDown={() => {
+                          const idx = employees.findIndex(e => e.id === u.id);
+                          if (idx >= 0) setEmpIdx(idx);
+                          setSearch('');
+                        }}>
+                        <span className="text-[9px] text-slate-500 font-black mr-1">{u.username}</span>
+                        {u.firstName} {u.lastName}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Mese con frecce ← → */}
             <div className="flex items-center gap-1.5 shrink-0">
