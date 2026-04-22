@@ -361,7 +361,11 @@ const getWorkingDays = (year, month) => {
   for (let d = 1; d <= dim; d++) {
     const dow = new Date(year, month, d).getDay();
     const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    if (dow !== 0 && dow !== 6 && !holidays.has(iso)) count++;
+    // Giorno lavorativo se: non è sabato/domenica E
+    // non è festività che cade in un giorno lun-ven (dow 1-5)
+    const isWeekend = dow === 0 || dow === 6;
+    const isHolidayOnWorkday = holidays.has(iso) && dow >= 1 && dow <= 5;
+    if (!isWeekend && !isHolidayOnWorkday) count++;
   }
   return count;
 };
@@ -397,6 +401,25 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
     );
 
     const empty = () => ({ appr: 0, pend: 0, rif: 0 });
+    
+    // Calcola giorni di chiusura "conta come ferie" nel mese corrente
+    // (vengono trattati come ferie approvate per tutti i dipendenti)
+    const closureFerieHours = (() => {
+      let total = 0;
+      for (const c of (closures || [])) {
+        if (!c.contaComeFerie) continue;
+        // Itera tutti i giorni della chiusura che cadono nel mese corrente
+        let curr = new Date(c.dal + 'T12:00:00');
+        const end = new Date(c.al + 'T12:00:00');
+        while (curr <= end) {
+          const iso = curr.toISOString().split('T')[0];
+          const dow = curr.getDay();
+          if (iso.startsWith(monthISO) && dow >= 1 && dow <= 5) total += HOURS_PER_DAY;
+          curr.setDate(curr.getDate() + 1);
+        }
+      }
+      return total;
+    })();
     const byType = {
       ferie: empty(), trasferta: empty(), malattia: empty(),
       permesso: empty(), fuorisede: empty(), recupero: empty()
@@ -424,6 +447,9 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved)
         byType.recupero.appr += dayHrs;
     }
+
+    // Aggiungi ore chiusura ferie al bucket approvato delle ferie
+    byType.ferie.appr += closureFerieHours;
 
     const sum = t => t.appr + t.pend + t.rif;
     return {
