@@ -324,11 +324,13 @@ const LogView = ({ auditLogs, db }) => {
 
 
 const TYPE_COLORS = {
-  ferie:     { bg: 'bg-red-500',    text: 'text-white',      label: 'F' },
-  malattia:  { bg: 'bg-orange-400', text: 'text-white',      label: 'M' },
-  trasferta: { bg: 'bg-blue-500',   text: 'text-white',      label: 'T' },
-  permesso:  { bg: 'bg-slate-400',  text: 'text-white',      label: 'P' },
-  fuorisede: { bg: 'bg-teal-500',   text: 'text-white',      label: 'FS' },
+  ferie:       { bg: 'bg-red-500',    text: 'text-white', label: 'F'   },
+  malattia:    { bg: 'bg-orange-400', text: 'text-white', label: 'M'   },
+  trasferta:   { bg: 'bg-blue-500',   text: 'text-white', label: 'T'   },
+  permesso:    { bg: 'bg-slate-400',  text: 'text-white', label: 'P'   },
+  fuorisede:   { bg: 'bg-teal-500',   text: 'text-white', label: 'FS'  },
+  permesso104: { bg: 'bg-violet-500', text: 'text-white', label: '104' },
+  congedo:     { bg: 'bg-pink-500',   text: 'text-white', label: 'C'   },
 };
 
 
@@ -444,6 +446,8 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       if (r.type === 'malattia')  { byType.malattia[b]  += dayHrs; reqIds.malattia.push(r.id); }
       if (r.type === 'permesso')  { byType.permesso[b]  += dayHrs; reqIds.permesso.push(r.id); }
       if (r.type === 'fuorisede') { byType.fuorisede[b] += dayHrs; reqIds.fuorisede.push(r.id); }
+      if (r.type === 'permesso104') { byType.permesso104[b] += Math.round((r.durationMinutes||0)/60*10)/10; reqIds.permesso104.push(r.id); }
+      if (r.type === 'congedo')     { byType.congedo[b]     += Math.round((r.durationMinutes||0)/60*10)/10; reqIds.congedo.push(r.id); }
       if (r.type === 'permesso' && r.recuperoOre && r.recuperoApproved)
         byType.recupero.appr += dayHrs;
     }
@@ -453,12 +457,14 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
 
     const sum = t => t.appr + t.pend + t.rif;
     return {
-      ferie:     sum(byType.ferie),
-      trasferta: sum(byType.trasferta),
-      malattia:  sum(byType.malattia),
-      permesso:  sum(byType.permesso),
-      fuorisede: sum(byType.fuorisede),
-      recupero:  byType.recupero.appr,
+      ferie:        sum(byType.ferie),
+      trasferta:    sum(byType.trasferta),
+      malattia:     sum(byType.malattia),
+      permesso:     sum(byType.permesso),
+      fuorisede:    sum(byType.fuorisede),
+      recupero:     byType.recupero.appr,
+      permesso104:  sum(byType.permesso104),
+      congedo:      sum(byType.congedo),
       byType, reqIds
     };
   };
@@ -482,12 +488,14 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
   };
 
   const COLS = [
-    { key: 'ferie',     label: 'Ferie',               bg: 'bg-red-50',    text: 'text-red-700',    dot: 'bg-red-500'    },
-    { key: 'trasferta', label: 'Trasferta',            bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-500'   },
-    { key: 'malattia',  label: 'Malattia',             bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-400' },
-    { key: 'permesso',  label: 'Permesso',             bg: 'bg-slate-50',  text: 'text-slate-700',  dot: 'bg-slate-400'  },
-    { key: 'fuorisede', label: 'Fuori sede',           bg: 'bg-teal-50',   text: 'text-teal-700',   dot: 'bg-teal-500'   },
-    { key: 'recupero',  label: 'Ore recupero aut.',    bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500'  },
+    { key: 'ferie',        label: 'Ferie',             bg: 'bg-red-50',     text: 'text-red-700',    dot: 'bg-red-500'    },
+    { key: 'trasferta',    label: 'Trasferta',          bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-500'   },
+    { key: 'malattia',     label: 'Malattia',           bg: 'bg-orange-50',  text: 'text-orange-700', dot: 'bg-orange-400' },
+    { key: 'permesso',     label: 'Permesso',           bg: 'bg-slate-50',   text: 'text-slate-700',  dot: 'bg-slate-400'  },
+    { key: 'fuorisede',    label: 'Fuori sede',         bg: 'bg-teal-50',    text: 'text-teal-700',   dot: 'bg-teal-500'   },
+    { key: 'recupero',     label: 'Ore recupero aut.',  bg: 'bg-amber-50',   text: 'text-amber-700',  dot: 'bg-amber-500'  },
+    { key: 'permesso104',  label: 'Permesso 104',       bg: 'bg-violet-50',  text: 'text-violet-700', dot: 'bg-violet-500' },
+    { key: 'congedo',      label: 'Congedo',            bg: 'bg-pink-50',    text: 'text-pink-700',   dot: 'bg-pink-500'   },
   ];
 
   return (
@@ -1291,7 +1299,7 @@ export default function App() {
     );
     const [selection, setSelection] = useState(null);
     const [requestType, setRequestType] = useState('ferie');
-    const [form, setForm] = useState({ end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '', recuperoOre: false });
+    const [form, setForm] = useState({ end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '', recuperoOre: false, extraMode: 'giorni', extraHours: '', extraEnd: '' });
     const [reqModal, setReqModal] = useState(null);
     const [modifyMode, setModifyMode] = useState(false);
     const [modifyForm, setModifyForm] = useState({ start: '', end: '', type: 'ferie', timeFrom: '09:00', timeTo: '10:00' });
@@ -1338,13 +1346,18 @@ export default function App() {
     };
 
     const getTypeLabel = (type) => {
-      const map = { ferie: 'Ferie', permesso: 'Permesso', malattia: 'Malattia', fuorisede: 'Fuori sede', trasferta: 'Trasferta' };
+      const map = { ferie: 'Ferie', permesso: 'Permesso', malattia: 'Malattia', fuorisede: 'Fuori sede', trasferta: 'Trasferta', permesso104: 'Permesso 104', congedo: 'Congedo' };
       return map[type] || type;
     };
 
     const getTypeBadgeColor = (type, status) => {
       if (status === 'rifiutato') return 'bg-red-500';
       if (status === 'approvato' || status === 'comunicato' || type === 'malattia') return 'bg-green-500';
+      return 'bg-orange-500';
+    };
+    const getTypeExtraColor = (type) => {
+      if (type === 'permesso104') return 'bg-violet-500';
+      if (type === 'congedo') return 'bg-pink-500';
       return 'bg-orange-500';
     };
 
@@ -1354,6 +1367,8 @@ export default function App() {
       if (r.type === 'malattia') return 'M';
       if (r.type === 'trasferta') return 'T';
       if (r.type === 'fuorisede') return r.mancataTimbratura ? 'MM' : 'FS';
+      if (r.type === 'permesso104') return '104';
+      if (r.type === 'congedo') return 'C';
       return '';
     };
 
@@ -1451,7 +1466,59 @@ export default function App() {
       setSelection(null);
     };
 
+    const handleSendExtra = async (type) => {
+      const assignedTo = user && user.resp1 && user.resp1 !== '/' ? user.resp1 : 'Mirco Ronci';
+      let dates = [];
+      let totalMinutes = 0;
+      let durationMinutes = 0;
+
+      if (form.extraMode === 'ore') {
+        // Solo ore: Dal-Al obbligatori, ore manuali
+        if (!selection || !form.extraEnd) return alert('Inserisci le date Dal e Al');
+        if (!form.extraHours || isNaN(parseFloat(form.extraHours))) return alert('Inserisci le ore totali');
+        dates = buildDates(selection, form.extraEnd);
+        durationMinutes = Math.round(parseFloat(form.extraHours) * 60);
+      } else if (form.extraMode === 'giorni') {
+        // Solo giorni: calcolo automatico 7h/giorno
+        dates = buildDates(selection, form.end || selection);
+        if (dates.length === 0) return alert('Seleziona almeno un giorno lavorativo');
+        durationMinutes = dates.length * HOURS_PER_DAY * 60;
+      } else {
+        // Giorni + ore extra
+        dates = buildDates(selection, form.end || selection);
+        if (dates.length === 0) return alert('Seleziona almeno un giorno lavorativo');
+        const extra = parseFloat(form.extraHours) || 0;
+        durationMinutes = dates.length * HOURS_PER_DAY * 60 + Math.round(extra * 60);
+      }
+
+      const newReq = {
+        userId: user.id, userName: user.name, type,
+        dates, durationMinutes,
+        extraMode: form.extraMode,
+        status: 'pendente', assignedTo,
+        createdAt: new Date().toISOString(),
+        ...(form.nota ? { nota: form.nota } : {})
+      };
+      const reqRef = await addDoc(collection(db, 'requests'), newReq);
+      const hrs = Math.round(durationMinutes / 60 * 10) / 10;
+      const typeLabel = type === 'permesso104' ? 'Permesso 104' : 'Congedo';
+      const dateInfo = dates.length > 0
+        ? (form.extraMode === 'ore'
+            ? 'dal ' + formatDate(dates[0]) + ' al ' + formatDate(dates[dates.length-1])
+            : dates.length === 1 ? 'il ' + formatDate(dates[0]) : 'dal ' + formatDate(dates[0]) + ' al ' + formatDate(dates[dates.length-1]) + ' (' + dates.length + ' gg)')
+        : '';
+      await addDoc(collection(db, 'notifications'), {
+        to: assignedTo,
+        message: 'Richiesta ' + typeLabel + ' di ' + user.name + ' ' + dateInfo + ' — ' + hrs + 'h totali' + (form.nota ? ' — Nota: ' + form.nota : ''),
+        date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), requestId: reqRef.id, read: false
+      });
+      await writeAuditLog({ action: 'inviata', fromUser: user, toUser: assignedTo, type, nota: form.nota || '', reqId: reqRef.id });
+      setSelection(null);
+    };
+
     const handleSend = async () => {
+      if (requestType === 'permesso104') return handleSendExtra('permesso104');
+      if (requestType === 'congedo') return handleSendExtra('congedo');
       if (requestType === 'permesso') return handleSendPermesso();
       if (requestType === 'fuorisede') return handleSendFuoriSede();
       if (requestType === 'trasferta') return handleSendTrasferta();
@@ -1520,7 +1587,7 @@ export default function App() {
         setReqModal(myReq); setModifyMode(false);
         setModifyForm({ start: myReq.dates[0], end: myReq.dates[myReq.dates.length - 1], type: myReq.type, timeFrom: myReq.timeFrom || '09:00', timeTo: myReq.timeTo || '10:00' });
       } else {
-        setForm({ end: '', type: requestType, timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '', recuperoOre: false });
+        setForm({ end: '', type: requestType, timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '', recuperoOre: false, extraMode: 'giorni', extraHours: '', extraEnd: '' });
         setSelection(dStr);
       }
     };
@@ -1545,6 +1612,7 @@ export default function App() {
       const isFuoriSede = requestType === 'fuorisede';
       const isTrasferta = requestType === 'trasferta';
       const isFerie = requestType === 'ferie' || requestType === 'malattia';
+      const isExtra = requestType === 'permesso104' || requestType === 'congedo';
 
       return (
         <BottomSheet>
@@ -1562,8 +1630,22 @@ export default function App() {
                 </button>
               ))}
             </div>
+            {/* Separatore visivo */}
+            <div className="flex items-center gap-2 pt-1">
+              <div className="flex-1 h-px bg-slate-200"></div>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Permessi speciali</span>
+              <div className="flex-1 h-px bg-slate-200"></div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setRequestType('permesso104')} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all ' + (requestType === 'permesso104' ? 'bg-violet-600 text-white' : 'bg-violet-50 text-violet-600 border border-violet-200')}>
+                Permesso 104
+              </button>
+              <button onClick={() => setRequestType('congedo')} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all ' + (requestType === 'congedo' ? 'bg-pink-600 text-white' : 'bg-pink-50 text-pink-600 border border-pink-200')}>
+                Congedo
+              </button>
+            </div>
 
-            <div className="border-t pt-3">
+            {!isExtra && <div className="border-t pt-3">
               <div><label className="text-[10px] font-black text-slate-400 uppercase">Data</label><input type="date" value={selection} readOnly className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
 
               {(isFerie || isTrasferta) && (
@@ -1612,7 +1694,79 @@ export default function App() {
                   <p className="text-xs font-black text-blue-600">La trasferta richiede approvazione del responsabile e di Mirco Ronci</p>
                 </div>
               )}
-            </div>
+            </div>}
+
+              {(requestType === 'permesso104' || requestType === 'congedo') && (
+                <div className="mt-3 space-y-3">
+                  {/* Toggle modalità */}
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Modalità inserimento</label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[['giorni','📅 Solo giorni'],['ore','🕐 Solo ore'],['giorni+ore','📅+🕐 Giorni + ore']].map(([m,l]) => (
+                        <button key={m} onClick={() => setForm(f => ({...f, extraMode: m}))}
+                          className={'py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ' + (form.extraMode === m ? (requestType === 'permesso104' ? 'bg-violet-600 text-white' : 'bg-pink-600 text-white') : 'bg-slate-100 text-slate-500')}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Modalità Solo giorni */}
+                  {form.extraMode === 'giorni' && (
+                    <div className="space-y-2">
+                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Data inizio</label>
+                        <input type="date" value={selection} readOnly className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
+                      </div>
+                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Data fine (opzionale)</label>
+                        <input type="date" min={selection} defaultValue={selection} onChange={e => setForm({...form, end: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
+                      </div>
+                      {selection && <p className="text-xs font-black text-slate-500 pl-1">
+                        Ore totali: <span className={requestType === 'permesso104' ? 'text-violet-600' : 'text-pink-600'}>
+                          {buildDates(selection, form.end || selection).length * HOURS_PER_DAY}h
+                        </span>
+                      </p>}
+                    </div>
+                  )}
+
+                  {/* Modalità Solo ore */}
+                  {form.extraMode === 'ore' && (
+                    <div className="space-y-2">
+                      <div className="p-3 bg-amber-50 border border-amber-100 rounded-2xl">
+                        <p className="text-[10px] font-black text-amber-700">Le date indicano il periodo di assenza. Le ore dichiarate sono il totale del periodo.</p>
+                      </div>
+                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Dal</label>
+                        <input type="date" value={selection} readOnly className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
+                      </div>
+                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Al</label>
+                        <input type="date" min={selection} defaultValue={selection} onChange={e => setForm({...form, extraEnd: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
+                      </div>
+                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Ore totali</label>
+                        <input type="number" min="0.5" max="999" step="0.5" placeholder="es. 4" value={form.extraHours} onChange={e => setForm({...form, extraHours: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base outline-none"/>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Modalità Giorni + ore */}
+                  {form.extraMode === 'giorni+ore' && (
+                    <div className="space-y-2">
+                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Data inizio</label>
+                        <input type="date" value={selection} readOnly className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
+                      </div>
+                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Data fine (opzionale)</label>
+                        <input type="date" min={selection} defaultValue={selection} onChange={e => setForm({...form, end: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
+                      </div>
+                      <div><label className="text-[10px] font-black text-slate-400 uppercase">Ore aggiuntive (frazioni di giornata)</label>
+                        <input type="number" min="0" max="7" step="0.5" placeholder="es. 3" value={form.extraHours} onChange={e => setForm({...form, extraHours: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base outline-none"/>
+                      </div>
+                      {selection && <p className="text-xs font-black text-slate-500 pl-1">
+                        Ore totali: <span className={requestType === 'permesso104' ? 'text-violet-600' : 'text-pink-600'}>
+                          {buildDates(selection, form.end || selection).length * HOURS_PER_DAY + (parseFloat(form.extraHours) || 0)}h
+                        </span>
+                      </p>}
+                    </div>
+                  )}
+                </div>
+              )}
 
             <div className="border-t pt-3">
               <label className="text-[10px] font-black text-slate-400 uppercase">Nota (opzionale)</label>
@@ -1730,7 +1884,7 @@ export default function App() {
           {!isPersonalView && (
             <div className="flex gap-3 flex-wrap border-t border-slate-100 pt-2">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Sigle:</span>
-              {[['F','Ferie'],['P','Permesso'],['M','Malattia'],['T','Trasferta'],['FS','Fuori sede'],['MM','Mancata marcatura']].map(([s,l]) => (
+              {[['F','Ferie'],['P','Permesso'],['M','Malattia'],['T','Trasferta'],['FS','Fuori sede'],['MM','Mancata marcatura'],['104','Permesso 104'],['C','Congedo']].map(([s,l]) => (
                 <span key={s} className="text-[10px] font-bold text-slate-500"><span className="font-black text-slate-700">{s}</span> = {l}</span>
               ))}
             </div>
