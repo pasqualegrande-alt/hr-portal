@@ -424,9 +424,10 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
     })();
     const byType = {
       ferie: empty(), trasferta: empty(), malattia: empty(),
-      permesso: empty(), fuorisede: empty(), recupero: empty()
+      permesso: empty(), fuorisede: empty(), recupero: empty(),
+      permesso104: empty(), congedo: empty()
     };
-    const reqIds = { ferie: [], trasferta: [], malattia: [], permesso: [], fuorisede: [], recupero: [] };
+    const reqIds = { ferie: [], trasferta: [], malattia: [], permesso: [], fuorisede: [], recupero: [], permesso104: [], congedo: [] };
 
     const isApproved = s => s === 'approvato' || s === 'comunicato';
     const isPending  = s => ['pendente','pendente_responsabile','pendente_mirco'].includes(s);
