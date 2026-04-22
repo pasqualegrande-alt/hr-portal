@@ -1655,8 +1655,20 @@ export default function App() {
 
               {(isPermesso || isFuoriSede) && (
                 <div className="grid grid-cols-2 gap-3 mt-3">
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase">Dalle</label><input type="time" step="900" value={form.timeFrom} onChange={e => setForm({...form, timeFrom: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase">Alle</label><input type="time" step="900" value={form.timeTo} onChange={e => setForm({...form, timeTo: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase">Dalle</label><input type="time" step="900" value={form.timeFrom} onChange={e => {
+                    const [h,m] = e.target.value.split(':');
+                    const rounded = Math.round(parseInt(m||0)/15)*15;
+                    const rm = rounded >= 60 ? '00' : String(rounded).padStart(2,'0');
+                    const rh = rounded >= 60 ? String(parseInt(h)+1).padStart(2,'0') : h;
+                    setForm({...form, timeFrom: rh+':'+rm});
+                  }} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase">Alle</label><input type="time" step="900" value={form.timeTo} onChange={e => {
+                    const [h,m] = e.target.value.split(':');
+                    const rounded = Math.round(parseInt(m||0)/15)*15;
+                    const rm = rounded >= 60 ? '00' : String(rounded).padStart(2,'0');
+                    const rh = rounded >= 60 ? String(parseInt(h)+1).padStart(2,'0') : h;
+                    setForm({...form, timeTo: rh+':'+rm});
+                  }} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
                 </div>
               )}
 
@@ -1740,10 +1752,22 @@ export default function App() {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div><label className="text-[10px] font-black text-slate-400 uppercase">Dalle</label>
-                          <input type="time" step="900" value={form.timeFrom} onChange={e => setForm({...form, timeFrom: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
+                          <input type="time" step="900" value={form.timeFrom} onChange={e => {
+                    const [h,m] = e.target.value.split(':');
+                    const rounded = Math.round(parseInt(m||0)/15)*15;
+                    const rm = rounded >= 60 ? '00' : String(rounded).padStart(2,'0');
+                    const rh = rounded >= 60 ? String(parseInt(h)+1).padStart(2,'0') : h;
+                    setForm({...form, timeFrom: rh+':'+rm});
+                  }} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
                         </div>
                         <div><label className="text-[10px] font-black text-slate-400 uppercase">Alle</label>
-                          <input type="time" step="900" value={form.timeTo} onChange={e => setForm({...form, timeTo: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
+                          <input type="time" step="900" value={form.timeTo} onChange={e => {
+                    const [h,m] = e.target.value.split(':');
+                    const rounded = Math.round(parseInt(m||0)/15)*15;
+                    const rm = rounded >= 60 ? '00' : String(rounded).padStart(2,'0');
+                    const rh = rounded >= 60 ? String(parseInt(h)+1).padStart(2,'0') : h;
+                    setForm({...form, timeTo: rh+':'+rm});
+                  }} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base"/>
                         </div>
                       </div>
                       {form.timeFrom && form.timeTo && calcMinutesExcludingLunch(form.timeFrom, form.timeTo) > 0 && (
@@ -1767,10 +1791,22 @@ export default function App() {
                         <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Orario assenza parziale</p>
                         <div className="grid grid-cols-2 gap-3">
                           <div><label className="text-[10px] font-black text-slate-400 uppercase">Dalle</label>
-                            <input type="time" step="900" value={form.timeFrom} onChange={e => setForm({...form, timeFrom: e.target.value})} className="w-full p-3 bg-white border rounded-xl font-bold mt-1 text-base"/>
+                            <input type="time" step="900" value={form.timeFrom} onChange={e => {
+                    const [h,m] = e.target.value.split(':');
+                    const rounded = Math.round(parseInt(m||0)/15)*15;
+                    const rm = rounded >= 60 ? '00' : String(rounded).padStart(2,'0');
+                    const rh = rounded >= 60 ? String(parseInt(h)+1).padStart(2,'0') : h;
+                    setForm({...form, timeFrom: rh+':'+rm});
+                  }} className="w-full p-3 bg-white border rounded-xl font-bold mt-1 text-base"/>
                           </div>
                           <div><label className="text-[10px] font-black text-slate-400 uppercase">Alle</label>
-                            <input type="time" step="900" value={form.timeTo} onChange={e => setForm({...form, timeTo: e.target.value})} className="w-full p-3 bg-white border rounded-xl font-bold mt-1 text-base"/>
+                            <input type="time" step="900" value={form.timeTo} onChange={e => {
+                    const [h,m] = e.target.value.split(':');
+                    const rounded = Math.round(parseInt(m||0)/15)*15;
+                    const rm = rounded >= 60 ? '00' : String(rounded).padStart(2,'0');
+                    const rh = rounded >= 60 ? String(parseInt(h)+1).padStart(2,'0') : h;
+                    setForm({...form, timeTo: rh+':'+rm});
+                  }} className="w-full p-3 bg-white border rounded-xl font-bold mt-1 text-base"/>
                           </div>
                         </div>
                         {form.timeFrom && form.timeTo && calcMinutesExcludingLunch(form.timeFrom, form.timeTo) > 0 && (
