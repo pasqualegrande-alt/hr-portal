@@ -129,6 +129,25 @@ const LogView = ({ auditLogs, db }) => {
     await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'auditLog', d.id))));
   };
 
+  const handleExportExcel = () => {
+    if (auditLogs.length === 0) { alert('Nessuna operazione da esportare.'); return; }
+    const cols = ['Codice','Username','Data','Orario','Destinatario','Tipo','Azione','Nota'];
+    const rows = auditLogs.map(l => [
+      l.code||'', l.username||'', l.date||'', l.time||'',
+      l.recipient||'', l.type||'', l.action||'',
+      (l.nota||'').replace(/;/g,',')
+    ]);
+    const csv = [cols,...rows].map(r=>r.map(v=>`"${v}"`).join(';')).join('\r\n');
+    const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const d = new Date();
+    a.download = `registro_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const actionLabel = (a) => {
     const map = { inviata: '📤 Inviata', approvata: '✅ Approvata', rifiutata: '❌ Rifiutata', cancellata: '🗑 Cancellata', modificata: '✏️ Modificata', 'rivalutata→approvata': '🔄 Rivalutata→Appr.' };
     return map[a] || a;
@@ -185,6 +204,9 @@ const LogView = ({ auditLogs, db }) => {
           )}
           <button onClick={handleClearLog} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
             <Trash2 size={14}/> Svuota
+          </button>
+          <button onClick={handleExportExcel} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
+            <Save size={14}/> Esporta CSV
           </button>
         </div>
       </div>
@@ -504,77 +526,64 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
       <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
 
         {/* Header nero con navigazione integrata */}
-        <div className="bg-slate-900 px-5 py-4">
-          <div className="flex items-center justify-between gap-4">
-
-            {/* Dipendente con frecce ↑↓ (solo HR) */}
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              {isHR && (
-                <div className="flex flex-col gap-0.5 shrink-0">
-                  <Arr onClick={() => setEmpIdx(i => Math.max(0, i-1))} disabled={empIdx === 0}>▲</Arr>
-                  <Arr onClick={() => setEmpIdx(i => Math.min(employees.length-1, i+1))} disabled={empIdx >= employees.length-1}>▼</Arr>
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="font-black text-white uppercase text-base leading-tight truncate">
-                  {emp?.firstName} {emp?.lastName}
-                </p>
-                <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                  {emp?.username} · {emp?.role}
-                  {isHR && <span className="text-slate-500 ml-2">{empIdx+1}/{employees.length}</span>}
-                </p>
-              </div>
-            </div>
-
-            {/* Campo filtro (solo HR) */}
+        <div className="bg-slate-900 px-4 py-3">
+          {/* Riga 1: nome dipendente + frecce (se HR) */}
+          <div className="flex items-center gap-2">
             {isHR && (
-              <div className="relative flex-1 max-w-[200px]">
-                <input
-                  type="text"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="🔍 Cerca..."
-                  className="w-full px-3 py-1.5 bg-white/10 border border-white/20 rounded-xl text-[11px] font-bold text-white placeholder-slate-400 outline-none focus:bg-white/20"
-                />
-                {filtered.length > 0 && search && (
-                  <div className="absolute top-full left-0 right-0 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-30 max-h-48 overflow-y-auto mt-1">
-                    {filtered.map(u => (
-                      <button key={u.id}
-                        className="w-full text-left px-3 py-2 hover:bg-slate-700 text-[11px] font-bold text-slate-200 border-b border-slate-700 last:border-0 transition-colors"
-                        onMouseDown={() => {
-                          const idx = employees.findIndex(e => e.id === u.id);
-                          if (idx >= 0) setEmpIdx(idx);
-                          setSearch('');
-                        }}>
-                        <span className="text-[9px] text-slate-500 font-black mr-1">{u.username}</span>
-                        {u.firstName} {u.lastName}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <Arr onClick={() => setEmpIdx(i => Math.max(0, i-1))} disabled={empIdx === 0}>▲</Arr>
+                <Arr onClick={() => setEmpIdx(i => Math.min(employees.length-1, i+1))} disabled={empIdx >= employees.length-1}>▼</Arr>
               </div>
             )}
-
-            {/* Mese con frecce ← → */}
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex-1 min-w-0">
+              <p className="font-black text-white uppercase text-sm leading-tight truncate">
+                {emp?.firstName} {emp?.lastName}
+              </p>
+              <p className="text-[10px] text-slate-400 font-bold">
+                {emp?.username} · {emp?.role}
+                {isHR && <span className="text-slate-500 ml-1">{empIdx+1}/{employees.length}</span>}
+              </p>
+            </div>
+            {/* Mese con frecce */}
+            <div className="flex items-center gap-1 shrink-0">
               <Arr onClick={() => setCardDate(new Date(year, month-1))} disabled={false}>◀</Arr>
-              <div className="text-right">
-                <p className="font-black text-blue-400 uppercase text-sm italic whitespace-nowrap">{monthLabel}</p>
-                <p className="text-[10px] text-slate-400 font-bold text-right">{theoreticalHours}h teoriche</p>
+              <div className="text-center">
+                <p className="font-black text-blue-400 uppercase text-xs italic whitespace-nowrap">{monthLabel}</p>
+                <p className="text-[9px] text-slate-400 font-bold">{theoreticalHours}h</p>
               </div>
               <Arr onClick={() => setCardDate(new Date(year, month+1))} disabled={false}>▶</Arr>
             </div>
           </div>
+          {/* Riga 2: filtro solo HR */}
+          {isHR && (
+            <div className="relative mt-2">
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="🔍 Cerca dipendente..."
+                className="w-full px-3 py-1.5 bg-white/10 border border-white/20 rounded-xl text-[11px] font-bold text-white placeholder-slate-400 outline-none focus:bg-white/20"
+              />
+              {filtered.length > 0 && search && (
+                <div className="absolute top-full left-0 right-0 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-30 max-h-48 overflow-y-auto mt-1">
+                  {filtered.map(u => (
+                    <button key={u.id}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-700 text-[11px] font-bold text-slate-200 border-b border-slate-700 last:border-0"
+                      onMouseDown={() => { const i=employees.findIndex(e=>e.id===u.id); if(i>=0) setEmpIdx(i); setSearch(''); }}>
+                      <span className="text-[9px] text-slate-500 font-black mr-1">{u.username}</span>{u.firstName} {u.lastName}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tabella */}
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-5 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/2">Tipo assenza</th>
-              <th className="px-4 py-3 text-center text-[10px] font-black text-green-600 uppercase tracking-widest">✓ Approvato</th>
-              <th className="px-4 py-3 text-center text-[10px] font-black text-orange-500 uppercase tracking-widest">◷ In attesa</th>
-              <th className="px-4 py-3 text-center text-[10px] font-black text-red-500 uppercase tracking-widest">✕ Rifiutato</th>
+              <th className="px-3 py-2 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo</th>
+              <th className="px-2 py-2 text-center text-[10px] font-black text-green-600 uppercase">✓ Appr.</th>
+              <th className="px-2 py-2 text-center text-[10px] font-black text-orange-500 uppercase">◷ Att.</th>
+              <th className="px-2 py-2 text-center text-[10px] font-black text-red-500 uppercase">✕ Rif.</th>
             </tr>
           </thead>
           <tbody>
@@ -583,33 +592,33 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
               const hasAny = t.appr>0 || t.pend>0 || t.rif>0;
               return (
                 <tr key={row.key} className={(ri%2===0?'bg-white':'bg-slate-50/50')+' border-b border-slate-100 hover:bg-blue-50/20 transition-colors'}>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2">
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1.5">
                       <span className={`w-2.5 h-2.5 rounded-sm ${row.dot} shrink-0`}></span>
-                      <span className={'text-sm font-bold '+(hasAny?row.color:'text-slate-400')}>{row.label}</span>
+                      <span className={'text-xs font-bold '+(hasAny?row.color:'text-slate-400')}>{row.label}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3.5 text-center">
+                  <td className="px-2 py-2.5 text-center">
                     <span className={'font-black text-sm '+(t.appr>0?'text-green-600':'text-slate-200')}>{fmt(t.appr)}</span>
                   </td>
-                  <td className="px-4 py-3.5 text-center">
+                  <td className="px-2 py-2.5 text-center">
                     <span className={'font-black text-sm '+(t.pend>0?'text-orange-500':'text-slate-200')}>{fmt(t.pend)}</span>
                   </td>
-                  <td className="px-4 py-3.5 text-center">
+                  <td className="px-2 py-2.5 text-center">
                     <span className={'font-black text-sm '+(t.rif>0?'text-red-500':'text-slate-200')}>{fmt(t.rif)}</span>
                   </td>
                 </tr>
               );
             })}
             <tr className="bg-slate-900">
-              <td className="px-5 py-3"><span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Totale assenze</span></td>
-              <td className="px-4 py-3 text-center"><span className={'font-black text-sm '+(totAppr>0?'text-green-400':'text-slate-600')}>{fmt(Math.round(totAppr*10)/10)}</span></td>
-              <td className="px-4 py-3 text-center"><span className={'font-black text-sm '+(totPend>0?'text-orange-400':'text-slate-600')}>{fmt(Math.round(totPend*10)/10)}</span></td>
-              <td className="px-4 py-3 text-center"><span className={'font-black text-sm '+(totRif>0?'text-red-400':'text-slate-600')}>{fmt(Math.round(totRif*10)/10)}</span></td>
+              <td className="px-3 py-2.5"><span className="text-[10px] font-black text-slate-300 uppercase">Totale</span></td>
+              <td className="px-2 py-2.5 text-center"><span className={'font-black text-sm '+(totAppr>0?'text-green-400':'text-slate-600')}>{fmt(Math.round(totAppr*10)/10)}</span></td>
+              <td className="px-2 py-2.5 text-center"><span className={'font-black text-sm '+(totPend>0?'text-orange-400':'text-slate-600')}>{fmt(Math.round(totPend*10)/10)}</span></td>
+              <td className="px-2 py-2.5 text-center"><span className={'font-black text-sm '+(totRif>0?'text-red-400':'text-slate-600')}>{fmt(Math.round(totRif*10)/10)}</span></td>
             </tr>
             <tr className="bg-blue-900/80">
-              <td className="px-5 py-3"><span className="text-[10px] font-black text-blue-300 uppercase tracking-widest">Ore teoriche rimanenti</span></td>
-              <td className="px-4 py-3 text-center" colSpan={3}>
+              <td className="px-3 py-2.5"><span className="text-[10px] font-black text-blue-300 uppercase">Ore rimanenti</span></td>
+              <td className="px-2 py-2.5 text-center" colSpan={3}>
                 <span className="font-black text-blue-300 text-sm">{Math.round((theoreticalHours-totAppr-totPend)*10)/10}h</span>
               </td>
             </tr>
