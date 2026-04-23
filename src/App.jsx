@@ -934,6 +934,7 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
 };
 
 const OverviewView = ({ users, requests, closures }) => {
+  const [cellDetail, setCellDetail] = useState(null);
   const [overviewDate, setOverviewDate] = useState(new Date());
   const [nameFilter, setNameFilter] = useState('');
 
@@ -1597,64 +1598,64 @@ export default function App() {
           </div>
         ))}
       {/* Modale dettaglio cella Overview */}
-      {overviewCellModal && (
-      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end justify-center z-50 px-4 pb-6" onClick={() => setOverviewCellModal(null)}>
+      {cellDetail && (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end justify-center z-50 px-4 pb-6" onClick={() => setCellDetail(null)}>
         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
           <div className="flex justify-center pt-4 pb-2"><div className="w-10 h-1 bg-slate-200 rounded-full"></div></div>
           <div className="px-6 pb-4 border-b border-slate-100">
-            <p className="font-black text-slate-800 text-base uppercase">{overviewCellModal.name}</p>
-            <p className="text-[11px] text-slate-400 font-bold mt-0.5">{overviewCellModal.date}</p>
+            <p className="font-black text-slate-800 text-base uppercase">{cellDetail.name}</p>
+            <p className="text-[11px] text-slate-400 font-bold mt-0.5">{cellDetail.date}</p>
           </div>
           <div className="px-6 py-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-black text-slate-500 uppercase">Tipo</span>
               <span className="font-black text-slate-800 text-sm">
-                {({'permesso':'Permesso','fuorisede':'Fuori sede','permesso104':'Permesso 104','congedo':'Congedo'})[overviewCellModal.type]||overviewCellModal.type}
+                {({'permesso':'Permesso','fuorisede':'Fuori sede','permesso104':'Permesso 104','congedo':'Congedo'})[cellDetail.type]||cellDetail.type}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-black text-slate-500 uppercase">Stato</span>
-              <span className={'font-black text-sm ' + (overviewCellModal.status==='approvato'?'text-green-600':overviewCellModal.status==='rifiutato'?'text-red-500':'text-orange-500')}>
-                {overviewCellModal.status==='approvato'?'✓ Approvato':overviewCellModal.status==='rifiutato'?'✗ Rifiutato':overviewCellModal.status==='pendente_responsabile'?'⏳ Att. responsabile':overviewCellModal.status==='pendente_mirco'?'⏳ Att. Mirco':'⏳ In attesa'}
+              <span className={'font-black text-sm ' + (cellDetail.status==='approvato'?'text-green-600':cellDetail.status==='rifiutato'?'text-red-500':'text-orange-500')}>
+                {cellDetail.status==='approvato'?'✓ Approvato':cellDetail.status==='rifiutato'?'✗ Rifiutato':cellDetail.status==='pendente_responsabile'?'⏳ Att. responsabile':cellDetail.status==='pendente_mirco'?'⏳ Att. Mirco':'⏳ In attesa'}
               </span>
             </div>
-            {overviewCellModal.timeFrom && overviewCellModal.timeTo && (
+            {cellDetail.timeFrom && cellDetail.timeTo && (
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-slate-500 uppercase">Orario</span>
-                <span className="font-black text-slate-800 text-sm">{overviewCellModal.timeFrom} → {overviewCellModal.timeTo}</span>
+                <span className="font-black text-slate-800 text-sm">{cellDetail.timeFrom} → {cellDetail.timeTo}</span>
               </div>
             )}
-            {overviewCellModal.durationMinutes > 0 && (
+            {cellDetail.durationMinutes > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-slate-500 uppercase">Durata</span>
                 <span className="font-black text-slate-800 text-sm">
-                  {(()=>{const h=Math.floor(overviewCellModal.durationMinutes/60),m=overviewCellModal.durationMinutes%60;return h+'h'+(m>0?' '+m+'m':'');})()}
+                  {(()=>{const h=Math.floor(cellDetail.durationMinutes/60),m=cellDetail.durationMinutes%60;return h+'h'+(m>0?' '+m+'m':'');})()}
                 </span>
               </div>
             )}
-            {overviewCellModal.extraMode && (
+            {cellDetail.extraMode && (
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-slate-500 uppercase">Modalità</span>
                 <span className="font-black text-slate-800 text-sm">
-                  {({'giorni':'Solo giorni','ore':'Solo ore','giorni+ore':'Giorni + ore'})[overviewCellModal.extraMode]||overviewCellModal.extraMode}
+                  {({'giorni':'Solo giorni','ore':'Solo ore','giorni+ore':'Giorni + ore'})[cellDetail.extraMode]||cellDetail.extraMode}
                 </span>
               </div>
             )}
-            {overviewCellModal.nota && (
+            {cellDetail.nota && (
               <div className="bg-slate-50 rounded-2xl p-3">
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Nota dipendente</p>
-                <p className="text-sm font-bold text-slate-700">{overviewCellModal.nota}</p>
+                <p className="text-sm font-bold text-slate-700">{cellDetail.nota}</p>
               </div>
             )}
-            {overviewCellModal.notaResponsabile && (
+            {cellDetail.notaResponsabile && (
               <div className="bg-blue-50 rounded-2xl p-3">
                 <p className="text-[10px] font-black text-blue-400 uppercase mb-1">Nota responsabile</p>
-                <p className="text-sm font-bold text-blue-700">{overviewCellModal.notaResponsabile}</p>
+                <p className="text-sm font-bold text-blue-700">{cellDetail.notaResponsabile}</p>
               </div>
             )}
           </div>
           <div className="px-6 pb-6">
-            <button onClick={() => setOverviewCellModal(null)} className="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase text-sm">
+            <button onClick={() => setCellDetail(null)} className="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase text-sm">
               Chiudi
             </button>
           </div>
@@ -1680,7 +1681,7 @@ export default function App() {
     const [recipientModal, setRecipientModal] = useState(null);
     const [trasfertaStep, setTrasfertaStep] = useState(null);
     const [dayDetailModal, setDayDetailModal] = useState(null);
-  const [overviewCellModal, setOverviewCellModal] = useState(null);
+  const [cellDetail, setOverviewCellModal_UNUSED] = useState(null);
     const [dayActionReq, setDayActionReq] = useState(null);
     const [dayActionNote, setDayActionNote] = useState('');
 
