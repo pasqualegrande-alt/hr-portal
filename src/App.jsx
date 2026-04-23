@@ -1132,7 +1132,7 @@ const OverviewView = ({ users, requests, closures }) => {
                         title={['permesso','fuorisede','permesso104','congedo'].includes(req.type) ? `${u.firstName} ${u.lastName} — doppio click per dettaglio` : `${u.firstName} ${u.lastName} — ${req.type} (${req.status})`}
                         onDoubleClick={() => {
                           if (!['permesso','fuorisede','permesso104','congedo'].includes(req.type)) return;
-                          setOverviewCellModal({
+                          setCellDetail({
                             name: u.firstName+' '+u.lastName,
                             type: req.type, date: iso,
                             status: req.status,
@@ -1681,7 +1681,7 @@ export default function App() {
     const [recipientModal, setRecipientModal] = useState(null);
     const [trasfertaStep, setTrasfertaStep] = useState(null);
     const [dayDetailModal, setDayDetailModal] = useState(null);
-  const [cellDetail, setOverviewCellModal_UNUSED] = useState(null);
+  const [cellDetail, setCellDetail_UNUSED] = useState(null);
     const [dayActionReq, setDayActionReq] = useState(null);
     const [dayActionNote, setDayActionNote] = useState('');
 
