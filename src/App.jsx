@@ -1869,6 +1869,12 @@ export default function App() {
     const handleCellClick = (dStr, isWeekend, closure, dayReqs) => {
       if (isWeekend || closure) return;
 
+      // hrmanager: mostra sempre il dettaglio giorno, mai il form richiesta
+      if (user.role === 'hrmanager') {
+        if (dayReqs.length > 0) setDayDetailModal({ date: dStr, reqs: dayReqs });
+        return;
+      }
+
       const isViewingOthers = user.role === 'CEO' ||
         (user.role === 'amministratore') ||
         (user.role === 'responsabile' && effectiveFilter !== 'mine');
