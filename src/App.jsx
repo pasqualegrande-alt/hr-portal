@@ -1130,7 +1130,13 @@ const OverviewView = ({ users, requests, closures }) => {
                         className={'border text-center ' + (isToday ? 'border-blue-400 border-2' : 'border-white') + ' ' + (isRejected ? 'bg-slate-200' : colors.bg) + ' ' + borderLeft}
                         style={{width:'28px',minWidth:'28px'}}
                         title={['permesso','fuorisede','permesso104','congedo'].includes(req.type) ? `${u.firstName} ${u.lastName} — click per dettaglio` : `${u.firstName} ${u.lastName} — ${req.type} (${req.status})`}
-                        onClick={() => ['permesso','fuorisede','permesso104','congedo'].includes(req.type) && setCellDetail({name:u.firstName+' '+u.lastName,type:req.type,date:iso,status:req.status,timeFrom:req.timeFrom,timeTo:req.timeTo,durationMinutes:req.durationMinutes,extraMode:req.extraMode,nota:req.nota,notaResponsabile:req.notaResponsabile})}>
+                        onClick={() => {
+                          console.log('CLICK cella overview:', req.type, iso);
+                          if (['permesso','fuorisede','permesso104','congedo'].includes(req.type)) {
+                            console.log('APRO MODALE per:', req.type);
+                            setCellDetail({name:u.firstName+' '+u.lastName,type:req.type,date:iso,status:req.status,timeFrom:req.timeFrom,timeTo:req.timeTo,durationMinutes:req.durationMinutes,extraMode:req.extraMode,nota:req.nota,notaResponsabile:req.notaResponsabile});
+                          }
+                        }}>
                         {isRejected
                           ? <span className="text-[7px] font-black text-slate-400">✕</span>
                           : <span className={'text-[7px] font-black ' + colors.text}>{colors.label}</span>
@@ -1144,6 +1150,71 @@ const OverviewView = ({ users, requests, closures }) => {
           </table>
         </div>
       </div>
+    {/* Modale dettaglio cella */}
+    {cellDetail && (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end justify-center z-50 px-4 pb-6" onClick={() => setCellDetail(null)}>
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          <div className="flex justify-center pt-4 pb-2"><div className="w-10 h-1 bg-slate-200 rounded-full"></div></div>
+          <div className="px-6 pb-4 border-b border-slate-100">
+            <p className="font-black text-slate-800 text-base uppercase">{cellDetail.name}</p>
+            <p className="text-[11px] text-slate-400 font-bold mt-0.5">{cellDetail.date}</p>
+          </div>
+          <div className="px-6 py-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-slate-500 uppercase">Tipo</span>
+              <span className="font-black text-slate-800 text-sm">
+                {({'permesso':'Permesso','fuorisede':'Fuori sede','permesso104':'Permesso 104','congedo':'Congedo'})[cellDetail.type]||cellDetail.type}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-slate-500 uppercase">Stato</span>
+              <span className={'font-black text-sm '+(cellDetail.status==='approvato'?'text-green-600':cellDetail.status==='rifiutato'?'text-red-500':'text-orange-500')}>
+                {cellDetail.status==='approvato'?'✓ Approvato':cellDetail.status==='rifiutato'?'✗ Rifiutato':cellDetail.status==='pendente_responsabile'?'⏳ Att. responsabile':cellDetail.status==='pendente_mirco'?'⏳ Att. Mirco':'⏳ In attesa'}
+              </span>
+            </div>
+            {cellDetail.timeFrom && cellDetail.timeTo && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-500 uppercase">Orario</span>
+                <span className="font-black text-slate-800 text-sm">{cellDetail.timeFrom} → {cellDetail.timeTo}</span>
+              </div>
+            )}
+            {cellDetail.durationMinutes > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-500 uppercase">Durata</span>
+                <span className="font-black text-slate-800 text-sm">
+                  {(()=>{const h=Math.floor(cellDetail.durationMinutes/60),m=cellDetail.durationMinutes%60;return h+'h'+(m>0?' '+m+'m':'');})()}
+                </span>
+              </div>
+            )}
+            {cellDetail.extraMode && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-500 uppercase">Modalità</span>
+                <span className="font-black text-slate-800 text-sm">
+                  {({'giorni':'Solo giorni','ore':'Solo ore','giorni+ore':'Giorni + ore'})[cellDetail.extraMode]||cellDetail.extraMode}
+                </span>
+              </div>
+            )}
+            {cellDetail.nota && (
+              <div className="bg-slate-50 rounded-2xl p-3">
+                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Nota dipendente</p>
+                <p className="text-sm font-bold text-slate-700">{cellDetail.nota}</p>
+              </div>
+            )}
+            {cellDetail.notaResponsabile && (
+              <div className="bg-blue-50 rounded-2xl p-3">
+                <p className="text-[10px] font-black text-blue-400 uppercase mb-1">Nota responsabile</p>
+                <p className="text-sm font-bold text-blue-700">{cellDetail.notaResponsabile}</p>
+              </div>
+            )}
+          </div>
+          <div className="px-6 pb-6">
+            <button onClick={() => setCellDetail(null)} className="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase text-sm">
+              Chiudi
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 };
@@ -1586,71 +1657,6 @@ export default function App() {
             </div>
           </div>
         ))}
-      {/* Modale dettaglio cella Overview */}
-      {cellDetail && (
-      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end justify-center z-50 px-4 pb-6" onClick={() => setCellDetail(null)}>
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
-          <div className="flex justify-center pt-4 pb-2"><div className="w-10 h-1 bg-slate-200 rounded-full"></div></div>
-          <div className="px-6 pb-4 border-b border-slate-100">
-            <p className="font-black text-slate-800 text-base uppercase">{cellDetail.name}</p>
-            <p className="text-[11px] text-slate-400 font-bold mt-0.5">{cellDetail.date}</p>
-          </div>
-          <div className="px-6 py-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-slate-500 uppercase">Tipo</span>
-              <span className="font-black text-slate-800 text-sm">
-                {({'permesso':'Permesso','fuorisede':'Fuori sede','permesso104':'Permesso 104','congedo':'Congedo'})[cellDetail.type]||cellDetail.type}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-slate-500 uppercase">Stato</span>
-              <span className={'font-black text-sm ' + (cellDetail.status==='approvato'?'text-green-600':cellDetail.status==='rifiutato'?'text-red-500':'text-orange-500')}>
-                {cellDetail.status==='approvato'?'✓ Approvato':cellDetail.status==='rifiutato'?'✗ Rifiutato':cellDetail.status==='pendente_responsabile'?'⏳ Att. responsabile':cellDetail.status==='pendente_mirco'?'⏳ Att. Mirco':'⏳ In attesa'}
-              </span>
-            </div>
-            {cellDetail.timeFrom && cellDetail.timeTo && (
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-500 uppercase">Orario</span>
-                <span className="font-black text-slate-800 text-sm">{cellDetail.timeFrom} → {cellDetail.timeTo}</span>
-              </div>
-            )}
-            {cellDetail.durationMinutes > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-500 uppercase">Durata</span>
-                <span className="font-black text-slate-800 text-sm">
-                  {(()=>{const h=Math.floor(cellDetail.durationMinutes/60),m=cellDetail.durationMinutes%60;return h+'h'+(m>0?' '+m+'m':'');})()}
-                </span>
-              </div>
-            )}
-            {cellDetail.extraMode && (
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-500 uppercase">Modalità</span>
-                <span className="font-black text-slate-800 text-sm">
-                  {({'giorni':'Solo giorni','ore':'Solo ore','giorni+ore':'Giorni + ore'})[cellDetail.extraMode]||cellDetail.extraMode}
-                </span>
-              </div>
-            )}
-            {cellDetail.nota && (
-              <div className="bg-slate-50 rounded-2xl p-3">
-                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Nota dipendente</p>
-                <p className="text-sm font-bold text-slate-700">{cellDetail.nota}</p>
-              </div>
-            )}
-            {cellDetail.notaResponsabile && (
-              <div className="bg-blue-50 rounded-2xl p-3">
-                <p className="text-[10px] font-black text-blue-400 uppercase mb-1">Nota responsabile</p>
-                <p className="text-sm font-bold text-blue-700">{cellDetail.notaResponsabile}</p>
-              </div>
-            )}
-          </div>
-          <div className="px-6 pb-6">
-            <button onClick={() => setCellDetail(null)} className="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase text-sm">
-              Chiudi
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
     </div>
     );
   };
