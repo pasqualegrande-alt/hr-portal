@@ -1103,7 +1103,7 @@ const OverviewView = ({ users, requests, closures }) => {
                     const isMonthBoundary = idx > 0 && dm !== days[idx-1].month;
                     const closure = getClosureForDate(iso);
                     const reqs = reqMap[`${u.id}_${iso}`] || [];
-                    const order = ['ferie','trasferta','malattia','permesso','fuorisede'];
+                    const order = ['ferie','trasferta','malattia','permesso','fuorisede','permesso104','congedo'];
                     const req = reqs.sort((a,b) => order.indexOf(a.type) - order.indexOf(b.type))[0];
                     const borderLeft = isMonthBoundary ? 'border-l-2 border-blue-400' : '';
                     const todayBg = isToday ? 'bg-blue-50' : '';
@@ -1130,19 +1130,7 @@ const OverviewView = ({ users, requests, closures }) => {
                         className={'border text-center ' + (isToday ? 'border-blue-400 border-2' : 'border-white') + ' ' + (isRejected ? 'bg-slate-200' : colors.bg) + ' ' + borderLeft}
                         style={{width:'28px',minWidth:'28px'}}
                         title={['permesso','fuorisede','permesso104','congedo'].includes(req.type) ? `${u.firstName} ${u.lastName} — click per dettaglio` : `${u.firstName} ${u.lastName} — ${req.type} (${req.status})`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!['permesso','fuorisede','permesso104','congedo'].includes(req.type)) return;
-                          setCellDetail({
-                            name: u.firstName+' '+u.lastName,
-                            type: req.type, date: iso,
-                            status: req.status,
-                            timeFrom: req.timeFrom, timeTo: req.timeTo,
-                            durationMinutes: req.durationMinutes,
-                            extraMode: req.extraMode,
-                            nota: req.nota, notaResponsabile: req.notaResponsabile
-                          });
-                        }}>
+                        onClick={() => ['permesso','fuorisede','permesso104','congedo'].includes(req.type) && setCellDetail({name:u.firstName+' '+u.lastName,type:req.type,date:iso,status:req.status,timeFrom:req.timeFrom,timeTo:req.timeTo,durationMinutes:req.durationMinutes,extraMode:req.extraMode,nota:req.nota,notaResponsabile:req.notaResponsabile})}>
                         {isRejected
                           ? <span className="text-[7px] font-black text-slate-400">✕</span>
                           : <span className={'text-[7px] font-black ' + colors.text}>{colors.label}</span>
