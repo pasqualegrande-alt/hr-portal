@@ -1129,8 +1129,9 @@ const OverviewView = ({ users, requests, closures }) => {
                       <td key={iso}
                         className={'border text-center ' + (isToday ? 'border-blue-400 border-2' : 'border-white') + ' ' + (isRejected ? 'bg-slate-200' : colors.bg) + ' ' + borderLeft}
                         style={{width:'28px',minWidth:'28px'}}
-                        title={['permesso','fuorisede','permesso104','congedo'].includes(req.type) ? `${u.firstName} ${u.lastName} — doppio click per dettaglio` : `${u.firstName} ${u.lastName} — ${req.type} (${req.status})`}
-                        onDoubleClick={() => {
+                        title={['permesso','fuorisede','permesso104','congedo'].includes(req.type) ? `${u.firstName} ${u.lastName} — click per dettaglio` : `${u.firstName} ${u.lastName} — ${req.type} (${req.status})`}
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (!['permesso','fuorisede','permesso104','congedo'].includes(req.type)) return;
                           setCellDetail({
                             name: u.firstName+' '+u.lastName,
