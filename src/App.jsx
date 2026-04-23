@@ -1007,7 +1007,7 @@ const OverviewView = ({ users, requests, closures }) => {
         {Object.entries(TYPE_COLORS).map(([type, c]) => (
           <span key={type} className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
             <span className={`w-4 h-4 rounded ${c.bg} inline-block`}></span>
-            {type === 'ferie' ? 'Ferie/In attesa' : type === 'malattia' ? 'Malattia' : type === 'trasferta' ? 'Trasferta' : type === 'permesso' ? 'Permesso' : 'Fuori sede'}
+            { {'ferie':'Ferie','malattia':'Malattia','trasferta':'Trasferta','permesso':'Permesso','fuorisede':'Fuori sede','recupero':'Ore recupero','permesso104':'Permesso 104','congedo':'Congedo'}[type] || type }
           </span>
         ))}
         <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
@@ -1128,7 +1128,19 @@ const OverviewView = ({ users, requests, closures }) => {
                       <td key={iso}
                         className={'border text-center ' + (isToday ? 'border-blue-400 border-2' : 'border-white') + ' ' + (isRejected ? 'bg-slate-200' : colors.bg) + ' ' + borderLeft}
                         style={{width:'28px',minWidth:'28px'}}
-                        title={`${u.firstName} ${u.lastName} — ${req.type} (${req.status})`}>
+                        title={['permesso','fuorisede','permesso104','congedo'].includes(req.type) ? `${u.firstName} ${u.lastName} — doppio click per dettaglio` : `${u.firstName} ${u.lastName} — ${req.type} (${req.status})`}
+                        onDoubleClick={() => {
+                          if (!['permesso','fuorisede','permesso104','congedo'].includes(req.type)) return;
+                          const fmtMins = m => { if(!m) return '—'; const h=Math.floor(m/60),mm=m%60; return h+'h'+(mm>0?mm+'m':''); };
+                          const tlabel = {'permesso':'Permesso','fuorisede':'Fuori sede','permesso104':'Permesso 104','congedo':'Congedo'}[req.type]||req.type;
+                          const slabel = req.status==='approvato'?'✓ Approvato':req.status==='rifiutato'?'✗ Rifiutato':req.status==='pendente_responsabile'?'⏳ Att. responsabile':req.status==='pendente_mirco'?'⏳ Att. Mirco':'⏳ In attesa';
+                          const orario = req.timeFrom&&req.timeTo ? '\nOrario: '+req.timeFrom+' → '+req.timeTo : '';
+                          const durata = req.durationMinutes ? '\nDurata: '+fmtMins(req.durationMinutes) : '';
+                          const modo = req.extraMode ? '\nModalità: '+({'giorni':'Solo giorni','ore':'Solo ore','giorni+ore':'Giorni + ore'}[req.extraMode]||req.extraMode) : '';
+                          const nota = req.nota ? '\nNota: '+req.nota : '';
+                          const nresp = req.notaResponsabile ? '\nNota resp.: '+req.notaResponsabile : '';
+                          alert(u.firstName+' '+u.lastName+' — '+tlabel+'\nData: '+iso+'\nStato: '+slabel+orario+durata+modo+nota+nresp);
+                        }}>
                         {isRejected
                           ? <span className="text-[7px] font-black text-slate-400">✕</span>
                           : <span className={'text-[7px] font-black ' + colors.text}>{colors.label}</span>
@@ -1875,9 +1887,17 @@ export default function App() {
         return;
       }
 
+      // responsabile che sta guardando un altro dipendente: solo dettaglio, mai form
+      const responsabileViewingOther = user.role === 'responsabile' &&
+        effectiveFilter !== 'mine' && effectiveFilter !== user.name;
+      if (responsabileViewingOther) {
+        if (dayReqs.length > 0) setDayDetailModal({ date: dStr, reqs: dayReqs });
+        return;
+      }
+
       const isViewingOthers = user.role === 'CEO' ||
         (user.role === 'amministratore') ||
-        (user.role === 'responsabile' && effectiveFilter !== 'mine');
+        (user.role === 'responsabile' && effectiveFilter !== 'mine' && effectiveFilter !== user.name);
 
       if (isViewingOthers && dayReqs.length > 0) {
         setDayDetailModal({ date: dStr, reqs: dayReqs });
