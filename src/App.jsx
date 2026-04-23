@@ -1617,9 +1617,9 @@ export default function App() {
       let passUser = false;
       if (user.role === 'dipendente') passUser = r.userId === user.id;
       else if (user.role === 'responsabile') {
-        if (effectiveFilter === 'mine') passUser = r.userId === user.id;
-        else if (effectiveFilter === 'all_mine') passUser = r.userId === user.id || subordinates.some(s => s.id === r.userId);
-        else passUser = r.userName === calFilter;
+        if (effectiveFilter === 'mine' || effectiveFilter === user.name) passUser = r.userId === user.id;
+        else if (effectiveFilter === 'all' || effectiveFilter === 'all_mine') passUser = true;
+        else passUser = r.userName === effectiveFilter;
       } else {
         if (effectiveFilter === 'all') passUser = true;
         else passUser = r.userName === calFilter;
@@ -1669,7 +1669,7 @@ export default function App() {
       return '';
     };
 
-    const isPersonalView = user.role === 'dipendente' || effectiveFilter === 'mine';
+    const isPersonalView = user.role === 'dipendente' || effectiveFilter === 'mine' || effectiveFilter === user.name;
 
     const doSendFerie = async (assignedTo) => {
       const dates = buildDates(selection, form.end);
@@ -1898,11 +1898,12 @@ export default function App() {
 
     const filterOptions = () => {
       if (user.role === 'responsabile') return [
-        { value: 'mine', label: 'Le mie ferie' },
-        ...[...subordinates]
+        { value: 'all', label: 'Tutti' },
+        { value: user.name, label: 'Le mie ferie' },
+        ...[...users]
+          .filter(u => u.role !== 'CEO' && u.role !== 'hrmanager' && u.id !== user.id)
           .sort((a,b) => (a.lastName||'').localeCompare(b.lastName||'', 'it'))
-          .map(s => ({ value: s.name, label: (s.firstName+' '+s.lastName).toLowerCase() })),
-        ...(subordinates.length > 1 ? [{ value: 'all_mine', label: 'Tutti i miei dipendenti' }] : []),
+          .map(u => ({ value: u.name, label: (u.firstName+' '+u.lastName).toLowerCase() })),
       ];
       if (user.role === 'amministratore' || user.role === 'CEO' || user.role === 'hrmanager') return [
         { value: 'all', label: 'Tutti' },
@@ -2611,7 +2612,7 @@ export default function App() {
               setUser(f);
               if (f.role === 'hrmanager') { setView('hr'); setCalFilter('all'); }
               else if (f.role === 'CEO' || f.role === 'amministratore') { setCalFilter('all'); setView('calendar'); }
-              else if (f.role === 'responsabile') { setCalFilter('all_mine'); setView('calendar'); }
+              else if (f.role === 'responsabile') { setCalFilter('all'); setView('calendar'); }
               else { setCalFilter('mine'); setView('calendar'); }
             } else alert('Credenziali non valide');
           }}>Accedi</button>
