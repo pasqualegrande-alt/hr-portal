@@ -1131,15 +1131,15 @@ const OverviewView = ({ users, requests, closures }) => {
                         title={['permesso','fuorisede','permesso104','congedo'].includes(req.type) ? `${u.firstName} ${u.lastName} — doppio click per dettaglio` : `${u.firstName} ${u.lastName} — ${req.type} (${req.status})`}
                         onDoubleClick={() => {
                           if (!['permesso','fuorisede','permesso104','congedo'].includes(req.type)) return;
-                          const fmtMins = m => { if(!m) return '—'; const h=Math.floor(m/60),mm=m%60; return h+'h'+(mm>0?mm+'m':''); };
-                          const tlabel = {'permesso':'Permesso','fuorisede':'Fuori sede','permesso104':'Permesso 104','congedo':'Congedo'}[req.type]||req.type;
-                          const slabel = req.status==='approvato'?'✓ Approvato':req.status==='rifiutato'?'✗ Rifiutato':req.status==='pendente_responsabile'?'⏳ Att. responsabile':req.status==='pendente_mirco'?'⏳ Att. Mirco':'⏳ In attesa';
-                          const orario = req.timeFrom&&req.timeTo ? '\nOrario: '+req.timeFrom+' → '+req.timeTo : '';
-                          const durata = req.durationMinutes ? '\nDurata: '+fmtMins(req.durationMinutes) : '';
-                          const modo = req.extraMode ? '\nModalità: '+({'giorni':'Solo giorni','ore':'Solo ore','giorni+ore':'Giorni + ore'}[req.extraMode]||req.extraMode) : '';
-                          const nota = req.nota ? '\nNota: '+req.nota : '';
-                          const nresp = req.notaResponsabile ? '\nNota resp.: '+req.notaResponsabile : '';
-                          alert(u.firstName+' '+u.lastName+' — '+tlabel+'\nData: '+iso+'\nStato: '+slabel+orario+durata+modo+nota+nresp);
+                          setOverviewCellModal({
+                            name: u.firstName+' '+u.lastName,
+                            type: req.type, date: iso,
+                            status: req.status,
+                            timeFrom: req.timeFrom, timeTo: req.timeTo,
+                            durationMinutes: req.durationMinutes,
+                            extraMode: req.extraMode,
+                            nota: req.nota, notaResponsabile: req.notaResponsabile
+                          });
                         }}>
                         {isRejected
                           ? <span className="text-[7px] font-black text-slate-400">✕</span>
@@ -1596,7 +1596,72 @@ export default function App() {
             </div>
           </div>
         ))}
+      {/* Modale dettaglio cella Overview */}
+      {overviewCellModal && (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end justify-center z-50 px-4 pb-6" onClick={() => setOverviewCellModal(null)}>
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          <div className="flex justify-center pt-4 pb-2"><div className="w-10 h-1 bg-slate-200 rounded-full"></div></div>
+          <div className="px-6 pb-4 border-b border-slate-100">
+            <p className="font-black text-slate-800 text-base uppercase">{overviewCellModal.name}</p>
+            <p className="text-[11px] text-slate-400 font-bold mt-0.5">{overviewCellModal.date}</p>
+          </div>
+          <div className="px-6 py-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-slate-500 uppercase">Tipo</span>
+              <span className="font-black text-slate-800 text-sm">
+                {({'permesso':'Permesso','fuorisede':'Fuori sede','permesso104':'Permesso 104','congedo':'Congedo'})[overviewCellModal.type]||overviewCellModal.type}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-slate-500 uppercase">Stato</span>
+              <span className={'font-black text-sm ' + (overviewCellModal.status==='approvato'?'text-green-600':overviewCellModal.status==='rifiutato'?'text-red-500':'text-orange-500')}>
+                {overviewCellModal.status==='approvato'?'✓ Approvato':overviewCellModal.status==='rifiutato'?'✗ Rifiutato':overviewCellModal.status==='pendente_responsabile'?'⏳ Att. responsabile':overviewCellModal.status==='pendente_mirco'?'⏳ Att. Mirco':'⏳ In attesa'}
+              </span>
+            </div>
+            {overviewCellModal.timeFrom && overviewCellModal.timeTo && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-500 uppercase">Orario</span>
+                <span className="font-black text-slate-800 text-sm">{overviewCellModal.timeFrom} → {overviewCellModal.timeTo}</span>
+              </div>
+            )}
+            {overviewCellModal.durationMinutes > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-500 uppercase">Durata</span>
+                <span className="font-black text-slate-800 text-sm">
+                  {(()=>{const h=Math.floor(overviewCellModal.durationMinutes/60),m=overviewCellModal.durationMinutes%60;return h+'h'+(m>0?' '+m+'m':'');})()}
+                </span>
+              </div>
+            )}
+            {overviewCellModal.extraMode && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-500 uppercase">Modalità</span>
+                <span className="font-black text-slate-800 text-sm">
+                  {({'giorni':'Solo giorni','ore':'Solo ore','giorni+ore':'Giorni + ore'})[overviewCellModal.extraMode]||overviewCellModal.extraMode}
+                </span>
+              </div>
+            )}
+            {overviewCellModal.nota && (
+              <div className="bg-slate-50 rounded-2xl p-3">
+                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Nota dipendente</p>
+                <p className="text-sm font-bold text-slate-700">{overviewCellModal.nota}</p>
+              </div>
+            )}
+            {overviewCellModal.notaResponsabile && (
+              <div className="bg-blue-50 rounded-2xl p-3">
+                <p className="text-[10px] font-black text-blue-400 uppercase mb-1">Nota responsabile</p>
+                <p className="text-sm font-bold text-blue-700">{overviewCellModal.notaResponsabile}</p>
+              </div>
+            )}
+          </div>
+          <div className="px-6 pb-6">
+            <button onClick={() => setOverviewCellModal(null)} className="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase text-sm">
+              Chiudi
+            </button>
+          </div>
+        </div>
       </div>
+    )}
+    </div>
     );
   };
 
@@ -1615,6 +1680,7 @@ export default function App() {
     const [recipientModal, setRecipientModal] = useState(null);
     const [trasfertaStep, setTrasfertaStep] = useState(null);
     const [dayDetailModal, setDayDetailModal] = useState(null);
+  const [overviewCellModal, setOverviewCellModal] = useState(null);
     const [dayActionReq, setDayActionReq] = useState(null);
     const [dayActionNote, setDayActionNote] = useState('');
 
