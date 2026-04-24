@@ -774,6 +774,165 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
     { key: 'congedo',      label: 'Congedo',            bg: 'bg-pink-50',    text: 'text-pink-700',   dot: 'bg-pink-500'   },
   ];
 
+  // ─── Genera foglio presenze Excel ──────────────────────────────────────────
+  const [generating, setGenerating] = useState(false);
+
+  const getHoursForDay = (userId, dateStr) => {
+    const date = new Date(dateStr + 'T12:00:00');
+    const dow = date.getDay();
+    if (dow === 0 || dow === 6) return null; // weekend → vuoto
+
+    // Festività italiane
+    const y = date.getFullYear();
+    const hols = getItalianHolidays(y);
+    if (hols.has(dateStr)) return null;
+
+    // Chiusure aziendali
+    for (const cl of (closures || [])) {
+      if (dateStr >= cl.dal && dateStr <= cl.al) {
+        return cl.contaComeFerie ? 'F' : null;
+      }
+    }
+
+    // Richieste approvate quel giorno
+    const dayReqs = requests.filter(r =>
+      r.userId === userId &&
+      r.status === 'approvato' &&
+      Array.isArray(r.dates) && r.dates.includes(dateStr)
+    );
+
+    if (dayReqs.length > 0) {
+      const req = dayReqs[0];
+      if (req.type === 'ferie')       return 'F';
+      if (req.type === 'malattia')    return 'M';
+      if (req.type === 'congedo')     return 'CM';
+      if (req.type === 'trasferta')   return 7;
+      if (req.type === 'fuorisede')   return 7;
+      if (req.type === 'permesso' || req.type === 'permesso104') {
+        const hrs = Math.round((req.durationMinutes || 0) / 60 * 4) / 4;
+        return Math.max(0, 7 - hrs);
+      }
+    }
+    return 7;
+  };
+
+  const generatePresenze = async () => {
+    setGenerating(true);
+    try {
+      // Carica SheetJS dinamicamente
+      if (!window.XLSX) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      const XLSX = window.XLSX;
+      const wb = XLSX.utils.book_new();
+      const monthStr = hrDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+      // Dipendenti ordinati per cognome
+      const emps = [...users]
+        .filter(u => !['CEO','amministratore','hrmanager'].includes(u.role) && u.lastName)
+        .sort((a, b) => (a.lastName||'').localeCompare(b.lastName||'', 'it'));
+
+      // ─── Costruzione dati foglio ──────────────────────────────────────────
+      const rows = [];
+
+      // Riga 1: intestazione
+      const r1 = ['PRESENZE DEL PERIODO: ' + monthStr.toUpperCase()];
+      for (let i = 1; i < 26; i++) r1.push('');
+      r1.push('DITTA'); r1.push('Excogita');
+      rows.push(r1);
+
+      // Riga 2: intestazione colonne
+      const r2 = ['n. matr.', 'Cognome e Nome', 'Qualifica'];
+      for (let d = 1; d <= 31; d++) r2.push(d <= daysInMonth ? d : '');
+      r2.push('gg', 'ore', 'retribuzione', '€');
+      rows.push(r2);
+
+      // Riga 3: sotto-intestazioni totali (solo label ultimi)
+      const r3 = new Array(35).fill('');
+      rows.push(r3);
+
+      // Righe dipendenti
+      emps.forEach((emp, idx) => {
+        const ordRow = ['', emp.firstName + ' ' + emp.lastName, 'ord.'];
+        const strRow = ['', '', 'str.'];
+        const starRow = ['', '', '*'];
+
+        for (let d = 1; d <= 31; d++) {
+          if (d <= daysInMonth) {
+            const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+            const val = getHoursForDay(emp.id, dateStr);
+            ordRow.push(val === null || val === undefined ? '' : val);
+          } else {
+            ordRow.push('');
+          }
+          strRow.push('');
+          starRow.push('');
+        }
+
+        // Formula totale ore nel mese (gg e ore)
+        const dataRowNum = 4 + idx * 3; // 1-indexed excel row
+        const startCol = XLSX.utils.encode_col(3); // D
+        const endCol = XLSX.utils.encode_col(3 + daysInMonth - 1);
+        ordRow.push(''); // gg - lasciamo vuoto (calcolo manuale)
+        ordRow.push(''); // ore
+        ordRow.push(''); // retribuzione
+        ordRow.push(''); // €
+        strRow.push('', '', '', '');
+        starRow.push('', '', '', '');
+
+        rows.push(ordRow, strRow, starRow);
+      });
+
+      // Riga legenda
+      rows.push([]);
+      rows.push([
+        '* LEGENDA DEFINIZIONE ASSENZE:',
+        'F=ferie · M=malattia · CM=congedo · PH=permessi handicap L.104 · FS=fuori sede · T=trasferta · PR=permesso retribuito'
+      ]);
+
+      // ─── Crea foglio ─────────────────────────────────────────────────────
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+
+      // Larghezze colonne
+      ws['!cols'] = [
+        { wch: 8 },   // A: n.matr.
+        { wch: 22 },  // B: nome
+        { wch: 7 },   // C: qualifica
+        ...Array(31).fill({ wch: 4 }),  // D-AH: giorni
+        { wch: 5 },   // AI: gg
+        { wch: 7 },   // AJ: ore
+        { wch: 13 },  // AK: retribuzione
+        { wch: 8 },   // AL: €
+      ];
+
+      // Stile celle intestazione (solo i valori, SheetJS base non ha stili nel piano free)
+      // Altezze righe
+      ws['!rows'] = [
+        { hpt: 25 }, // riga 1
+        { hpt: 20 }, // riga 2
+        { hpt: 14 }, // riga 3
+        ...Array(emps.length * 3 + 2).fill({ hpt: 14 }),
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Presenze del Periodo');
+
+      // Download
+      const now = new Date();
+      const fname = 'presenze_' + String(month + 1).padStart(2, '0') + '_' + year + '.xlsx';
+      XLSX.writeFile(wb, fname);
+    } catch (e) {
+      alert('Errore durante la generazione: ' + e.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <div className="pb-6 px-6">
       {/* Header navigazione */}
@@ -808,6 +967,15 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
               <X size={12} className="inline mr-1"/>Reset
             </button>
           )}
+          <button
+            onClick={generatePresenze}
+            disabled={generating}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl font-black uppercase text-xs disabled:opacity-50 transition-colors">
+            {generating
+              ? <><span className="animate-spin">⏳</span> Generando...</>
+              : <><Download size={14}/> Genera presenze</>
+            }
+          </button>
         </div>
       </div>
 
