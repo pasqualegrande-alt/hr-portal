@@ -953,56 +953,92 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         }
       });
 
-      // ─── Impostazioni di stampa ─────────────────────────────────────────
-      // Merge con !pageSetup esistente per preservare proprietà interne SheetJS
-      ws['!pageSetup'] = Object.assign(ws['!pageSetup'] || {}, {
-        paperSize: 9,           // 9 = A4
-        orientation: 'landscape',
-        fitToPage: false,
-        scale: 100,
-        fitToWidth: 1,
-        fitToHeight: 0,
-        horizontalDpi: 600,
-        verticalDpi: 600,
+      // ─── Genera XLSX con SheetJS poi aggiusta page setup via JSZip ──────
+      // SheetJS non scrive correttamente pageSetup/rowBreaks — usiamo JSZip
+      // per manipolare direttamente l'XML del file XLSX (che è uno ZIP)
+
+      // Carica JSZip
+      if (!window.JSZip) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+
+      // Genera XLSX come array binario con SheetJS
+      const xlsxArrayBuffer = XLSX.write(wb, {
+        cellStyles: true, bookType: 'xlsx', type: 'array'
       });
 
-      // Centrata orizzontalmente e verticalmente sulla pagina
-      ws['!printOptions'] = Object.assign(ws['!printOptions'] || {}, {
-        horizontalCentered: true,
-        verticalCentered: true,
-      });
+      // Apri lo ZIP con JSZip
+      const zip = await window.JSZip.loadAsync(xlsxArrayBuffer);
 
-      // Interruzioni di pagina manuali: solo righe 28 e 57 (3 pagine A4)
-      // man:1, max:16383 è il formato corretto per xlsx
-      ws['!rowBreaks'] = [
-        { man: 1, max: 16383, min: 0, pt: 28 },
-        { man: 1, max: 16383, min: 0, pt: 57 },
-      ];
+      // Leggi l'XML del primo foglio
+      const sheetXmlFile = zip.file('xl/worksheets/sheet1.xml');
+      if (!sheetXmlFile) throw new Error('Sheet XML non trovato nel file generato');
+      let sheetXml = await sheetXmlFile.async('string');
 
-      // Area di stampa: solo le 3 pagine (righe 1-86)
-      const sheetName = wb.SheetNames[0];
-      if (!wb.Workbook) wb.Workbook = {};
-      if (!wb.Workbook.Names) wb.Workbook.Names = [];
-      wb.Workbook.Names = wb.Workbook.Names.filter(n => n.Name !== 'Print_Area');
-      wb.Workbook.Names.push({
-        Sheet: 0,
-        Name: 'Print_Area',
-        Ref: "'" + sheetName + "'!$A$1:$AL$86"
-      });
+      // ── 1. Fix pageSetup: A4 landscape ──────────────────────────────────
+      const pageSetupNew = '<pageSetup paperSize="9" orientation="landscape" fitToPage="0" scale="100" horizontalDpi="600" verticalDpi="600"/>';
+      if (/<pageSetup[^/]*\/?>/.test(sheetXml)) {
+        sheetXml = sheetXml.replace(/<pageSetup[^/]*\/?>/g, pageSetupNew);
+      } else {
+        // Inserisci prima di </worksheet>
+        sheetXml = sheetXml.replace('</worksheet>', pageSetupNew + '</worksheet>');
+      }
 
-      // Margini pagina stretti (pollici: ~0.5cm)
-      ws['!margins'] = {
-        left: 0.2,
-        right: 0.2,
-        top: 0.2,
-        bottom: 0.2,
-        header: 0.1,
-        footer: 0.1,
-      };
+      // ── 2. Fix printOptions: centrata ───────────────────────────────────
+      const printOptionsNew = '<printOptions horizontalCentered="1" verticalCentered="1"/>';
+      if (/<printOptions[^/]*\/?>/.test(sheetXml)) {
+        sheetXml = sheetXml.replace(/<printOptions[^/]*\/?>/g, printOptionsNew);
+      } else {
+        sheetXml = sheetXml.replace('<pageSetup', printOptionsNew + '<pageSetup');
+      }
 
-      // Download
-      const fname = 'presenze_' + String(month+1).padStart(2,'0') + '_' + year + '.xlsx';
-      XLSX.writeFile(wb, fname, { cellStyles: true, bookType: 'xlsx' });
+      // ── 3. Fix rowBreaks: solo righe 28 e 57 ────────────────────────────
+      const rowBreaksNew = '<rowBreaks count="2" manualBreakCount="2"><brk id="28" man="1" max="16383" min="0"/><brk id="57" man="1" max="16383" min="0"/></rowBreaks>';
+      if (/<rowBreaks[\s\S]*?<\/rowBreaks>/.test(sheetXml)) {
+        sheetXml = sheetXml.replace(/<rowBreaks[\s\S]*?<\/rowBreaks>/g, rowBreaksNew);
+      } else {
+        sheetXml = sheetXml.replace('</worksheet>', rowBreaksNew + '</worksheet>');
+      }
+
+      // ── 4. Fix pageMargins: stretti ──────────────────────────────────────
+      const pageMarginsNew = '<pageMargins left="0.2" right="0.2" top="0.2" bottom="0.2" header="0.1" footer="0.1"/>';
+      if (/<pageMargins[^/]*\/?>/.test(sheetXml)) {
+        sheetXml = sheetXml.replace(/<pageMargins[^/]*\/?>/g, pageMarginsNew);
+      } else {
+        sheetXml = sheetXml.replace('<pageSetup', pageMarginsNew + '<pageSetup');
+      }
+
+      // ── 5. Fix area di stampa in workbook.xml ────────────────────────────
+      const wbXmlFile = zip.file('xl/workbook.xml');
+      if (wbXmlFile) {
+        let wbXml = await wbXmlFile.async('string');
+        const printAreaDef = '<definedName name="_xlnm.Print_Area" localSheetId="0">&apos;Presenze del Periodo&apos;!$A$1:$AL$86</definedName>';
+        if (wbXml.includes('_xlnm.Print_Area')) {
+          wbXml = wbXml.replace(/<definedName name="_xlnm\.Print_Area"[^>]*>[\s\S]*?<\/definedName>/g, printAreaDef);
+        } else if (wbXml.includes('<definedNames>')) {
+          wbXml = wbXml.replace('<definedNames>', '<definedNames>' + printAreaDef);
+        } else {
+          wbXml = wbXml.replace('</workbook>', '<definedNames>' + printAreaDef + '</definedNames></workbook>');
+        }
+        zip.file('xl/workbook.xml', wbXml);
+      }
+
+      // Riscrivi il file sheet1.xml nel ZIP
+      zip.file('xl/worksheets/sheet1.xml', sheetXml);
+
+      // Genera e scarica il file finale
+      const finalBlob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(finalBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'presenze_' + String(month+1).padStart(2,'0') + '_' + year + '.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (e) {
       alert('Errore: ' + e.message);
       console.error(e);
