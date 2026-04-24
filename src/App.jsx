@@ -819,7 +819,6 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
   const generatePresenze = async () => {
     setGenerating(true);
     try {
-      // Carica SheetJS dinamicamente
       if (!window.XLSX) {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
@@ -832,66 +831,110 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const monthStr = hrDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' }).toUpperCase();
 
+      // Cutoff: per il mese corrente solo fino a ieri; mesi passati tutto
+      const today = new Date();
+      const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+      const cutoffDay = isCurrentMonth ? today.getDate() - 1 : daysInMonth;
+
+      // Conteggio giorni feriali (lun-ven) del mese
+      const ggCount = Array.from({length: daysInMonth}, (_, i) => {
+        const d = new Date(year, month, i + 1).getDay();
+        return (d !== 0 && d !== 6) ? 1 : 0;
+      }).reduce((a, b) => a + b, 0);
+
       // Dipendenti ordinati per cognome
       const emps = [...users]
         .filter(u => !['CEO','amministratore','hrmanager'].includes(u.role) && u.lastName)
         .sort((a, b) => (a.lastName||'').localeCompare(b.lastName||'', 'it'));
 
-      // ─── Carica template originale (con tutta la formattazione) ──────────
-      const wb = XLSX.read(PRESENZE_TEMPLATE_B64, { type: 'base64' });
+      // Carica template con stili
+      const wb = XLSX.read(PRESENZE_TEMPLATE_B64, {
+        type: 'base64', cellStyles: true, sheetStubs: true
+      });
       const ws = wb.Sheets[wb.SheetNames[0]];
 
-      // Helper: scrivi cella preservando stile esistente
-      const setCell = (r, c, v) => {
-        const addr = XLSX.utils.encode_cell({ r: r - 1, c: c - 1 }); // 0-indexed
+      // Struttura pagine: 4 pagine × 8 slot ciascuna
+      const PAGE_STARTS = [1, 30, 59, 88]; // righe 1-indexed
+      const SLOTS_PER_PAGE = 8;
+
+      // Helper: scrive valore su cella esistente preservando stile
+      const setVal = (r, c, v, isFormula = false) => {
+        const addr = XLSX.utils.encode_cell({ r: r - 1, c: c - 1 });
         if (!ws[addr]) ws[addr] = {};
-        ws[addr].v = v;
-        ws[addr].t = typeof v === 'number' ? 'n' : 's';
+        if (isFormula) {
+          ws[addr].f = v;
+          ws[addr].t = 'n';
+          delete ws[addr].v;
+        } else if (v === '' || v === null || v === undefined) {
+          ws[addr].v = '';
+          ws[addr].t = 's';
+          delete ws[addr].f;
+        } else {
+          ws[addr].v = v;
+          ws[addr].t = typeof v === 'number' ? 'n' : 's';
+          delete ws[addr].f;
+        }
       };
 
-      // ─── Aggiorna intestazione mese (riga 1, colonna A) ──────────────────
-      setCell(1, 1, 'PRESENZE DEL PERIODO: ' + monthStr);
+      // Aggiorna titolo su tutte le 4 pagine
+      PAGE_STARTS.forEach(ps => {
+        setVal(ps, 1, 'PRESENZE DEL PERIODO: ' + monthStr);
+      });
 
-      // ─── Cancella dati vecchi (righe dipendenti: 4 → max slot) ──────────
-      for (let slotIdx = 0; slotIdx < 32; slotIdx++) {
-        const ordRow = 4 + slotIdx * 3;
-        // Cancella nome
-        setCell(ordRow, 2, '');
-        // Cancella tutti i giorni (colonne D=4 → AH=34)
-        for (let c = 4; c <= 34; c++) {
-          const addr = XLSX.utils.encode_cell({ r: ordRow - 1, c: c - 1 });
-          if (ws[addr]) { ws[addr].v = ''; ws[addr].t = 's'; }
-        }
-      }
-
-      // ─── Scrivi dati dipendenti ───────────────────────────────────────────
-      emps.forEach((emp, idx) => {
-        const ordRow = 4 + idx * 3;
-        // Nome
-        setCell(ordRow, 2, emp.lastName + ' ' + emp.firstName);
-        // Ore per ogni giorno
-        for (let d = 1; d <= daysInMonth; d++) {
-          const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-          const val = getHoursForDay(emp.id, dateStr);
-          const col = 3 + d; // giorno 1 = col 4 (D), giorno 2 = col 5 (E)...
-          if (val !== null && val !== undefined) {
-            setCell(ordRow, col, val);
-          } else {
-            const addr = XLSX.utils.encode_cell({ r: ordRow - 1, c: col - 1 });
-            if (ws[addr]) { ws[addr].v = ''; ws[addr].t = 's'; }
-          }
-        }
-        // Giorni oltre il mese (es. giorno 29/30/31 se mese più corto)
-        for (let d = daysInMonth + 1; d <= 31; d++) {
-          const col = 3 + d;
-          const addr = XLSX.utils.encode_cell({ r: ordRow - 1, c: col - 1 });
-          if (ws[addr]) { ws[addr].v = ''; ws[addr].t = 's'; }
+      // Pulisci tutti gli slot esistenti
+      PAGE_STARTS.forEach(ps => {
+        for (let si = 0; si < SLOTS_PER_PAGE; si++) {
+          const ordRow = ps + 3 + si * 3;
+          setVal(ordRow, 2, ''); // nome
+          for (let d = 1; d <= 31; d++) setVal(ordRow, 3 + d, '');
+          setVal(ordRow, 35, ''); // gg
         }
       });
 
-      // ─── Download ────────────────────────────────────────────────────────
-      const fname = 'presenze_' + String(month + 1).padStart(2, '0') + '_' + year + '.xlsx';
-      XLSX.writeFile(wb, fname);
+      // Scrivi dipendenti
+      emps.forEach((emp, idx) => {
+        const pageIdx = Math.floor(idx / SLOTS_PER_PAGE);
+        const slotInPage = idx % SLOTS_PER_PAGE;
+        if (pageIdx >= PAGE_STARTS.length) return; // oltre i 32 slot
+        const ps = PAGE_STARTS[pageIdx];
+        const ordRow = ps + 3 + slotInPage * 3;
+
+        // Nome
+        setVal(ordRow, 2, emp.lastName + ' ' + emp.firstName);
+
+        // Ore per ogni giorno
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+          const col = 3 + d; // giorno 1 = col 4 (D)
+          if (d > cutoffDay) {
+            setVal(ordRow, col, '');
+            continue;
+          }
+          const val = getHoursForDay(emp.id, dateStr);
+          if (val === null || val === undefined) {
+            setVal(ordRow, col, '');
+          } else {
+            setVal(ordRow, col, typeof val === 'number' ? val : val);
+          }
+        }
+        // Giorni oltre il mese: vuoto
+        for (let d = daysInMonth + 1; d <= 31; d++) setVal(ordRow, 3 + d, '');
+
+        // gg = giorni feriali teorici del mese
+        setVal(ordRow, 35, ggCount);
+
+        // ore = formula SUM (se non già presente nel template)
+        const oreAddr = XLSX.utils.encode_cell({ r: ordRow - 1, c: 35 }); // AJ = col 36, c=35 (0-indexed)
+        if (!ws[oreAddr] || !ws[oreAddr].f) {
+          const colStart = XLSX.utils.encode_col(3); // D
+          const colEnd   = XLSX.utils.encode_col(3 + 30); // AH (col 34, 0-indexed=33)
+          setVal(ordRow, 36, colStart + ordRow + ':' + colEnd + ordRow, true);
+        }
+      });
+
+      // Download
+      const fname = 'presenze_' + String(month+1).padStart(2,'0') + '_' + year + '.xlsx';
+      XLSX.writeFile(wb, fname, { cellStyles: true, bookType: 'xlsx' });
     } catch (e) {
       alert('Errore: ' + e.message);
       console.error(e);
