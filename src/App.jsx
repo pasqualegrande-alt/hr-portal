@@ -2773,13 +2773,13 @@ export default function App() {
           <Bell size={22}/><span className="text-[10px] font-black uppercase">Notifiche</span>
           {pendingCount > 0 && <span className="absolute top-2 right-[calc(50%-20px)] bg-red-500 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[9px] font-black px-1">{pendingCount}</span>}
         </button>}
-        {showAdmin && (
+        {(user.role === 'amministratore') && (
           <button onClick={() => setView('users')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'users' ? 'text-blue-400' : 'text-slate-500')}>
             <Users size={22}/><span className="text-[10px] font-black uppercase">Collaboratori</span>
           </button>
         )}
 
-        {showAdmin && (
+        {(user.role === 'amministratore') && (
           <button onClick={() => setView('log')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'log' ? 'text-blue-400' : 'text-slate-500')}>
             <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Registro</span>
           </button>
