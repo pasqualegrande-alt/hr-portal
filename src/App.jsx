@@ -953,6 +953,51 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         }
       });
 
+      // ─── Impostazioni di stampa ────────────────────────────────────────
+      // A4 orizzontale
+      ws['!pageSetup'] = {
+        paperSize: 9,           // 9 = A4
+        orientation: 'landscape',
+        fitToPage: false,
+        scale: 100,
+        horizontalDpi: 600,
+        verticalDpi: 600,
+      };
+
+      // Centrata orizzontalmente e verticalmente sulla pagina
+      ws['!printOptions'] = {
+        horizontalCentered: true,
+        verticalCentered: true,
+      };
+
+      // Interruzioni di pagina manuali dopo riga 28 e riga 57
+      ws['!rowBreaks'] = [
+        { man: true, max: 16383, min: 0, pt: 28 },
+        { man: true, max: 16383, min: 0, pt: 57 },
+      ];
+
+      // Area di stampa: righe 1-86 (3 pagine A4)
+      const sheetName = wb.SheetNames[0];
+      if (!wb.Workbook) wb.Workbook = {};
+      if (!wb.Workbook.Names) wb.Workbook.Names = [];
+      // Rimuove eventuale Print_Area precedente
+      wb.Workbook.Names = wb.Workbook.Names.filter(n => n.Name !== 'Print_Area');
+      wb.Workbook.Names.push({
+        Sheet: 0,
+        Name: 'Print_Area',
+        Ref: "'" + sheetName + "'!$A$1:$AL$86"
+      });
+
+      // Margini pagina (cm → pollici: 1cm = 0.3937in)
+      ws['!margins'] = {
+        left: 0.394,    // ~1cm
+        right: 0.394,
+        top: 0.394,
+        bottom: 0.394,
+        header: 0.197,
+        footer: 0.197,
+      };
+
       // Download
       const fname = 'presenze_' + String(month+1).padStart(2,'0') + '_' + year + '.xlsx';
       XLSX.writeFile(wb, fname, { cellStyles: true, bookType: 'xlsx' });
