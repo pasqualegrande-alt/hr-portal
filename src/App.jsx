@@ -914,15 +914,16 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
           const val = getHoursForDay(emp.id, dateStr);
           if (val === null || val === undefined) {
             cell.value = null;
-          } else {
-            // Reimposta stile per evitare arrotondamenti da formato "0" del template
-            // Preserva allineamento e bordi ma forza numFmt a '0.##'
-            // (mostra 7 come "7", 5.5 come "5,5", 5.75 come "5,75")
-            const s = cell.style || {};
-            cell.style = Object.assign({}, s, {
-              numFmt: typeof val === 'number' ? '0.##' : '@'
-            });
+          } else if (typeof val === 'string') {
+            // F, M, C, P, H → testo, nessun problema di formato
             cell.value = val;
+          } else if (Number.isInteger(val)) {
+            // Numero intero (7, 5, 6...) → lascia il formato del template intatto
+            cell.value = val;
+          } else {
+            // Numero decimale (5.5, 5.75...) → scrivi come stringa
+            // per aggirare il formato "0" che arrotonda a intero
+            cell.value = String(val).replace('.', ',');
           }
         }
         for (let d = daysInMonth + 1; d <= 31; d++) row.getCell(3 + d).value = null;
