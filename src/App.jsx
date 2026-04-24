@@ -909,9 +909,12 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         for (let d = 1; d <= daysInMonth; d++) {
           const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
           const col = 3 + d;
-          if (d > cutoffDay) { row.getCell(col).value = null; continue; }
+          const cell = row.getCell(col);
+          // Forza formato General per evitare arrotondamenti da formato "0" del template
+          cell.numFmt = 'General';
+          if (d > cutoffDay) { cell.value = null; continue; }
           const val = getHoursForDay(emp.id, dateStr);
-          row.getCell(col).value = (val === null || val === undefined) ? null : val;
+          cell.value = (val === null || val === undefined) ? null : val;
         }
         for (let d = daysInMonth + 1; d <= 31; d++) row.getCell(3 + d).value = null;
         // gg con rotazione 90° (come nel template)
