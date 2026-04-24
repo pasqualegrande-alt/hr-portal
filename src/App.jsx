@@ -819,224 +819,83 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
   const generatePresenze = async () => {
     setGenerating(true);
     try {
-      if (!window.XLSX) {
+      if (!window.ExcelJS) {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
           s.onload = resolve; s.onerror = reject;
           document.head.appendChild(s);
         });
       }
-      const XLSX = window.XLSX;
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const monthStr = hrDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' }).toUpperCase();
-
-      // Cutoff: per il mese corrente solo fino a ieri; mesi passati tutto
       const today = new Date();
       const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
       const cutoffDay = isCurrentMonth ? today.getDate() - 1 : daysInMonth;
-
-      // Conteggio giorni feriali (lun-ven) del mese
-      const ggCount = Array.from({length: daysInMonth}, (_, i) => {
-        const d = new Date(year, month, i + 1).getDay();
-        return (d !== 0 && d !== 6) ? 1 : 0;
-      }).reduce((a, b) => a + b, 0);
-
-      // Dipendenti ordinati per cognome
+      const ggCount = Array.from({length: daysInMonth}, (_, i) =>
+        new Date(year, month, i+1).getDay() % 6 !== 0 ? 1 : 0
+      ).reduce((a,b) => a+b, 0);
       const emps = [...users]
         .filter(u => !['CEO','amministratore','hrmanager'].includes(u.role) && u.lastName)
         .sort((a, b) => (a.lastName||'').localeCompare(b.lastName||'', 'it'));
 
-      // Carica template con stili
-      const wb = XLSX.read(PRESENZE_TEMPLATE_B64, {
-        type: 'base64', cellStyles: true, sheetStubs: true
-      });
-      const ws = wb.Sheets[wb.SheetNames[0]];
+      const bin = atob(PRESENZE_TEMPLATE_B64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const workbook = new window.ExcelJS.Workbook();
+      await workbook.xlsx.load(bytes.buffer);
+      const ws = workbook.worksheets[0];
 
-      // Struttura pagine: 4 pagine × 8 slot ciascuna
-      const PAGE_STARTS = [1, 30, 59, 88]; // righe 1-indexed
-      const SLOTS_PER_PAGE = 8;
+      ws.pageSetup.orientation = 'landscape';
+      ws.pageSetup.paperSize = 9;
+      ws.pageSetup.fitToPage = false;
+      ws.pageSetup.scale = 100;
+      ws.pageSetup.horizontalCentered = true;
+      ws.pageSetup.verticalCentered = true;
+      ws.pageSetup.printArea = 'A1:AL86';
+      try { ws.getRow(28).addPageBreak(); } catch(e) {}
+      try { ws.getRow(57).addPageBreak(); } catch(e) {}
 
-      // Helper: scrive valore su cella esistente preservando stile
-      const setVal = (r, c, v, isFormula = false) => {
-        const addr = XLSX.utils.encode_cell({ r: r - 1, c: c - 1 });
-        if (!ws[addr]) ws[addr] = {};
-        if (isFormula) {
-          ws[addr].f = v;
-          ws[addr].t = 'n';
-          delete ws[addr].v;
-        } else if (v === '' || v === null || v === undefined) {
-          ws[addr].v = '';
-          ws[addr].t = 's';
-          delete ws[addr].f;
-        } else {
-          ws[addr].v = v;
-          ws[addr].t = typeof v === 'number' ? 'n' : 's';
-          delete ws[addr].f;
-        }
-      };
-
-      // Aggiorna titolo su tutte le 4 pagine
+      const PAGE_STARTS = [1, 30, 59, 88];
+      const SLOTS = 8;
       PAGE_STARTS.forEach(ps => {
-        setVal(ps, 1, 'PRESENZE DEL PERIODO: ' + monthStr);
+        ws.getRow(ps).getCell(1).value = 'PRESENZE DEL PERIODO: ' + monthStr;
       });
-
-      // Pulisci tutti gli slot esistenti
       PAGE_STARTS.forEach(ps => {
-        for (let si = 0; si < SLOTS_PER_PAGE; si++) {
-          const ordRow = ps + 3 + si * 3;
-          setVal(ordRow, 2, ''); // nome
-          for (let d = 1; d <= 31; d++) setVal(ordRow, 3 + d, '');
-          setVal(ordRow, 35, ''); // gg
+        for (let si = 0; si < SLOTS; si++) {
+          const r = ps + 3 + si * 3;
+          const row = ws.getRow(r);
+          row.getCell(2).value = null;
+          for (let c = 4; c <= 35; c++) row.getCell(c).value = null;
         }
       });
-
-      // Scrivi dipendenti
       emps.forEach((emp, idx) => {
-        const pageIdx = Math.floor(idx / SLOTS_PER_PAGE);
-        const slotInPage = idx % SLOTS_PER_PAGE;
-        if (pageIdx >= PAGE_STARTS.length) return; // oltre i 32 slot
-        const ps = PAGE_STARTS[pageIdx];
-        const ordRow = ps + 3 + slotInPage * 3;
-
-        // Copia stili dalle celle template (riga 4) per consistenza visiva
-        const copyStyle = (fromRow, fromCol, toRow, toCol) => {
-          const fromAddr = XLSX.utils.encode_cell({ r: fromRow - 1, c: fromCol - 1 });
-          const toAddr   = XLSX.utils.encode_cell({ r: toRow - 1,   c: toCol - 1 });
-          if (ws[fromAddr] && ws[fromAddr].s) {
-            if (!ws[toAddr]) ws[toAddr] = {};
-            ws[toAddr].s = JSON.parse(JSON.stringify(ws[fromAddr].s));
-          }
-        };
-        // Copia stile nome (B4 → B{ordRow})
-        copyStyle(4, 2, ordRow, 2);
-        // Copia stile gg (AI4 → AI{ordRow})
-        copyStyle(4, 35, ordRow, 35);
-        // Copia stili celle giorno (D4→AH4 → D{ordRow}→AH{ordRow})
-        for (let d = 1; d <= 31; d++) copyStyle(4, 3 + d, ordRow, 3 + d);
-
-        // Nome
-        setVal(ordRow, 2, emp.lastName + ' ' + emp.firstName);
-
-        // Ore per ogni giorno
+        const pi = Math.floor(idx / SLOTS);
+        const si = idx % SLOTS;
+        if (pi >= PAGE_STARTS.length) return;
+        const ordRow = PAGE_STARTS[pi] + 3 + si * 3;
+        const row = ws.getRow(ordRow);
+        row.getCell(2).value = emp.lastName + ' ' + emp.firstName;
         for (let d = 1; d <= daysInMonth; d++) {
           const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
-          const col = 3 + d; // giorno 1 = col 4 (D)
-          if (d > cutoffDay) {
-            setVal(ordRow, col, '');
-            continue;
-          }
+          const col = 3 + d;
+          if (d > cutoffDay) { row.getCell(col).value = null; continue; }
           const val = getHoursForDay(emp.id, dateStr);
-          if (val === null || val === undefined) {
-            setVal(ordRow, col, '');
-          } else {
-            setVal(ordRow, col, typeof val === 'number' ? val : val);
-          }
+          row.getCell(col).value = (val === null || val === undefined) ? null : val;
         }
-        // Giorni oltre il mese: vuoto
-        for (let d = daysInMonth + 1; d <= 31; d++) setVal(ordRow, 3 + d, '');
-
-        // gg = giorni feriali teorici del mese
-        setVal(ordRow, 35, ggCount);
-
-        // ore = formula SUM
-        const oreAddr = XLSX.utils.encode_cell({ r: ordRow - 1, c: 35 }); // AJ = col 36 (0-indexed col 35)
-        // Usa sempre la formula SUM corretta, copiando lo stile dalla cella template AJ4
-        const templateOreCell = ws[XLSX.utils.encode_cell({ r: 3, c: 35 })]; // AJ4 (0-indexed)
-        if (!ws[oreAddr]) ws[oreAddr] = {};
-        ws[oreAddr].f = 'SUM(D' + ordRow + ':AH' + ordRow + ')';
-        ws[oreAddr].t = 'n';
-        delete ws[oreAddr].v;
-        // Copia stile dalla cella template per evitare ####
-        if (templateOreCell && templateOreCell.s) {
-          ws[oreAddr].s = JSON.parse(JSON.stringify(templateOreCell.s));
-        }
+        for (let d = daysInMonth + 1; d <= 31; d++) row.getCell(3 + d).value = null;
+        row.getCell(35).value = ggCount;
+        row.getCell(36).value = { formula: 'SUM(D' + ordRow + ':AH' + ordRow + ')' };
       });
 
-      // ─── Genera XLSX con SheetJS poi aggiusta page setup via JSZip ──────
-      if (!window.JSZip) {
-        await new Promise((resolve, reject) => {
-          const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-          s.onload = resolve; s.onerror = reject;
-          document.head.appendChild(s);
-        });
-      }
-
-      // Genera XLSX come array binario
-      const xlsxArr = XLSX.write(wb, { cellStyles: true, bookType: 'xlsx', type: 'array' });
-      const zip = await window.JSZip.loadAsync(xlsxArr);
-
-      // Trova il file del primo foglio seguendo le relazioni del workbook
-      let sheetPath = 'xl/worksheets/sheet1.xml';
-      const wbRelsF = zip.file('xl/_rels/workbook.xml.rels');
-      if (wbRelsF) {
-        const wbRelsXml = await wbRelsF.async('string');
-        const m = wbRelsXml.match(/Type="[^"]*worksheet[^"]*"\s+Target="worksheets\/([^"]+)"/);
-        if (m) sheetPath = 'xl/worksheets/' + m[1];
-      }
-
-      const sheetF = zip.file(sheetPath);
-      if (!sheetF) throw new Error('Sheet non trovato: ' + sheetPath);
-      let sx = await sheetF.async('string');
-
-      // ── Rimuovi tutti gli elementi di stampa esistenti (evita duplicati) ─
-      sx = sx
-        .replace(/<printOptions[^>]*\/>/g, '')
-        .replace(/<printOptions[^>]*>[\s\S]*?<\/printOptions>/g, '')
-        .replace(/<pageMargins[^>]*\/>/g, '')
-        .replace(/<pageMargins[^>]*>[\s\S]*?<\/pageMargins>/g, '')
-        .replace(/<pageSetup[^>]*\/>/g, '')
-        .replace(/<pageSetup[^>]*>[\s\S]*?<\/pageSetup>/g, '')
-        .replace(/<rowBreaks[^>]*\/>/g, '')
-        .replace(/<rowBreaks[^>]*>[\s\S]*?<\/rowBreaks>/g, '');
-
-      // ── Inserisci prima di </worksheet> nell'ordine corretto OOXML ────────
-      const printBlock =
-        '<printOptions horizontalCentered="1" verticalCentered="1"/>' +
-        '<pageMargins left="0.2" right="0.2" top="0.2" bottom="0.2" header="0.1" footer="0.1"/>' +
-        '<pageSetup paperSize="9" orientation="landscape" scale="100" fitToPage="0" fitToWidth="1" fitToHeight="0" horizontalDpi="600" verticalDpi="600"/>' +
-        '<rowBreaks count="2" manualBreakCount="2">' +
-          '<brk id="28" man="1" max="16383" min="0"/>' +
-          '<brk id="57" man="1" max="16383" min="0"/>' +
-        '</rowBreaks>';
-      sx = sx.replace('</worksheet>', printBlock + '</worksheet>');
-      zip.file(sheetPath, sx);
-
-      // ── Aggiorna area di stampa in workbook.xml ───────────────────────────
-      const wbF = zip.file('xl/workbook.xml');
-      if (wbF) {
-        let wx = await wbF.async('string');
-        // Rimuovi print area esistente
-        wx = wx.replace(/<definedName name="_xlnm\.Print_Area"[^>]*>[\s\S]*?<\/definedName>/g, '');
-        // Aggiungi nuova print area (apostrofi letterali nel text content XML)
-        const pa = '<definedName name="_xlnm.Print_Area" localSheetId="0">' +
-                   "'Presenze del Periodo'!$A$1:$AL$86" +
-                   '</definedName>';
-        if (wx.includes('<definedNames/>')) {
-          wx = wx.replace('<definedNames/>', '<definedNames>' + pa + '</definedNames>');
-        } else if (wx.includes('<definedNames>')) {
-          wx = wx.replace('<definedNames>', '<definedNames>' + pa);
-        } else {
-          wx = wx.replace('</workbook>', '<definedNames>' + pa + '</definedNames></workbook>');
-        }
-        zip.file('xl/workbook.xml', wx);
-      }
-
-      // ── Scarica il file ───────────────────────────────────────────────────
-      const finalBlob = await zip.generateAsync({
-        type: 'blob',
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      });
-      const dlUrl = URL.createObjectURL(finalBlob);
+      const buf = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
       const dlA = document.createElement('a');
-      dlA.href = dlUrl;
-      dlA.download = 'presenze_' + String(month+1).padStart(2,'0') + '_' + year + '.xlsx';
-      dlA.click();
-      URL.revokeObjectURL(dlUrl);
-    } catch (e) {
-      alert('Errore: ' + e.message);
-      console.error(e);
+      dlA.href = url; dlA.download = 'presenze_' + String(month+1).padStart(2,'0') + '_' + year + '.xlsx';
+      dlA.click(); URL.revokeObjectURL(url);
+    } catch(e) {
+      alert('Errore: ' + e.message); console.error(e);
     } finally {
       setGenerating(false);
     }
