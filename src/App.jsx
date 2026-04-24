@@ -910,11 +910,20 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
           const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
           const col = 3 + d;
           const cell = row.getCell(col);
-          // Forza formato General per evitare arrotondamenti da formato "0" del template
-          cell.numFmt = 'General';
           if (d > cutoffDay) { cell.value = null; continue; }
           const val = getHoursForDay(emp.id, dateStr);
-          cell.value = (val === null || val === undefined) ? null : val;
+          if (val === null || val === undefined) {
+            cell.value = null;
+          } else {
+            // Reimposta stile per evitare arrotondamenti da formato "0" del template
+            // Preserva allineamento e bordi ma forza numFmt a '0.##'
+            // (mostra 7 come "7", 5.5 come "5,5", 5.75 come "5,75")
+            const s = cell.style || {};
+            cell.style = Object.assign({}, s, {
+              numFmt: typeof val === 'number' ? '0.##' : '@'
+            });
+            cell.value = val;
+          }
         }
         for (let d = daysInMonth + 1; d <= 31; d++) row.getCell(3 + d).value = null;
         // gg con rotazione 90° (come nel template)
