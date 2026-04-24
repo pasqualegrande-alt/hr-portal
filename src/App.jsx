@@ -953,34 +953,36 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         }
       });
 
-      // ─── Impostazioni di stampa ────────────────────────────────────────
-      // A4 orizzontale
-      ws['!pageSetup'] = {
+      // ─── Impostazioni di stampa ─────────────────────────────────────────
+      // Merge con !pageSetup esistente per preservare proprietà interne SheetJS
+      ws['!pageSetup'] = Object.assign(ws['!pageSetup'] || {}, {
         paperSize: 9,           // 9 = A4
         orientation: 'landscape',
         fitToPage: false,
         scale: 100,
+        fitToWidth: 1,
+        fitToHeight: 0,
         horizontalDpi: 600,
         verticalDpi: 600,
-      };
+      });
 
       // Centrata orizzontalmente e verticalmente sulla pagina
-      ws['!printOptions'] = {
+      ws['!printOptions'] = Object.assign(ws['!printOptions'] || {}, {
         horizontalCentered: true,
         verticalCentered: true,
-      };
+      });
 
-      // Interruzioni di pagina manuali dopo riga 28 e riga 57
+      // Interruzioni di pagina manuali: solo righe 28 e 57 (3 pagine A4)
+      // man:1, max:16383 è il formato corretto per xlsx
       ws['!rowBreaks'] = [
-        { man: true, max: 16383, min: 0, pt: 28 },
-        { man: true, max: 16383, min: 0, pt: 57 },
+        { man: 1, max: 16383, min: 0, pt: 28 },
+        { man: 1, max: 16383, min: 0, pt: 57 },
       ];
 
-      // Area di stampa: righe 1-86 (3 pagine A4)
+      // Area di stampa: solo le 3 pagine (righe 1-86)
       const sheetName = wb.SheetNames[0];
       if (!wb.Workbook) wb.Workbook = {};
       if (!wb.Workbook.Names) wb.Workbook.Names = [];
-      // Rimuove eventuale Print_Area precedente
       wb.Workbook.Names = wb.Workbook.Names.filter(n => n.Name !== 'Print_Area');
       wb.Workbook.Names.push({
         Sheet: 0,
@@ -988,14 +990,14 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         Ref: "'" + sheetName + "'!$A$1:$AL$86"
       });
 
-      // Margini pagina (cm → pollici: 1cm = 0.3937in)
+      // Margini pagina stretti (pollici: ~0.5cm)
       ws['!margins'] = {
-        left: 0.394,    // ~1cm
-        right: 0.394,
-        top: 0.394,
-        bottom: 0.394,
-        header: 0.197,
-        footer: 0.197,
+        left: 0.2,
+        right: 0.2,
+        top: 0.2,
+        bottom: 0.2,
+        header: 0.1,
+        footer: 0.1,
       };
 
       // Download
