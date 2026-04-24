@@ -865,6 +865,17 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       await workbook.xlsx.load(bytes.buffer);
       const ws = workbook.worksheets[0];
 
+      // Fix formato celle M7, M36, M65: da "0.00" a "General"
+      // (bug nel template: queste 3 celle hanno formato numerico con decimali fissi)
+      [[7,13],[36,13],[65,13]].forEach(([r,c]) => {
+        const cell = ws.getRow(r).getCell(c);
+        cell.numFmt = 'General';
+        // Rimuove anche shrinkToFit se presente, per non rimpicciolire i numeri interi
+        if (cell.alignment) {
+          cell.alignment = Object.assign({}, cell.alignment, { shrinkToFit: false });
+        }
+      });
+
       ws.pageSetup.orientation = 'landscape';
       ws.pageSetup.paperSize = 9;
       ws.pageSetup.fitToPage = false;
