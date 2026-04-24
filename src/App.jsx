@@ -954,10 +954,6 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       });
 
       // ─── Genera XLSX con SheetJS poi aggiusta page setup via JSZip ──────
-      // SheetJS non scrive correttamente pageSetup/rowBreaks — usiamo JSZip
-      // per manipolare direttamente l'XML del file XLSX (che è uno ZIP)
-
-      // Carica JSZip
       if (!window.JSZip) {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
@@ -967,78 +963,77 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         });
       }
 
-      // Genera XLSX come array binario con SheetJS
-      const xlsxArrayBuffer = XLSX.write(wb, {
-        cellStyles: true, bookType: 'xlsx', type: 'array'
-      });
+      // Genera XLSX come array binario
+      const xlsxArr = XLSX.write(wb, { cellStyles: true, bookType: 'xlsx', type: 'array' });
+      const zip = await window.JSZip.loadAsync(xlsxArr);
 
-      // Apri lo ZIP con JSZip
-      const zip = await window.JSZip.loadAsync(xlsxArrayBuffer);
-
-      // Leggi l'XML del primo foglio
-      const sheetXmlFile = zip.file('xl/worksheets/sheet1.xml');
-      if (!sheetXmlFile) throw new Error('Sheet XML non trovato nel file generato');
-      let sheetXml = await sheetXmlFile.async('string');
-
-      // ── 1. Fix pageSetup: A4 landscape ──────────────────────────────────
-      const pageSetupNew = '<pageSetup paperSize="9" orientation="landscape" fitToPage="0" scale="100" horizontalDpi="600" verticalDpi="600"/>';
-      if (/<pageSetup[^/]*\/?>/.test(sheetXml)) {
-        sheetXml = sheetXml.replace(/<pageSetup[^/]*\/?>/g, pageSetupNew);
-      } else {
-        // Inserisci prima di </worksheet>
-        sheetXml = sheetXml.replace('</worksheet>', pageSetupNew + '</worksheet>');
+      // Trova il file del primo foglio seguendo le relazioni del workbook
+      let sheetPath = 'xl/worksheets/sheet1.xml';
+      const wbRelsF = zip.file('xl/_rels/workbook.xml.rels');
+      if (wbRelsF) {
+        const wbRelsXml = await wbRelsF.async('string');
+        const m = wbRelsXml.match(/Type="[^"]*worksheet[^"]*"\s+Target="worksheets\/([^"]+)"/);
+        if (m) sheetPath = 'xl/worksheets/' + m[1];
       }
 
-      // ── 2. Fix printOptions: centrata ───────────────────────────────────
-      const printOptionsNew = '<printOptions horizontalCentered="1" verticalCentered="1"/>';
-      if (/<printOptions[^/]*\/?>/.test(sheetXml)) {
-        sheetXml = sheetXml.replace(/<printOptions[^/]*\/?>/g, printOptionsNew);
-      } else {
-        sheetXml = sheetXml.replace('<pageSetup', printOptionsNew + '<pageSetup');
-      }
+      const sheetF = zip.file(sheetPath);
+      if (!sheetF) throw new Error('Sheet non trovato: ' + sheetPath);
+      let sx = await sheetF.async('string');
 
-      // ── 3. Fix rowBreaks: solo righe 28 e 57 ────────────────────────────
-      const rowBreaksNew = '<rowBreaks count="2" manualBreakCount="2"><brk id="28" man="1" max="16383" min="0"/><brk id="57" man="1" max="16383" min="0"/></rowBreaks>';
-      if (/<rowBreaks[\s\S]*?<\/rowBreaks>/.test(sheetXml)) {
-        sheetXml = sheetXml.replace(/<rowBreaks[\s\S]*?<\/rowBreaks>/g, rowBreaksNew);
-      } else {
-        sheetXml = sheetXml.replace('</worksheet>', rowBreaksNew + '</worksheet>');
-      }
+      // ── Rimuovi tutti gli elementi di stampa esistenti (evita duplicati) ─
+      sx = sx
+        .replace(/<printOptions[^>]*\/>/g, '')
+        .replace(/<printOptions[^>]*>[\s\S]*?<\/printOptions>/g, '')
+        .replace(/<pageMargins[^>]*\/>/g, '')
+        .replace(/<pageMargins[^>]*>[\s\S]*?<\/pageMargins>/g, '')
+        .replace(/<pageSetup[^>]*\/>/g, '')
+        .replace(/<pageSetup[^>]*>[\s\S]*?<\/pageSetup>/g, '')
+        .replace(/<rowBreaks[^>]*\/>/g, '')
+        .replace(/<rowBreaks[^>]*>[\s\S]*?<\/rowBreaks>/g, '');
 
-      // ── 4. Fix pageMargins: stretti ──────────────────────────────────────
-      const pageMarginsNew = '<pageMargins left="0.2" right="0.2" top="0.2" bottom="0.2" header="0.1" footer="0.1"/>';
-      if (/<pageMargins[^/]*\/?>/.test(sheetXml)) {
-        sheetXml = sheetXml.replace(/<pageMargins[^/]*\/?>/g, pageMarginsNew);
-      } else {
-        sheetXml = sheetXml.replace('<pageSetup', pageMarginsNew + '<pageSetup');
-      }
+      // ── Inserisci prima di </worksheet> nell'ordine corretto OOXML ────────
+      const printBlock =
+        '<printOptions horizontalCentered="1" verticalCentered="1"/>' +
+        '<pageMargins left="0.2" right="0.2" top="0.2" bottom="0.2" header="0.1" footer="0.1"/>' +
+        '<pageSetup paperSize="9" orientation="landscape" scale="100" fitToPage="0" fitToWidth="1" fitToHeight="0" horizontalDpi="600" verticalDpi="600"/>' +
+        '<rowBreaks count="2" manualBreakCount="2">' +
+          '<brk id="28" man="1" max="16383" min="0"/>' +
+          '<brk id="57" man="1" max="16383" min="0"/>' +
+        '</rowBreaks>';
+      sx = sx.replace('</worksheet>', printBlock + '</worksheet>');
+      zip.file(sheetPath, sx);
 
-      // ── 5. Fix area di stampa in workbook.xml ────────────────────────────
-      const wbXmlFile = zip.file('xl/workbook.xml');
-      if (wbXmlFile) {
-        let wbXml = await wbXmlFile.async('string');
-        const printAreaDef = '<definedName name="_xlnm.Print_Area" localSheetId="0">&apos;Presenze del Periodo&apos;!$A$1:$AL$86</definedName>';
-        if (wbXml.includes('_xlnm.Print_Area')) {
-          wbXml = wbXml.replace(/<definedName name="_xlnm\.Print_Area"[^>]*>[\s\S]*?<\/definedName>/g, printAreaDef);
-        } else if (wbXml.includes('<definedNames>')) {
-          wbXml = wbXml.replace('<definedNames>', '<definedNames>' + printAreaDef);
+      // ── Aggiorna area di stampa in workbook.xml ───────────────────────────
+      const wbF = zip.file('xl/workbook.xml');
+      if (wbF) {
+        let wx = await wbF.async('string');
+        // Rimuovi print area esistente
+        wx = wx.replace(/<definedName name="_xlnm\.Print_Area"[^>]*>[\s\S]*?<\/definedName>/g, '');
+        // Aggiungi nuova print area (apostrofi letterali nel text content XML)
+        const pa = '<definedName name="_xlnm.Print_Area" localSheetId="0">' +
+                   "'Presenze del Periodo'!$A$1:$AL$86" +
+                   '</definedName>';
+        if (wx.includes('<definedNames/>')) {
+          wx = wx.replace('<definedNames/>', '<definedNames>' + pa + '</definedNames>');
+        } else if (wx.includes('<definedNames>')) {
+          wx = wx.replace('<definedNames>', '<definedNames>' + pa);
         } else {
-          wbXml = wbXml.replace('</workbook>', '<definedNames>' + printAreaDef + '</definedNames></workbook>');
+          wx = wx.replace('</workbook>', '<definedNames>' + pa + '</definedNames></workbook>');
         }
-        zip.file('xl/workbook.xml', wbXml);
+        zip.file('xl/workbook.xml', wx);
       }
 
-      // Riscrivi il file sheet1.xml nel ZIP
-      zip.file('xl/worksheets/sheet1.xml', sheetXml);
-
-      // Genera e scarica il file finale
-      const finalBlob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(finalBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'presenze_' + String(month+1).padStart(2,'0') + '_' + year + '.xlsx';
-      a.click();
-      URL.revokeObjectURL(url);
+      // ── Scarica il file ───────────────────────────────────────────────────
+      const finalBlob = await zip.generateAsync({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const dlUrl = URL.createObjectURL(finalBlob);
+      const dlA = document.createElement('a');
+      dlA.href = dlUrl;
+      dlA.download = 'presenze_' + String(month+1).padStart(2,'0') + '_' + year + '.xlsx';
+      dlA.click();
+      URL.revokeObjectURL(dlUrl);
     } catch (e) {
       alert('Errore: ' + e.message);
       console.error(e);
