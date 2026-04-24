@@ -921,9 +921,12 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
             // Numero intero (7, 5, 6...) → lascia il formato del template intatto
             cell.value = val;
           } else {
-            // Numero decimale (5.5, 5.75...) → scrivi come stringa
+            // Numero decimale (5.5, 5.75...) → scrivi come stringa con virgola italiana
             // per aggirare il formato "0" che arrotonda a intero
             cell.value = String(val).replace('.', ',');
+            // Ripristina shrinkToFit per far stare il testo nella cella piccola
+            const al = cell.alignment || {};
+            cell.alignment = Object.assign({}, al, { shrinkToFit: true });
           }
         }
         for (let d = daysInMonth + 1; d <= 31; d++) row.getCell(3 + d).value = null;
