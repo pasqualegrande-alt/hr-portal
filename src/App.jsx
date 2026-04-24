@@ -780,21 +780,22 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
   const getHoursForDay = (userId, dateStr) => {
     const date = new Date(dateStr + 'T12:00:00');
     const dow = date.getDay();
-    if (dow === 0 || dow === 6) return null; // weekend → vuoto
+    if (dow === 0 || dow === 6) return null;
 
-    // Festività italiane
     const y = date.getFullYear();
     const hols = getItalianHolidays(y);
     if (hols.has(dateStr)) return null;
 
-    // Chiusure aziendali
     for (const cl of (closures || [])) {
       if (dateStr >= cl.dal && dateStr <= cl.al) {
         return cl.contaComeFerie ? 'F' : null;
       }
     }
 
-    // Richieste approvate quel giorno
+    // Ore base: 5 per Silvia Cori (part-time), 7 per tutti gli altri
+    const emp = users.find(u => u.id === userId);
+    const baseHrs = emp && emp.username === 's.cori' ? 5 : HOURS_PER_DAY;
+
     const dayReqs = requests.filter(r =>
       r.userId === userId &&
       r.status === 'approvato' &&
@@ -803,17 +804,35 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
 
     if (dayReqs.length > 0) {
       const req = dayReqs[0];
-      if (req.type === 'ferie')       return 'F';
-      if (req.type === 'malattia')    return 'M';
-      if (req.type === 'congedo')     return 'CM';
-      if (req.type === 'trasferta')   return 7;
-      if (req.type === 'fuorisede')   return 7;
+      if (req.type === 'ferie')     return 'F';
+      if (req.type === 'malattia')  return 'M';
+      if (req.type === 'congedo')   return 'C';
+      if (req.type === 'trasferta') return baseHrs;
+      if (req.type === 'fuorisede') return baseHrs;
       if (req.type === 'permesso' || req.type === 'permesso104') {
         const hrs = Math.round((req.durationMinutes || 0) / 60 * 4) / 4;
-        return Math.max(0, 7 - hrs);
+        return Math.max(0, baseHrs - hrs);
       }
     }
-    return 7;
+    return baseHrs;
+  };
+
+  // Restituisce il codice per la riga * (permesso → P, 104 → H, congedo → C)
+  const getStarCode = (userId, dateStr) => {
+    const date = new Date(dateStr + 'T12:00:00');
+    if (date.getDay() === 0 || date.getDay() === 6) return null;
+    const dayReqs = requests.filter(r =>
+      r.userId === userId &&
+      r.status === 'approvato' &&
+      Array.isArray(r.dates) && r.dates.includes(dateStr)
+    );
+    if (dayReqs.length > 0) {
+      const t = dayReqs[0].type;
+      if (t === 'permesso')    return 'P';
+      if (t === 'permesso104') return 'H';
+      if (t === 'congedo')     return 'C';
+    }
+    return null;
   };
 
   const generatePresenze = async () => {
@@ -884,8 +903,20 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
           row.getCell(col).value = (val === null || val === undefined) ? null : val;
         }
         for (let d = daysInMonth + 1; d <= 31; d++) row.getCell(3 + d).value = null;
-        row.getCell(35).value = ggCount;
+        // gg con rotazione 90° (come nel template)
+        const ggCell = row.getCell(35);
+        ggCell.value = ggCount;
+        ggCell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
         row.getCell(36).value = { formula: 'SUM(D' + ordRow + ':AH' + ordRow + ')' };
+
+        // Riga * (ordRow + 2): codice P / H / C per permesso/104/congedo
+        const starRow = ws.getRow(ordRow + 2);
+        for (let d = 1; d <= daysInMonth; d++) {
+          if (d > cutoffDay) { starRow.getCell(3 + d).value = null; continue; }
+          const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+          const code = getStarCode(emp.id, dateStr);
+          starRow.getCell(3 + d).value = code || null;
+        }
       });
 
       const buf = await workbook.xlsx.writeBuffer();
