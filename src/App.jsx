@@ -899,6 +899,22 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         const ps = PAGE_STARTS[pageIdx];
         const ordRow = ps + 3 + slotInPage * 3;
 
+        // Copia stili dalle celle template (riga 4) per consistenza visiva
+        const copyStyle = (fromRow, fromCol, toRow, toCol) => {
+          const fromAddr = XLSX.utils.encode_cell({ r: fromRow - 1, c: fromCol - 1 });
+          const toAddr   = XLSX.utils.encode_cell({ r: toRow - 1,   c: toCol - 1 });
+          if (ws[fromAddr] && ws[fromAddr].s) {
+            if (!ws[toAddr]) ws[toAddr] = {};
+            ws[toAddr].s = JSON.parse(JSON.stringify(ws[fromAddr].s));
+          }
+        };
+        // Copia stile nome (B4 → B{ordRow})
+        copyStyle(4, 2, ordRow, 2);
+        // Copia stile gg (AI4 → AI{ordRow})
+        copyStyle(4, 35, ordRow, 35);
+        // Copia stili celle giorno (D4→AH4 → D{ordRow}→AH{ordRow})
+        for (let d = 1; d <= 31; d++) copyStyle(4, 3 + d, ordRow, 3 + d);
+
         // Nome
         setVal(ordRow, 2, emp.lastName + ' ' + emp.firstName);
 
@@ -923,12 +939,17 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         // gg = giorni feriali teorici del mese
         setVal(ordRow, 35, ggCount);
 
-        // ore = formula SUM (se non già presente nel template)
-        const oreAddr = XLSX.utils.encode_cell({ r: ordRow - 1, c: 35 }); // AJ = col 36, c=35 (0-indexed)
-        if (!ws[oreAddr] || !ws[oreAddr].f) {
-          const colStart = XLSX.utils.encode_col(3); // D
-          const colEnd   = XLSX.utils.encode_col(3 + 30); // AH (col 34, 0-indexed=33)
-          setVal(ordRow, 36, colStart + ordRow + ':' + colEnd + ordRow, true);
+        // ore = formula SUM
+        const oreAddr = XLSX.utils.encode_cell({ r: ordRow - 1, c: 35 }); // AJ = col 36 (0-indexed col 35)
+        // Usa sempre la formula SUM corretta, copiando lo stile dalla cella template AJ4
+        const templateOreCell = ws[XLSX.utils.encode_cell({ r: 3, c: 35 })]; // AJ4 (0-indexed)
+        if (!ws[oreAddr]) ws[oreAddr] = {};
+        ws[oreAddr].f = 'SUM(D' + ordRow + ':AH' + ordRow + ')';
+        ws[oreAddr].t = 'n';
+        delete ws[oreAddr].v;
+        // Copia stile dalla cella template per evitare ####
+        if (templateOreCell && templateOreCell.s) {
+          ws[oreAddr].s = JSON.parse(JSON.stringify(templateOreCell.s));
         }
       });
 
