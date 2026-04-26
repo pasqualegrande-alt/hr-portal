@@ -935,12 +935,16 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
             // Numero intero (7, 5, 6...) → lascia il formato del template intatto
             cell.value = val;
           } else {
-            // Numero decimale (5.5, 5.75...) → scrivi come stringa con virgola italiana
-            // per aggirare il formato "0" che arrotonda a intero
-            cell.value = String(val).replace('.', ',');
-            // Ripristina shrinkToFit per far stare il testo nella cella piccola
-            const al = cell.alignment || {};
-            cell.alignment = Object.assign({}, al, { shrinkToFit: true });
+            // Numero decimale (5.5, 5.75...): scrivi come numero reale (non stringa)
+            // con deep copy dello stile per forzare formato decimale senza rompere nulla
+            try {
+              const styleCopy = JSON.parse(JSON.stringify(cell.style || {}));
+              styleCopy.numFmt = '0.##';
+              if (styleCopy.alignment) styleCopy.alignment.shrinkToFit = true;
+              else styleCopy.alignment = { shrinkToFit: true };
+              cell.style = styleCopy;
+            } catch(e) {}
+            cell.value = val; // numero reale: la SUM lo somma correttamente
           }
         }
         for (let d = daysInMonth + 1; d <= 31; d++) row.getCell(3 + d).value = null;
