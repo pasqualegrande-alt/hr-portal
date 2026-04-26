@@ -970,6 +970,9 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         }
       });
 
+      // Imposta larghezza colonna AJ (indice 36) a 7.5
+      ws.getColumn(36).width = 7.5;
+
       const buf = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
