@@ -668,19 +668,23 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
     const empty = () => ({ appr: 0, pend: 0, rif: 0 });
     
     // Calcola giorni di chiusura "conta come ferie" nel mese corrente
-    // (vengono trattati come ferie approvate per tutti i dipendenti)
     const closureFerieHours = (() => {
       let total = 0;
-      for (const c of (closures || [])) {
-        if (!c.contaComeFerie) continue;
-        // Itera tutti i giorni della chiusura che cadono nel mese corrente
-        let curr = new Date(c.dal + 'T12:00:00');
-        const end = new Date(c.al + 'T12:00:00');
-        while (curr <= end) {
-          const iso = curr.toISOString().split('T')[0];
-          const dow = curr.getDay();
-          if (iso.startsWith(monthISO) && dow >= 1 && dow <= 5) total += HOURS_PER_DAY;
-          curr.setDate(curr.getDate() + 1);
+      const dim = new Date(year, month+1, 0).getDate();
+      for (let d = 1; d <= dim; d++) {
+        const iso = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+        const dow = new Date(iso + 'T12:00:00').getDay();
+        if (dow === 0 || dow === 6) continue;
+        const mmdd = iso.slice(5);
+        for (const c of (closures || [])) {
+          if (!c.contaComeFerie) continue;
+          let match = false;
+          if (c.ripetaAnni) {
+            match = mmdd >= c.dal.slice(5) && mmdd <= c.al.slice(5);
+          } else {
+            match = iso >= c.dal && iso <= c.al;
+          }
+          if (match) { total += HOURS_PER_DAY; break; }
         }
       }
       return total;
@@ -786,10 +790,12 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
     const hols = getItalianHolidays(y);
     if (hols.has(dateStr)) return null;
 
+    const mmdd = dateStr.slice(5);
     for (const cl of (closures || [])) {
-      if (dateStr >= cl.dal && dateStr <= cl.al) {
-        return cl.contaComeFerie ? 'F' : null;
-      }
+      const match = cl.ripetaAnni
+        ? mmdd >= (cl.dal||'').slice(5) && mmdd <= (cl.al||'').slice(5)
+        : dateStr >= cl.dal && dateStr <= cl.al;
+      if (match) return cl.contaComeFerie ? 'F' : null;
     }
 
     // Ore base: 5 per Silvia Cori (part-time), 7 per tutti gli altri
@@ -1795,7 +1801,7 @@ export default function App() {
   };
 
   const ClosuresView = () => {
-    const emptyForm = { dal: '', al: '', descrizione: '', contaComeFerie: false };
+    const emptyForm = { dal: '', al: '', descrizione: '', contaComeFerie: false, ripetaAnni: false };
     const [form, setForm] = useState(emptyForm);
     const [editingId, setEditingId] = useState(null);
 
@@ -1833,6 +1839,13 @@ export default function App() {
               <div>
                 <p className="font-black text-slate-800 text-sm">Conta come ferie</p>
                 <p className="text-[11px] text-slate-400 font-bold">Se attivo, scala dai giorni ferie dei dipendenti</p>
+              </div>
+            </label>
+            <label className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-100 rounded-2xl cursor-pointer">
+              <input type="checkbox" checked={form.ripetaAnni || false} onChange={e => setForm({...form, ripetaAnni: e.target.checked})} className="w-4 h-4 accent-amber-500"/>
+              <div>
+                <p className="font-black text-slate-800 text-sm">🔁 Ripeti tutti gli anni</p>
+                <p className="text-[11px] text-slate-400 font-bold">Ricorrenza annuale (es. Natale, 1 Maggio...)</p>
               </div>
             </label>
             <button onClick={handleSave} className="w-full bg-slate-800 text-white rounded-2xl font-black uppercase flex items-center justify-center gap-2 py-4">
