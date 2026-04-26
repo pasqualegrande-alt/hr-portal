@@ -851,9 +851,17 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       const today = new Date();
       const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
       const cutoffDay = isCurrentMonth ? today.getDate() - 1 : daysInMonth;
-      const ggCount = Array.from({length: daysInMonth}, (_, i) =>
-        new Date(year, month, i+1).getDay() % 6 !== 0 ? 1 : 0
-      ).reduce((a,b) => a+b, 0);
+      // Giorni lavorativi: lun-ven escluse le festività italiane che cadono in settimana
+      const ggHolidays = getItalianHolidays(year);
+      const ggCount = Array.from({length: daysInMonth}, (_, i) => {
+        const d = i + 1;
+        const date = new Date(year, month, d);
+        const dow = date.getDay();
+        if (dow === 0 || dow === 6) return 0; // weekend
+        const iso = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+        if (ggHolidays.has(iso)) return 0; // festività caduta in settimana
+        return 1;
+      }).reduce((a,b) => a+b, 0);
       const emps = [...users]
         .filter(u => !['CEO','amministratore','hrmanager'].includes(u.role) && u.lastName)
         .sort((a, b) => (a.lastName||'').localeCompare(b.lastName||'', 'it'));
