@@ -1185,7 +1185,10 @@ const OverviewView = ({ users, requests, closures }) => {
   }
 
   // Chiusure aziendali
-  const getClosureForDate = (iso) => closures.find(c => iso >= c.dal && iso <= c.al) || null;
+  const getClosureForDate = (iso) => closures.find(c => {
+      const md = iso.slice(5);
+      return c.ripetaAnni ? (md >= (c.dal||'').slice(5) && md <= (c.al||'').slice(5)) : (iso >= c.dal && iso <= c.al);
+    }) || null;
 
   // Etichetta mesi
   const monthLabel = (
@@ -1540,7 +1543,10 @@ export default function App() {
     return () => { if (unsubscribe) unsubscribe(); };
   }, [user]);
 
-  const getClosureForDate = (dStr) => closures.find(c => dStr >= c.dal && dStr <= c.al) || null;
+  const getClosureForDate = (dStr) => closures.find(c => {
+      const md = dStr.slice(5);
+      return c.ripetaAnni ? (md >= (c.dal||'').slice(5) && md <= (c.al||'').slice(5)) : (dStr >= c.dal && dStr <= c.al);
+    }) || null;
 
   const checkPolivalenza = async (submittedDates, submittingUser) => {
     const userGroups = polivalenze.filter(g => g.members && g.members.includes(submittingUser.name));
