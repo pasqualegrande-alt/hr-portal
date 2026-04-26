@@ -952,7 +952,13 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         const ggCell = row.getCell(35);
         ggCell.value = ggCount;
         ggCell.alignment = { textRotation: 90, vertical: 'middle', horizontal: 'center' };
-        row.getCell(36).value = { formula: 'SUM(D' + ordRow + ':AH' + ordRow + ')' };
+        const oreCell = row.getCell(36);
+        oreCell.value = { formula: 'SUM(D' + ordRow + ':AH' + ordRow + ')' };
+        try {
+          const oreCopy = JSON.parse(JSON.stringify(oreCell.style || {}));
+          oreCopy.numFmt = '0.00';
+          oreCell.style = oreCopy;
+        } catch(e) {}
 
         // Riga * (ordRow + 2): codice P / H / C per permesso/104/congedo
         const starRow = ws.getRow(ordRow + 2);
