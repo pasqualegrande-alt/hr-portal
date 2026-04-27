@@ -3,6 +3,8 @@ import { Calendar, Users, Bell, LogOut, ChevronLeft, ChevronRight, Trash2, Edit3
 import { db, getMessagingInstance } from './firebase';
 import { collection, doc, setDoc, getDocs, onSnapshot, deleteDoc, updateDoc, addDoc, query, orderBy } from 'firebase/firestore';
 import { getToken, onMessage } from 'firebase/messaging';
+import { signInAnonymously, signOut } from 'firebase/auth';
+import { auth } from './firebase';
 
 const EXCOGITA_LOGO = (
   'data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCALjAwADASIAAhEBAxEB/8QAHQABAAIDAQEBAQAAAAAAAAAAAAcIAQQGBQMCCf/EAFUQAAECAwIGCw0EBwYGAgMAAAABAgMEBQYRBxchVXGTCBIxMjZBUWF0kbETFTVSVnWBobKzwtHSFCJCwRYjM2JygpI0Q1Nzg6IkN0VUY+ElZCZE8P/EABoBAQADAQEBAAAAAAAAAAAAAAABAwQCBQb/xAAyEQEAAgECBAQFAwQCAwAAAAAAAQIDBBEFFSExMkJhkRJBUVJxIoGhE7HB0RQjM+Hw/9oADAMBAAIRAxEAPwC5QAOXQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB848aDAbto8VkJvK9yIgH0BorWKSi3LVJJP9dvzMd+aRnSS17fmBvg0O/NIzpJa9vzHfmkZ0kte35gb4NDvzSM6SWvb8x35pGdJLXt+YG+DQ780jOklr2/Md+aRnSS17fmBvg0O/NIzpJa9vzHfmkZ0kte35gb4NDvzSM6SWvb8x35pGdJLXt+YG+DQ780jOklr2/Md+aRnSS17fmBvg0O/NIzpJa9vzHfmkZ0kte35gb4NDvzSM6SWvb8x35pGdJLXt+YG+DQ780jOklr2/Md+aRnSS17fmBvg0O/NIzpJa9vzHfmkZ0kte35gb4NDvzSM6SWvb8x35pGdJLXt+YG+DQ780jOklr2/Md+aRnSS17fmBvg0O/NIzpJa9vzHfmkZ0kte35gb4NDvzSM6SWvb8x35pGdJLXt+YG+DQ780jOklr2/Md+aRnSS17fmBvg0O/NIzpJa9vzHfmkZ0kte35gb4NDvzSM6SWvb8x35pGdJLXt+YG+DQ780jOklr2/Md+aRnSS17fmBvg0O/NIzpJa9vzHfmkZ0kte35gb4NDvzSM6SWvb8x35pGdJLXt+YG+DQ780jOklr2/Md+aRnSS17fmBvg0O/NIzpJa9vzHfmkZ0kte35gb4NDvzSM6SWvb8x35pGdJLXt+YG+DQ780jOklr2/Md+aRnSS17f' +
@@ -2927,6 +2929,7 @@ export default function App() {
             const p = document.getElementById('pw').value;
             const f = users.find(x => x.username === u && x.password === p);
             if (f) {
+              await signInAnonymously(auth);
               setUser(f);
               if (f.role === 'hrmanager') { setView('hr'); setCalFilter('all'); }
               else if (f.role === 'CEO' || f.role === 'amministratore') { setCalFilter('all'); setView('calendar'); }
@@ -2951,7 +2954,7 @@ export default function App() {
             <p className="font-black text-xs uppercase leading-tight">{user.name}</p>
             <p className="text-[10px] text-blue-400 font-bold uppercase">{user.role}</p>
           </div>
-          <button onClick={() => { setUser(null); setCalFilter(null); setTypeFilter('tutti'); }} className="p-2 text-red-400"><LogOut size={20}/></button>
+          <button onClick={() => { signOut(auth); setUser(null); setCalFilter(null); setTypeFilter('tutti'); }} className="p-2 text-red-400"><LogOut size={20}/></button>
         </div>
       </header>
       <main className={"flex-1 pt-16 pb-24 overflow-y-auto " + (["log","overview","hr","card"].includes(view) ? "px-0" : "px-4")}>
