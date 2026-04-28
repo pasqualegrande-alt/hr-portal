@@ -2551,7 +2551,7 @@ export default function App() {
             </p>
             <div className="space-y-3">
               {dayDetailModal.reqs.map(r => {
-                const canAct = user.role === 'CEO' || user.role === 'amministratore' || r.assignedTo === user.name;
+                const canAct = user.role === 'CEO' || user.role === 'amministratore' || r.assignedTo?.toLowerCase() === user.name?.toLowerCase();
                 const isSelected = dayActionReq === r.id;
                 const statusColor = r.status === 'approvato' ? 'border-green-500 bg-green-50' : r.status === 'rifiutato' ? 'border-red-400 bg-red-50' : r.status === 'comunicato' ? 'border-teal-500 bg-teal-50' : 'border-orange-400 bg-orange-50';
                 const statusLabel = r.status === 'pendente_responsabile' ? 'Att. responsabile' : r.status === 'pendente_mirco' ? 'Att. Mirco' : r.status === 'comunicato' ? 'Comunicato' : r.status === 'approvato' ? '✓ Approvato' : r.status === 'rifiutato' ? '✗ Rifiutato' : r.status;
@@ -2727,7 +2727,7 @@ export default function App() {
 
   const NotificationsView = () => {
     const [approvalNotes, setApprovalNotes] = useState({});
-    const myPending = requests.filter(r => r.assignedTo === user.name && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco'));
+    const myPending = requests.filter(r => r.assignedTo?.toLowerCase() === user.name?.toLowerCase() && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco'));
     const myHistory = notifications.filter(n => n.to?.toLowerCase() === user.name?.toLowerCase());
 
     const resolve = async (req, status) => {
@@ -2825,10 +2825,10 @@ export default function App() {
           </div>
         ))}
         {/* Richieste rifiutate — possibilità di rivalutare */}
-        {requests.filter(r => r.assignedTo === user.name && r.status === 'rifiutato').length > 0 && (
+        {requests.filter(r => r.assignedTo?.toLowerCase() === user.name?.toLowerCase() && r.status === 'rifiutato').length > 0 && (
           <div className="space-y-2">
             <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Richieste rifiutate — Rivaluta</p>
-            {requests.filter(r => r.assignedTo === user.name && r.status === 'rifiutato').map(r => (
+            {requests.filter(r => r.assignedTo?.toLowerCase() === user.name?.toLowerCase() && r.status === 'rifiutato').map(r => (
               <div key={r.id} className="bg-white p-5 rounded-3xl border-2 border-red-100 shadow-sm space-y-3">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -2942,7 +2942,7 @@ export default function App() {
     </div>
   );
 
-  const pendingCount = requests.filter(r => r.assignedTo === user.name && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco')).length;
+  const pendingCount = requests.filter(r => r.assignedTo?.toLowerCase() === user.name?.toLowerCase() && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco')).length;
   const showAdmin = user.role === 'amministratore' || user.role === 'CEO';
 
   return (
