@@ -2728,7 +2728,7 @@ export default function App() {
   const NotificationsView = () => {
     const [approvalNotes, setApprovalNotes] = useState({});
     const myPending = requests.filter(r => r.assignedTo === user.name && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco'));
-    const myHistory = notifications.filter(n => n.to === user.name);
+    const myHistory = notifications.filter(n => n.to?.toLowerCase() === user.name?.toLowerCase());
 
     const resolve = async (req, status) => {
       if (req.type === 'trasferta' && status === 'approvato' && req.status === 'pendente_responsabile') {
