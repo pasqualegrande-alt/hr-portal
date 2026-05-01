@@ -2936,7 +2936,7 @@ export default function App() {
         <div className="space-y-4">
           <input id="un" type="text" placeholder="Username" className="w-full p-5 bg-slate-50 border rounded-2xl outline-none font-bold text-base" autoCapitalize="none" />
           <input id="pw" type="password" placeholder="Password" className="w-full p-5 bg-slate-50 border rounded-2xl outline-none font-bold text-base" />
-          <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-lg text-base" onClick={() => {
+          <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-lg text-base" onClick={async () => {
             const u = document.getElementById('un').value;
             const p = document.getElementById('pw').value;
             const f = users.find(x => x.username === u && x.password === p);
