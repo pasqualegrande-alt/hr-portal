@@ -1750,7 +1750,7 @@ export default function App() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {users.map(u => (
+                {[...users].sort((a,b) => (a.lastName||'').localeCompare(b.lastName||'', 'it')).map(u => (
                   <tr key={u.id} className="hover:bg-slate-50/50">
                     <td className="p-4 font-black text-slate-800 uppercase text-sm">{u.firstName} {u.lastName}</td>
                     <td className="p-4"><span className={'px-2 py-1 rounded-full text-[9px] font-black uppercase ' + (u.role === 'hrmanager' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600')}>{u.role === 'hrmanager' ? 'HR Manager' : u.role}</span></td>
@@ -2750,9 +2750,9 @@ export default function App() {
         return;
       }
       await updateDoc(doc(db, 'requests', req.id), {
-        status,
+        status: status === 'approvato_con_recupero' ? 'approvato' : status,
         ...(approvalNotes[req.id] ? { notaResponsabile: approvalNotes[req.id] } : {}),
-        ...(req.recuperoOre && status === 'approvato' ? { recuperoApproved: true } : {})
+        ...(req.recuperoOre ? { recuperoApproved: status === 'approvato_con_recupero' } : {})
       });
       await writeAuditLog({ action: status, fromUser: user, toUser: req.userName, type: req.type, nota: approvalNotes[req.id] || '', reqId: req.id });
       await addDoc(collection(db, 'notifications'), {
@@ -2762,7 +2762,7 @@ export default function App() {
           const dateInfo = req.dates && req.dates.length > 0
             ? (req.dates.length === 1 ? ' del ' + formatDate(req.dates[0]) : ' dal ' + formatDate(req.dates[0]) + ' al ' + formatDate(req.dates[req.dates.length - 1]) + ' (' + req.dates.length + ' gg)')
             : '';
-          const statusLabel = status === 'approvato' ? 'APPROVATA' : 'RIFIUTATA';
+          const statusLabel = status === 'approvato_con_recupero' ? 'APPROVATA (recupero ore autorizzato)' : status === 'approvato' ? 'APPROVATA (recupero ore non autorizzato)' : 'RIFIUTATA';
           const nota = approvalNotes[req.id] || '';
           return 'Richiesta di ' + typeLabel + dateInfo + ' ' + statusLabel + (nota ? ' — ' + nota : '');
         })(),
@@ -2807,7 +2807,7 @@ export default function App() {
               <div className="flex gap-2 shrink-0">
                 {r.type === 'fuorisede' && r.mancataTimbratura ? (
                   <button onClick={() => approveFuoriSede(r)} className="p-4 bg-teal-500 text-white rounded-2xl"><CheckCircle size={20}/></button>
-                ) : (
+                ) : r.recuperoOre ? null : (
                   <>
                     <button onClick={() => resolve(r, 'approvato')} className="p-4 bg-green-500 text-white rounded-2xl"><CheckCircle size={20}/></button>
                     <button onClick={() => resolve(r, 'rifiutato')} className="p-4 bg-red-500 text-white rounded-2xl"><XCircle size={20}/></button>
@@ -2815,6 +2815,11 @@ export default function App() {
                 )}
               </div>
             </div>
+            {r.recuperoOre && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-3">
+                <p className="text-xs font-black text-red-600 uppercase tracking-wide">⚠️ Il dipendente chiede di recuperare le ore di questo permesso</p>
+              </div>
+            )}
             <textarea
               placeholder="Nota opzionale (visibile al dipendente)..."
               value={approvalNotes[r.id] || ''}
@@ -2822,6 +2827,13 @@ export default function App() {
               className="w-full p-3 bg-slate-50 border rounded-2xl font-bold outline-none text-xs resize-none"
               rows={2}
             />
+            {r.recuperoOre ? (
+              <div className="flex flex-col gap-2 pt-1">
+                <button onClick={() => resolve(r, 'approvato_con_recupero')} className="w-full py-3 bg-green-500 text-white rounded-2xl font-black text-xs uppercase tracking-wide flex items-center justify-center gap-2"><CheckCircle size={16}/> Approva permesso + recupero ore</button>
+                <button onClick={() => resolve(r, 'approvato')} className="w-full py-3 bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-wide flex items-center justify-center gap-2"><CheckCircle size={16}/> Approva permesso — no recupero</button>
+                <button onClick={() => resolve(r, 'rifiutato')} className="w-full py-3 bg-red-500 text-white rounded-2xl font-black text-xs uppercase tracking-wide flex items-center justify-center gap-2"><XCircle size={16}/> Rifiuta tutto</button>
+              </div>
+            ) : null}
           </div>
         ))}
         {/* Richieste rifiutate — possibilità di rivalutare */}
@@ -2924,7 +2936,7 @@ export default function App() {
         <div className="space-y-4">
           <input id="un" type="text" placeholder="Username" className="w-full p-5 bg-slate-50 border rounded-2xl outline-none font-bold text-base" autoCapitalize="none" />
           <input id="pw" type="password" placeholder="Password" className="w-full p-5 bg-slate-50 border rounded-2xl outline-none font-bold text-base" />
-          <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-lg text-base" onClick={async() => {
+          <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-lg text-base" onClick={() => {
             const u = document.getElementById('un').value;
             const p = document.getElementById('pw').value;
             const f = users.find(x => x.username === u && x.password === p);
