@@ -2205,6 +2205,7 @@ export default function App() {
       }
 
       if (user.role === 'CEO') return;
+      if (user.role === 'amministratore') return;
 
       const myReq = dayReqs.find(r => r.userId === user.id);
       if (myReq) {
@@ -2228,7 +2229,7 @@ export default function App() {
       if (user.role === 'amministratore' || user.role === 'CEO' || user.role === 'hrmanager') return [
         { value: 'all', label: 'Tutti' },
         ...[...users]
-          .filter(u => u.role !== 'CEO' && u.role !== 'hrmanager')
+          .filter(u => u.role !== 'CEO' && u.role !== 'hrmanager' && u.role !== 'amministratore')
           .sort((a,b) => (a.lastName||'').localeCompare(b.lastName||'', 'it'))
           .map(u => ({ value: u.name, label: (u.firstName+' '+u.lastName).toLowerCase() })),
       ];
@@ -2645,6 +2646,22 @@ export default function App() {
                           {/* Se già approvato: mostra solo rifiuta */}
                           {/* Se già rifiutato: mostra solo approva (rivaluta) */}
                         </div>
+                        {/* Cancella richiesta — solo admin/CEO */}
+                        {(user.role === 'amministratore' || user.role === 'CEO') && (
+                          <button
+                            className="w-full flex items-center justify-center gap-1 bg-slate-200 text-slate-600 py-3 rounded-2xl font-black text-xs uppercase mt-1"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!window.confirm('Cancellare definitivamente questa richiesta?')) return;
+                              await deleteDoc(doc(db, 'requests', r.id));
+                              await writeAuditLog({ action: 'cancellata', fromUser: user, toUser: r.userName, type: r.type, reqId: r.id });
+                              setDayActionReq(null); setDayActionNote('');
+                              setDayDetailModal(prev => prev ? { ...prev, reqs: prev.reqs.filter(x => x.id !== r.id) } : null);
+                            }}
+                          >
+                            <Trash2 size={13}/> Cancella richiesta
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
