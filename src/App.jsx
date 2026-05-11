@@ -2802,7 +2802,15 @@ export default function App() {
               <div>
                 <p className="font-black text-slate-800 uppercase text-sm">{r.userName}</p>
                 <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{getPendingLabel(r)}</p>
-                {r.timeFrom && <p className="text-[10px] font-bold text-slate-500 mt-0.5">{r.dates?.[0]} · {r.timeFrom} - {r.timeTo}</p>}
+                {r.dates && r.dates.length > 0 && (
+                  <p className="text-[11px] font-black text-blue-600 mt-1">
+                    {r.timeFrom
+                      ? formatDate(r.dates[0]) + ' · ' + r.timeFrom + ' - ' + r.timeTo
+                      : r.dates.length === 1
+                        ? formatDate(r.dates[0])
+                        : 'Dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length - 1]) + ' (' + r.dates.length + ' gg)'}
+                  </p>
+                )}
                 {r.nota && <p className="text-xs text-blue-600 font-bold mt-1 italic">"{r.nota}"</p>}
               </div>
               <div className="flex gap-2 shrink-0">
