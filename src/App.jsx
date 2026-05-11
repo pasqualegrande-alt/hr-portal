@@ -1931,10 +1931,10 @@ export default function App() {
       else if (user.role === 'responsabile') {
         if (effectiveFilter === 'mine' || effectiveFilter === user.name) passUser = r.userId === user.id;
         else if (effectiveFilter === 'all' || effectiveFilter === 'all_mine') passUser = true;
-        else passUser = r.userName === effectiveFilter;
+        else passUser = (r.userName || '').trim().toLowerCase() === (effectiveFilter || '').trim().toLowerCase();
       } else {
         if (effectiveFilter === 'all') passUser = true;
-        else passUser = r.userName === calFilter;
+        else passUser = (r.userName || '').trim().toLowerCase() === (calFilter || '').trim().toLowerCase();
       }
       if (!passUser) return false;
       // Filtro tipo richiesta
@@ -2646,22 +2646,6 @@ export default function App() {
                           {/* Se già approvato: mostra solo rifiuta */}
                           {/* Se già rifiutato: mostra solo approva (rivaluta) */}
                         </div>
-                        {/* Cancella richiesta — solo admin/CEO */}
-                        {(user.role === 'amministratore' || user.role === 'CEO') && (
-                          <button
-                            className="w-full flex items-center justify-center gap-1 bg-slate-200 text-slate-600 py-3 rounded-2xl font-black text-xs uppercase mt-1"
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (!window.confirm('Cancellare definitivamente questa richiesta?')) return;
-                              await deleteDoc(doc(db, 'requests', r.id));
-                              await writeAuditLog({ action: 'cancellata', fromUser: user, toUser: r.userName, type: r.type, reqId: r.id });
-                              setDayActionReq(null); setDayActionNote('');
-                              setDayDetailModal(prev => prev ? { ...prev, reqs: prev.reqs.filter(x => x.id !== r.id) } : null);
-                            }}
-                          >
-                            <Trash2 size={13}/> Cancella richiesta
-                          </button>
-                        )}
                       </div>
                     )}
                   </div>
