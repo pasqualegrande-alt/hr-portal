@@ -286,6 +286,10 @@ const LogView = ({ auditLogs, db }) => {
                     className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
                   />
                 </th>
+                {/* Data Richiesta */}
+                <th className="px-3 py-2 w-44 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('reqDates')}>Data rich. <SortIcon col="reqDates"/></th>
+                {/* Valore */}
+                <th className="px-3 py-2 w-20 cursor-pointer select-none" onClick={() => handleSort('reqValue')}>Valore <SortIcon col="reqValue"/></th>
                 {/* Azione */}
                 <th className="px-3 py-2 w-44">
                   <div className="cursor-pointer select-none" onClick={() => handleSort('action')}>Azione <SortIcon col="action"/></div>
@@ -329,6 +333,8 @@ const LogView = ({ auditLogs, db }) => {
                             <td className="px-3 py-2 font-bold text-slate-500 whitespace-nowrap tabular-nums">{l.time}</td>
                             <td className="px-3 py-2 font-bold text-slate-600 whitespace-nowrap">{l.recipient}</td>
                             <td className="px-3 py-2"><span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">{l.type}</span></td>
+                            <td className="px-3 py-2 text-[10px] font-bold text-slate-500 whitespace-nowrap">{l.reqDates && l.reqDates.length > 0 ? (l.reqDates.length === 1 ? formatDate(l.reqDates[0]) : formatDate(l.reqDates[0]) + ' → ' + formatDate(l.reqDates[l.reqDates.length-1])) : <span className="text-slate-200">—</span>}</td>
+                            <td className="px-3 py-2 text-[10px] font-black text-blue-600 whitespace-nowrap">{l.reqValue || <span className="text-slate-200 font-normal">—</span>}</td>
                             <td className="px-3 py-2 whitespace-nowrap font-bold text-slate-700">{actionLabel(l.action)}</td>
                             <td className="px-3 py-2 text-slate-500 italic">{l.nota || <span className="text-slate-200">—</span>}</td>
                           </tr>
@@ -1503,7 +1509,11 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [auditLogs, setAuditLogs] = useState([]);
   const [calFilter, setCalFilter] = useState(null); // inizializzato dopo login
+  const [lastNotifView, setLastNotifView] = useState(''); // timestamp ultima apertura notifiche
+  const userRef = React.useRef(null); // ref per user in closure async
   const [typeFilter, setTypeFilter] = useState('tutti');
+
+  useEffect(() => { userRef.current = user; }, [user]);
 
   useEffect(() => {
     const initUsers = async () => {
@@ -1529,7 +1539,7 @@ export default function App() {
     let firstNotifLoad = true;
     const unsubNotifs = onSnapshot(query(collection(db, 'notifications'), orderBy('createdAt', 'desc')), snap => {
       const newNotifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (!firstNotifLoad && snap.docChanges().some(c => c.type === 'added')) playBip();
+      if (!firstNotifLoad && snap.docChanges().some(c => c.type === 'added' && (c.doc.data().to || '').toLowerCase() === (userRef.current?.name || '').toLowerCase())) playBip();
       firstNotifLoad = false;
       setNotifications(newNotifs);
     });
@@ -1609,7 +1619,7 @@ export default function App() {
     }
   };
 
-  const writeAuditLog = async ({ action, fromUser, toUser, type, nota = '', reqId = '' }) => {
+  const writeAuditLog = async ({ action, fromUser, toUser, type, nota = '', reqId = '', reqDates = null, reqValue = '' }) => {
     try {
       const now = new Date();
       const pad = (n) => String(n).padStart(2, '0');
@@ -1627,9 +1637,28 @@ export default function App() {
         action: action || '-',
         nota: nota || '',
         reqId: reqId || '',
+        reqDates: reqDates || null,
+        reqValue: reqValue || '',
         createdAt: now.toISOString()
       });
     } catch(e) { console.log('Audit log error:', e); }
+  };
+
+  // Helper: calcola valore leggibile da una request
+  const getReqValue = (r) => {
+    if (!r) return '';
+    if (r.type === 'ferie' || r.type === 'malattia' || r.type === 'trasferta' || r.type === 'fuorisede') {
+      const days = r.dates?.length || 0;
+      return days > 0 ? days + ' gg' : '';
+    }
+    if (r.type === 'permesso' || r.type === 'permesso104' || r.type === 'congedo') {
+      if (r.durationMinutes) {
+        const h = Math.floor(r.durationMinutes / 60);
+        const m = r.durationMinutes % 60;
+        return h > 0 ? (m > 0 ? h + 'h ' + m + 'm' : h + 'h') : m + 'm';
+      }
+    }
+    return '';
   };
 
   // BottomSheet component (shared)
@@ -2004,7 +2033,7 @@ export default function App() {
         });
       }
       await checkPolivalenza(dates, user);
-      await writeAuditLog({ action: 'inviata', fromUser: user, toUser: assignedTo, type: requestType, nota: form.nota || '' });
+      await writeAuditLog({ action: 'inviata', fromUser: user, toUser: assignedTo, type: requestType, nota: form.nota || '', reqDates: dates, reqValue: getReqValue({ type: requestType, dates, durationMinutes: mins }) });
       setSelection(null); setRecipientModal(null);
     };
 
@@ -2611,7 +2640,7 @@ export default function App() {
                                 const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
                                 await addDoc(collection(db, 'notifications'), {
                                   to: r.userName,
-                                  message: 'Richiesta di ' + typeLabel + dateInfo + ' APPROVATA' + (dayActionNote ? ' — ' + dayActionNote : '') + (r.status === 'rifiutato' ? ' (rivalutazione)' : ''),
+                                  message: 'Richiesta di ' + typeLabel + dateInfo + ' APPROVATA da ' + user.name + (dayActionNote ? ' — ' + dayActionNote : '') + (r.status === 'rifiutato' ? ' (rivalutazione)' : ''),
                                   date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
                                 });
                                 setDayActionReq(null); setDayActionNote('');
@@ -2633,7 +2662,7 @@ export default function App() {
                                 const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
                                 await addDoc(collection(db, 'notifications'), {
                                   to: r.userName,
-                                  message: 'Richiesta di ' + typeLabel + dateInfo + ' RIFIUTATA' + (dayActionNote ? ' — ' + dayActionNote : ''),
+                                  message: 'Richiesta di ' + typeLabel + dateInfo + ' RIFIUTATA da ' + user.name + (dayActionNote ? ' — ' + dayActionNote : ''),
                                   date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
                                 });
                                 setDayActionReq(null); setDayActionNote('');
@@ -2755,7 +2784,7 @@ export default function App() {
         ...(approvalNotes[req.id] ? { notaResponsabile: approvalNotes[req.id] } : {}),
         ...(req.recuperoOre ? { recuperoApproved: status === 'approvato_con_recupero' } : {})
       });
-      await writeAuditLog({ action: status, fromUser: user, toUser: req.userName, type: req.type, nota: approvalNotes[req.id] || '', reqId: req.id });
+      await writeAuditLog({ action: status, fromUser: user, toUser: req.userName, type: req.type, nota: approvalNotes[req.id] || '', reqId: req.id, reqDates: req.dates || null, reqValue: getReqValue(req) });
       await addDoc(collection(db, 'notifications'), {
         to: req.userName,
         message: (() => {
@@ -2765,7 +2794,7 @@ export default function App() {
             : '';
           const statusLabel = status === 'approvato_con_recupero' ? 'APPROVATA (recupero ore autorizzato)' : status === 'approvato' ? 'APPROVATA (recupero ore non autorizzato)' : 'RIFIUTATA';
           const nota = approvalNotes[req.id] || '';
-          return 'Richiesta di ' + typeLabel + dateInfo + ' ' + statusLabel + (nota ? ' — ' + nota : '');
+          return 'Richiesta di ' + typeLabel + dateInfo + ' ' + statusLabel + ' da ' + user.name + (nota ? ' — ' + nota : '');
         })(),
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
       });
@@ -2776,7 +2805,7 @@ export default function App() {
       await writeAuditLog({ action: 'approvata', fromUser: user, toUser: req.userName, type: 'fuorisede' });
       await addDoc(collection(db, 'notifications'), {
         to: req.userName,
-        message: 'Mancata timbratura del ' + formatDate(req.dates?.[0]) + ' APPROVATA.',
+        message: 'Mancata timbratura del ' + formatDate(req.dates?.[0]) + ' APPROVATA da ' + user.name + '.',
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
       });
     };
@@ -2868,7 +2897,7 @@ export default function App() {
                         message: (() => {
                           const typeLabel = r.type === 'trasferta' ? 'trasferta' : r.type === 'permesso' ? 'permesso' : r.type === 'fuorisede' ? 'fuori sede' : 'ferie';
                           const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
-                          return 'Richiesta di ' + typeLabel + dateInfo + ' APPROVATA (rivalutazione)';
+                          return 'Richiesta di ' + typeLabel + dateInfo + ' APPROVATA da ' + user.name + ' (rivalutazione)';
                         })(),
                         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
                       });
@@ -2964,6 +2993,7 @@ export default function App() {
   );
 
   const pendingCount = requests.filter(r => r.assignedTo?.toLowerCase() === user.name?.toLowerCase() && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco')).length;
+  const unreadNotifCount = notifications.filter(n => (n.to || '').toLowerCase() === (user.name || '').toLowerCase() && n.createdAt && n.createdAt > (lastNotifView || '0')).length;
   const showAdmin = user.role === 'amministratore' || user.role === 'CEO';
 
   return (
@@ -3029,9 +3059,13 @@ export default function App() {
         {user.role !== 'hrmanager' && <button onClick={() => setView('calendar')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'calendar' ? 'text-blue-400' : 'text-slate-500')}>
           <Calendar size={22}/><span className="text-[10px] font-black uppercase">Calendario</span>
         </button>}
-        {user.role !== 'hrmanager' && <button onClick={() => setView('notifications')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
+        {user.role !== 'hrmanager' && <button onClick={() => { setView('notifications'); setLastNotifView(new Date().toISOString()); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
           <Bell size={22}/><span className="text-[10px] font-black uppercase">Notifiche</span>
-          {pendingCount > 0 && <span className="absolute top-2 right-[calc(50%-20px)] bg-red-500 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[9px] font-black px-1">{pendingCount}</span>}
+          {(pendingCount > 0 || unreadNotifCount > 0) && (
+            <span className="absolute top-2 right-[calc(50%-20px)] bg-red-500 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[9px] font-black px-1 text-white">
+              {pendingCount > 0 ? pendingCount : unreadNotifCount}
+            </span>
+          )}
         </button>}
         {(user.role === 'amministratore') && (
           <button onClick={() => setView('users')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'users' ? 'text-blue-400' : 'text-slate-500')}>
