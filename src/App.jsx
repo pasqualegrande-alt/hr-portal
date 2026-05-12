@@ -2538,7 +2538,7 @@ export default function App() {
                               ? getTypeLabel(r.type)
                               : (displayName + (sigla ? ' ' + sigla : ''));
                             return (
-                              <div key={r.id} className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + getTypeBadgeColor(r.type, r.status)}>
+                              <div key={r.id} className={'text-[7px] px-1 rounded font-black text-slate-900 truncate leading-tight py-0.5 ' + getTypeBadgeColor(r.type, r.status)}>
                                 {label}
                               </div>
                             );
@@ -2603,7 +2603,7 @@ export default function App() {
                             {canAct && <span className="text-[9px] text-slate-400 font-bold">{isSelected ? '▲ chiudi' : '▼ gestisci'}</span>}
                           </div>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className={'px-2 py-0.5 rounded-full text-[10px] font-black uppercase text-white ' + getTypeBadgeColor(r.type, r.status)}>
+                            <span className={'px-2 py-0.5 rounded-full text-[10px] font-black uppercase text-slate-900 ' + getTypeBadgeColor(r.type, r.status)}>
                               {getTypeLabel(r.type)}
                             </span>
                             <span className={'text-[10px] font-black uppercase ' + statusTextColor}>{statusLabel}</span>
