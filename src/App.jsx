@@ -286,9 +286,7 @@ const LogView = ({ auditLogs, db }) => {
                     className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
                   />
                 </th>
-                {/* Data Richiesta */}
                 <th className="px-3 py-2 w-44 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('reqDates')}>Data rich. <SortIcon col="reqDates"/></th>
-                {/* Valore */}
                 <th className="px-3 py-2 w-20 cursor-pointer select-none" onClick={() => handleSort('reqValue')}>Valore <SortIcon col="reqValue"/></th>
                 {/* Azione */}
                 <th className="px-3 py-2 w-44">
@@ -1509,8 +1507,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [auditLogs, setAuditLogs] = useState([]);
   const [calFilter, setCalFilter] = useState(null); // inizializzato dopo login
-  const [lastNotifView, setLastNotifView] = useState(''); // timestamp ultima apertura notifiche
-  const userRef = React.useRef(null); // ref per user in closure async
+  const [lastNotifView, setLastNotifView] = useState('');
+  const userRef = React.useRef(null);
   const [typeFilter, setTypeFilter] = useState('tutti');
 
   useEffect(() => { userRef.current = user; }, [user]);
@@ -1644,18 +1642,15 @@ export default function App() {
     } catch(e) { console.log('Audit log error:', e); }
   };
 
-  // Helper: calcola valore leggibile da una request
   const getReqValue = (r) => {
     if (!r) return '';
-    if (r.type === 'ferie' || r.type === 'malattia' || r.type === 'trasferta' || r.type === 'fuorisede') {
-      const days = r.dates?.length || 0;
-      return days > 0 ? days + ' gg' : '';
+    if (['ferie','malattia','trasferta','fuorisede'].includes(r.type)) {
+      const d = r.dates?.length || 0; return d > 0 ? d + ' gg' : '';
     }
-    if (r.type === 'permesso' || r.type === 'permesso104' || r.type === 'congedo') {
+    if (['permesso','permesso104','congedo'].includes(r.type)) {
       if (r.durationMinutes) {
-        const h = Math.floor(r.durationMinutes / 60);
-        const m = r.durationMinutes % 60;
-        return h > 0 ? (m > 0 ? h + 'h ' + m + 'm' : h + 'h') : m + 'm';
+        const h = Math.floor(r.durationMinutes/60), m = r.durationMinutes%60;
+        return h > 0 ? (m > 0 ? h+'h '+m+'m' : h+'h') : m+'m';
       }
     }
     return '';
@@ -2504,6 +2499,7 @@ export default function App() {
             while (cells.length % 7 !== 0) cells.push(null);
             const rows = [];
             for (let r = 0; r < cells.length / 7; r++) rows.push(cells.slice(r * 7, r * 7 + 7));
+            const todayStr = new Date().toISOString().split('T')[0];
             return rows.map((row, ri) => {
               // Calcola numero settimana dal LUNEDÌ della riga (ISO: la settimana inizia il lunedì)
               // row[0]=Dom, row[1]=Lun — se lunedì esiste usalo, altrimenti usa il primo giorno reale dopo domenica
@@ -2521,13 +2517,14 @@ export default function App() {
                     const dStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
                     const isWeekend = new Date(dStr).getDay() === 0 || new Date(dStr).getDay() === 6;
                     const closure = getClosureForDate(dStr);
+                    const isToday = dStr === todayStr;
                     const dayReqs = visibleRequests.filter(r => r.dates && r.dates.includes(dStr)).slice().sort((a, b) => (a.createdAt||'').localeCompare(b.createdAt||''));
                     let cellBg = 'bg-white';
                     if (isWeekend) cellBg = 'bg-red-50/30';
                     else if (closure) cellBg = closure.contaComeFerie ? 'bg-purple-50' : 'bg-slate-100';
                     return (
-                      <div key={di} onClick={() => handleCellClick(dStr, isWeekend, closure, dayReqs)} className={'h-16 border border-slate-100 p-1 rounded-xl transition-all flex flex-col ' + cellBg + ((!isWeekend && !closure && user.role !== 'CEO') ? ' cursor-pointer active:bg-blue-50' : ' cursor-default')}>
-                        <span className={'text-[12px] font-bold shrink-0 ' + (isWeekend ? 'text-red-300' : closure ? (closure.contaComeFerie ? 'text-purple-400' : 'text-slate-400') : 'text-slate-400')}>{day}</span>
+                      <div key={di} onClick={() => handleCellClick(dStr, isWeekend, closure, dayReqs)} className={'h-16 p-1 rounded-xl transition-all flex flex-col ' + cellBg + (isToday ? ' border-2 border-blue-500' : ' border border-slate-100') + ((!isWeekend && !closure && user.role !== 'CEO') ? ' cursor-pointer active:bg-blue-50' : ' cursor-default')}>
+                        <span className={'text-[12px] font-bold shrink-0 ' + (isToday ? 'text-blue-600 font-black' : isWeekend ? 'text-red-300' : closure ? (closure.contaComeFerie ? 'text-purple-400' : 'text-slate-400') : 'text-slate-400')}>{day}</span>
                         <div className="overflow-y-auto flex-1 space-y-0.5 mt-0.5">
                           {closure && <div className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + (closure.contaComeFerie ? 'bg-purple-400' : 'bg-slate-400')}>Chiusura az.</div>}
                           {dayReqs.map(r => {
@@ -2603,7 +2600,7 @@ export default function App() {
                             {canAct && <span className="text-[9px] text-slate-400 font-bold">{isSelected ? '▲ chiudi' : '▼ gestisci'}</span>}
                           </div>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className={'px-2 py-0.5 rounded-full text-[10px] font-black uppercase text-slate-900 ' + getTypeBadgeColor(r.type, r.status)}>
+                            <span className={'px-2 py-0.5 rounded-full text-[10px] font-black uppercase text-white ' + getTypeBadgeColor(r.type, r.status)}>
                               {getTypeLabel(r.type)}
                             </span>
                             <span className={'text-[10px] font-black uppercase ' + statusTextColor}>{statusLabel}</span>
@@ -2640,7 +2637,7 @@ export default function App() {
                                 const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
                                 await addDoc(collection(db, 'notifications'), {
                                   to: r.userName,
-                                  message: 'Richiesta di ' + typeLabel + dateInfo + ' APPROVATA da ' + user.name + (dayActionNote ? ' — ' + dayActionNote : '') + (r.status === 'rifiutato' ? ' (rivalutazione)' : ''),
+                                  message: 'Richiesta di ' + typeLabel + dateInfo + ' APPROVATA' + (dayActionNote ? ' — ' + dayActionNote : '') + (r.status === 'rifiutato' ? ' (rivalutazione)' : ''),
                                   date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
                                 });
                                 setDayActionReq(null); setDayActionNote('');
@@ -2662,7 +2659,7 @@ export default function App() {
                                 const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
                                 await addDoc(collection(db, 'notifications'), {
                                   to: r.userName,
-                                  message: 'Richiesta di ' + typeLabel + dateInfo + ' RIFIUTATA da ' + user.name + (dayActionNote ? ' — ' + dayActionNote : ''),
+                                  message: 'Richiesta di ' + typeLabel + dateInfo + ' RIFIUTATA' + (dayActionNote ? ' — ' + dayActionNote : ''),
                                   date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
                                 });
                                 setDayActionReq(null); setDayActionNote('');
@@ -2792,7 +2789,11 @@ export default function App() {
           const dateInfo = req.dates && req.dates.length > 0
             ? (req.dates.length === 1 ? ' del ' + formatDate(req.dates[0]) : ' dal ' + formatDate(req.dates[0]) + ' al ' + formatDate(req.dates[req.dates.length - 1]) + ' (' + req.dates.length + ' gg)')
             : '';
-          const statusLabel = status === 'approvato_con_recupero' ? 'APPROVATA (recupero ore autorizzato)' : status === 'approvato' ? 'APPROVATA (recupero ore non autorizzato)' : 'RIFIUTATA';
+          const statusLabel = status === 'approvato_con_recupero'
+            ? 'APPROVATA (e recupero ore autorizzato)'
+            : status === 'approvato'
+              ? (req.recuperoOre ? 'APPROVATA (ma senza possibilità di recuperare le ore)' : 'APPROVATA')
+              : (req.recuperoOre ? 'PERMESSO E RECUPERO NON APPROVATI' : 'RIFIUTATA');
           const nota = approvalNotes[req.id] || '';
           return 'Richiesta di ' + typeLabel + dateInfo + ' ' + statusLabel + ' da ' + user.name + (nota ? ' — ' + nota : '');
         })(),
@@ -2805,7 +2806,7 @@ export default function App() {
       await writeAuditLog({ action: 'approvata', fromUser: user, toUser: req.userName, type: 'fuorisede' });
       await addDoc(collection(db, 'notifications'), {
         to: req.userName,
-        message: 'Mancata timbratura del ' + formatDate(req.dates?.[0]) + ' APPROVATA da ' + user.name + '.',
+        message: 'Mancata timbratura del ' + formatDate(req.dates?.[0]) + ' APPROVATA.',
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
       });
     };
@@ -2897,7 +2898,7 @@ export default function App() {
                         message: (() => {
                           const typeLabel = r.type === 'trasferta' ? 'trasferta' : r.type === 'permesso' ? 'permesso' : r.type === 'fuorisede' ? 'fuori sede' : 'ferie';
                           const dateInfo = r.dates?.length > 0 ? (r.dates.length === 1 ? ' del ' + formatDate(r.dates[0]) : ' dal ' + formatDate(r.dates[0]) + ' al ' + formatDate(r.dates[r.dates.length-1])) : '';
-                          return 'Richiesta di ' + typeLabel + dateInfo + ' APPROVATA da ' + user.name + ' (rivalutazione)';
+                          return 'Richiesta di ' + typeLabel + dateInfo + ' APPROVATA (rivalutazione)';
                         })(),
                         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false
                       });
@@ -2992,6 +2993,7 @@ export default function App() {
     </div>
   );
 
+  if (user.role === 'amministratore' && view === 'notifications') setView('calendar');
   const pendingCount = requests.filter(r => r.assignedTo?.toLowerCase() === user.name?.toLowerCase() && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco')).length;
   const unreadNotifCount = notifications.filter(n => (n.to || '').toLowerCase() === (user.name || '').toLowerCase() && n.createdAt && n.createdAt > (lastNotifView || '0')).length;
   const showAdmin = user.role === 'amministratore' || user.role === 'CEO';
@@ -3059,7 +3061,7 @@ export default function App() {
         {user.role !== 'hrmanager' && <button onClick={() => setView('calendar')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'calendar' ? 'text-blue-400' : 'text-slate-500')}>
           <Calendar size={22}/><span className="text-[10px] font-black uppercase">Calendario</span>
         </button>}
-        {user.role !== 'hrmanager' && <button onClick={() => { setView('notifications'); setLastNotifView(new Date().toISOString()); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
+        {user.role !== 'hrmanager' && user.role !== 'amministratore' && <button onClick={() => { setView('notifications'); setLastNotifView(new Date().toISOString()); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
           <Bell size={22}/><span className="text-[10px] font-black uppercase">Notifiche</span>
           {(pendingCount > 0 || unreadNotifCount > 0) && (
             <span className="absolute top-2 right-[calc(50%-20px)] bg-red-500 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[9px] font-black px-1 text-white">
