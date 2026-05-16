@@ -2332,7 +2332,7 @@ export default function App() {
               {isFuoriSede && (
                 <div className="mt-3 space-y-2">
                   <div className="p-3 bg-teal-50 border border-teal-100 rounded-2xl">
-                    <p className="text-xs font-black text-teal-600">Tutte le uscite fuori sede richiedono approvazione del responsabile</p>
+                    <p className="text-xs font-black text-teal-600">Il sistema considera sempre un'ora di pausa pranzo dalle 13:00 alle 14:00; se nel periodo in cui sei stat* fuori sede è compreso questo orario, indica solo l'orario di ingresso al mattino e di uscita nel pomeriggio.</p>
                   </div>
                   <label className="flex items-center gap-4 p-4 bg-slate-50 border rounded-2xl cursor-pointer">
                     <input type="checkbox" checked={form.mancataTimbratura} onChange={e => setForm({...form, mancataTimbratura: e.target.checked})} className="w-6 h-6 accent-teal-600" />
