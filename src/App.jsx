@@ -1727,14 +1727,15 @@ export default function App() {
   };
 
   const printModulo = (modulo) => {
+    const nomeFile = 'Mod_Trasferta_' + (modulo.userName||'').replace(/\s+/g,'-') + '_' + (modulo.commessa||'senza-commessa').replace(/\s+/g,'');
     const win = window.open('', '_blank');
     const totalSpese = (modulo.spese||[]).reduce((s,r)=>s+parseFloat(r.totale||0),0).toFixed(2);
     const totalKm = (modulo.kmRows||[]).reduce((s,r)=>s+parseFloat(r.totale||0),0).toFixed(2);
     const rows_spese = (modulo.spese||[]).map(r=>'<tr><td>'+r.descrizione+'</td><td>'+r.data+'</td><td style="text-align:right">€ '+r.totale+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
     const rows_km = (modulo.kmRows||[]).map(r=>'<tr><td>'+r.tipo+'</td><td style="text-align:right">'+r.km+'</td><td>'+r.data+'</td><td style="text-align:right">'+(r.indennizzo?'€ '+r.indennizzo:'—')+'</td><td style="text-align:right">'+(r.totale?'€ '+r.totale:'—')+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
-    win.document.write('<!DOCTYPE html><html><head><title>Modulo Trasferta</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#222;}h1{font-size:20px;font-weight:bold;text-transform:uppercase;margin-bottom:4px;color:#1A3661;}h2{font-size:13px;font-weight:bold;margin:20px 0 6px;border-bottom:2px solid #1A3661;padding-bottom:3px;color:#1A3661;text-transform:uppercase;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:8px;}.field label{font-size:9px;font-weight:bold;text-transform:uppercase;color:#888;display:block;}.field p{margin:0;padding:3px 0 3px;border-bottom:1px solid #ddd;font-weight:bold;}table{width:100%;border-collapse:collapse;margin-top:4px;}th{background:#1A3661;color:white;padding:6px 8px;text-align:left;font-size:11px;}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;}.total td{background:#f5f5f5;font-weight:bold;}.note-box{background:#fff3cd;padding:8px 12px;border-left:3px solid #ffc107;font-size:11px;margin-top:10px;}.approved{color:green;font-weight:bold;margin-top:16px;}@media print{button{display:none!important;}}</style></head><body>')
+    win.document.write('<!DOCTYPE html><html><head><title>'+nomeFile+'</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#222;}h1{font-size:20px;font-weight:bold;text-transform:uppercase;margin-bottom:4px;color:#1A3661;}h2{font-size:13px;font-weight:bold;margin:20px 0 6px;border-bottom:2px solid #1A3661;padding-bottom:3px;color:#1A3661;text-transform:uppercase;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:8px;}.field label{font-size:9px;font-weight:bold;text-transform:uppercase;color:#888;display:block;}.field p{margin:0;padding:3px 0 3px;border-bottom:1px solid #ddd;font-weight:bold;}table{width:100%;border-collapse:collapse;margin-top:4px;}th{background:#1A3661;color:white;padding:6px 8px;text-align:left;font-size:11px;}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;}.total td{background:#f5f5f5;font-weight:bold;}.note-box{background:#fff3cd;padding:8px 12px;border-left:3px solid #ffc107;font-size:11px;margin-top:10px;}.approved{color:green;font-weight:bold;margin-top:16px;}@media print{button{display:none!important;}}</style></head><body>')
     win.document.write('<button onclick="window.print()" style="margin-bottom:16px;padding:8px 20px;background:#1A3661;color:white;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#128438; Stampa / Salva PDF</button>')
-    win.document.write('<h1>Modulo di Trasferta Excogita</h1><p style="font-size:10px;color:#999;">Generato il '+new Date().toLocaleDateString('it-IT')+'</p>')
+    win.document.write('<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><h1 style="margin:0;">Modulo di Trasferta Excogita</h1><span style="font-size:10px;color:#999;text-align:right;">MOD. TR/02<br>del '+new Date().toLocaleDateString('it-IT')+'</span></div><p style="font-size:10px;color:#999;margin:0 0 12px;">Generato il '+new Date().toLocaleDateString('it-IT')+'</p>')
     win.document.write('<h2>Dati Trasferta</h2><div class="grid">')
     win.document.write('<div class="field"><label>Dipendente</label><p>'+(modulo.userName||'—')+'</p></div>')
     win.document.write('<div class="field"><label>Commessa Excogita</label><p>'+(modulo.commessa||'—')+'</p></div>')
@@ -3390,6 +3391,9 @@ export default function App() {
               {moduloFormData.kmRows.map((r,i) => <p key={i} className="text-sm">{r.tipo} · {r.km} km · {r.data}{r.note?' · '+r.note:''}</p>)}
               {moduloFormData.kmRows.length === 0 && <p className="text-slate-300 text-sm">Nessuna riga km inserita</p>}
             </div>
+            <button onClick={() => { setModuloMainStep('header'); }} className="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2">
+              ✏️ Correggi Modulo
+            </button>
             <button onClick={submitModulo} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-base">
               📤 Invia Modulo
             </button>
@@ -3440,17 +3444,27 @@ export default function App() {
             ? <p className="text-slate-300 text-sm font-bold text-center py-10">Nessun modulo {isHR ? 'ricevuto' : 'inviato'}</p>
             : <div className="space-y-3">
                 {myModuli.map(m => (
-                  <button key={m.id} onClick={() => { setModuloSelectedId(m.id); setHrKmEdits({}); }}
-                    className={'w-full text-left rounded-2xl p-4 shadow-sm border-l-4 ' + (m.status==='approvato' ? 'bg-green-50 border-green-400' : 'bg-orange-50 border-orange-400')}>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="font-black text-sm">{isHR ? m.userName+' — ' : ''}Trasferta a {m.destinazione}</p>
-                      <span className={'shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ' + (m.status==='approvato' ? 'bg-green-200 text-green-700' : 'bg-orange-200 text-orange-700')}>
-                        {m.status==='approvato' ? '✓ Appr.' : 'In attesa'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500">{m.dataInizio} → {m.dataFine} · {(m.spese||[]).length} spese · {(m.kmRows||[]).length} km</p>
-                    {m.commessa && <p className="text-xs text-slate-400">Commessa: {m.commessa}</p>}
-                  </button>
+                <div key={m.id} className={'rounded-2xl shadow-sm border-l-4 ' + (m.status==='approvato' ? 'bg-green-50 border-green-400' : 'bg-orange-50 border-orange-400')}>
+                    <button onClick={() => { setModuloSelectedId(m.id); setHrKmEdits({}); }} className="w-full text-left p-4">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="font-black text-sm">{isHR ? m.userName+' — ' : ''}Trasferta a {m.destinazione}</p>
+                        <span className={'shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ' + (m.status==='approvato' ? 'bg-green-200 text-green-700' : 'bg-orange-200 text-orange-700')}>
+                          {m.status==='approvato' ? '✓ Appr.' : 'In attesa'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">{m.dataInizio} → {m.dataFine} · {(m.spese||[]).length} spese · {(m.kmRows||[]).length} km</p>
+                      {m.commessa && <p className="text-xs text-slate-400">Commessa: {m.commessa}</p>}
+                    </button>
+                    {!isHR && (
+                      <button onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!window.confirm('Sei sicuro di voler cancellare il modulo?')) return;
+                        await deleteDoc(doc(db, 'moduliTrasferta', m.id));
+                      }} className="w-full flex items-center justify-center gap-2 py-2 border-t border-red-100 text-red-500 text-xs font-black uppercase rounded-b-2xl hover:bg-red-50">
+                        <X size={12}/> Cancella modulo
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
           }
