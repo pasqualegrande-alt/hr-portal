@@ -1756,7 +1756,7 @@ export default function App() {
     win.document.write('<h2>Spese Sostenute</h2><table><thead><tr><th>Descrizione</th><th>Data</th><th>Totale €</th><th>Note</th></tr></thead><tbody>')
     win.document.write(rows_spese)
     win.document.write('<tr class="total"><td colspan="2">TOTALE SPESE</td><td style="text-align:right">€ '+totalSpese+'</td><td></td></tr></tbody></table>')
-    win.document.write('<h2>Indennità Kilometrica</h2><table><thead><tr><th>Tipo veicolo</th><th>Km</th><th>Data</th><th>Ind. €/km</th><th>Totale €</th><th>Note</th></tr></thead><tbody>')
+    win.document.write('<h2>Indennità Kilometrica</h2><table><colgroup><col style="width:28%"><col style="width:8%;text-align:right"><col style="width:12%"><col style="width:15%;text-align:right"><col style="width:15%;text-align:right"><col style="width:22%"></colgroup><thead><tr><th>Tipo veicolo</th><th style="text-align:right">Km</th><th>Data</th><th style="text-align:right">Ind. €/km</th><th style="text-align:right">Totale €</th><th>Note</th></tr></thead><tbody>')
     win.document.write(rows_km)
     win.document.write('<tr class="total"><td colspan="4">TOTALE RIMBORSO KM</td><td style="text-align:right">€ '+totalKm+'</td><td></td></tr></tbody></table>')
     win.document.write('<div class="note-box">Indennizzo Kilometrico e Totale Rimborso sono a cura dell\'HR Manager.</div>')
