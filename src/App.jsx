@@ -1749,7 +1749,7 @@ export default function App() {
     win.document.write('<h2>Indennità Kilometrica</h2><table><thead><tr><th>Tipo veicolo</th><th>Km</th><th>Data</th><th>Ind. €/km</th><th>Totale €</th><th>Note</th></tr></thead><tbody>')
     win.document.write(rows_km)
     win.document.write('<tr class="total"><td colspan="4">TOTALE RIMBORSO KM</td><td style="text-align:right">€ '+totalKm+'</td><td></td></tr></tbody></table>')
-    win.document.write('<div class="note-box">Indennizzo Kilometrico e Totale Rimborso sono a cura dell'HR Manager.</div>')
+    win.document.write('<div class="note-box">Indennizzo Kilometrico e Totale Rimborso sono a cura dell\'HR Manager.</div>')
     if (modulo.status === 'approvato') {
       win.document.write('<p class="approved">&#10003; APPROVATO da '+(modulo.approvedBy||'—')+' il '+(modulo.approvedAt ? new Date(modulo.approvedAt).toLocaleDateString('it-IT') : '—')+'</p>')
     }
