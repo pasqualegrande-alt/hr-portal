@@ -1509,6 +1509,17 @@ export default function App() {
   const [calFilter, setCalFilter] = useState(null); // inizializzato dopo login
   const [lastNotifView, setLastNotifView] = useState('');
   const userRef = React.useRef(null);
+  // ─── MODULISTICA STATE ───────────────────────────────────────────────────
+  const [moduloStep, setModuloStep] = useState('list');
+  const [moduloMainStep, setModuloMainStep] = useState('header');
+  const [moduloFormData, setModuloFormData] = useState({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',spese:[],kmRows:[]});
+  const [moduloSpesa, setModuloSpesa] = useState({descrizione:'Aereo',data:'',totale:'',note:''});
+  const [moduloSpesaPhase, setModuloSpesaPhase] = useState('editing');
+  const [moduloKm, setModuloKm] = useState({tipo:'Auto',km:'',data:'',note:''});
+  const [moduloKmPhase, setModuloKmPhase] = useState('editing');
+  const [moduliList, setModuliList] = useState([]);
+  const [moduloSelectedId, setModuloSelectedId] = useState(null);
+  const [hrKmEdits, setHrKmEdits] = useState({});
   const [typeFilter, setTypeFilter] = useState('tutti');
 
   useEffect(() => { userRef.current = user; }, [user]);
@@ -1644,16 +1655,106 @@ export default function App() {
 
   const getReqValue = (r) => {
     if (!r) return '';
-    if (['ferie','malattia','trasferta','fuorisede'].includes(r.type)) {
-      const d = r.dates?.length || 0; return d > 0 ? d + ' gg' : '';
-    }
+    if (['ferie','malattia','trasferta','fuorisede'].includes(r.type)) { const d = r.dates?.length||0; return d>0?d+' gg':''; }
     if (['permesso','permesso104','congedo'].includes(r.type)) {
-      if (r.durationMinutes) {
-        const h = Math.floor(r.durationMinutes/60), m = r.durationMinutes%60;
-        return h > 0 ? (m > 0 ? h+'h '+m+'m' : h+'h') : m+'m';
-      }
+      if (r.durationMinutes) { const h=Math.floor(r.durationMinutes/60),m=r.durationMinutes%60; return h>0?(m>0?h+'h '+m+'m':h+'h'):m+'m'; }
     }
     return '';
+  };
+
+  // ─── MODULISTICA SUBSCRIPTION ───────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'moduliTrasferta'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, snap => {
+      setModuliList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [user]);
+
+  // ─── MODULISTICA HELPERS ─────────────────────────────────────────────────
+  const resetModuloForm = () => {
+    setModuloStep('list'); setModuloMainStep('header');
+    setModuloFormData({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',spese:[],kmRows:[]});
+    setModuloSpesa({descrizione:'Aereo',data:'',totale:'',note:''});
+    setModuloSpesaPhase('editing');
+    setModuloKm({tipo:'Auto',km:'',data:'',note:''});
+    setModuloKmPhase('editing');
+    setModuloSelectedId(null); setHrKmEdits({});
+  };
+
+  const submitModulo = async () => {
+    try {
+      const hrUser = users.find(u => u.role === 'hrmanager');
+      const docRef = await addDoc(collection(db, 'moduliTrasferta'), {
+        userId: user.id, userName: user.name,
+        ...moduloFormData,
+        status: 'in_attesa',
+        createdAt: new Date().toISOString(),
+      });
+      if (hrUser) {
+        await addDoc(collection(db, 'notifications'), {
+          to: hrUser.name,
+          message: 'Nuovo Modulo di Trasferta da ' + user.name + ' — ' + moduloFormData.destinazione,
+          type: 'modulistica', reqId: docRef.id,
+          createdAt: new Date().toISOString(), read: false,
+        });
+      }
+      resetModuloForm();
+      alert('Modulo inviato con successo!');
+    } catch(e) { console.error(e); alert("Errore nell'invio del modulo"); }
+  };
+
+  const approveModulo = async (modulo) => {
+    try {
+      const updatedKmRows = (modulo.kmRows||[]).map((row, i) => {
+        const ind = parseFloat(hrKmEdits[i]?.indennizzo ?? row.indennizzo ?? 0);
+        const km = parseFloat(row.km || 0);
+        return { ...row, indennizzo: String(ind), totale: (km * ind).toFixed(2) };
+      });
+      await updateDoc(doc(db, 'moduliTrasferta', modulo.id), {
+        kmRows: updatedKmRows, status: 'approvato',
+        approvedAt: new Date().toISOString(), approvedBy: user.name,
+      });
+      await addDoc(collection(db, 'notifications'), {
+        to: modulo.userName,
+        message: 'Modulo Trasferta per ' + modulo.destinazione + ' APPROVATO da ' + user.name,
+        type: 'modulistica', reqId: modulo.id,
+        createdAt: new Date().toISOString(), read: false,
+      });
+      setModuloSelectedId(null); setHrKmEdits({});
+    } catch(e) { console.error(e); }
+  };
+
+  const printModulo = (modulo) => {
+    const win = window.open('', '_blank');
+    const totalSpese = (modulo.spese||[]).reduce((s,r)=>s+parseFloat(r.totale||0),0).toFixed(2);
+    const totalKm = (modulo.kmRows||[]).reduce((s,r)=>s+parseFloat(r.totale||0),0).toFixed(2);
+    const rows_spese = (modulo.spese||[]).map(r=>'<tr><td>'+r.descrizione+'</td><td>'+r.data+'</td><td style="text-align:right">€ '+r.totale+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
+    const rows_km = (modulo.kmRows||[]).map(r=>'<tr><td>'+r.tipo+'</td><td style="text-align:right">'+r.km+'</td><td>'+r.data+'</td><td style="text-align:right">'+(r.indennizzo?'€ '+r.indennizzo:'—')+'</td><td style="text-align:right">'+(r.totale?'€ '+r.totale:'—')+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
+    win.document.write('<!DOCTYPE html><html><head><title>Modulo Trasferta</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#222;}h1{font-size:20px;font-weight:bold;text-transform:uppercase;margin-bottom:4px;color:#1A3661;}h2{font-size:13px;font-weight:bold;margin:20px 0 6px;border-bottom:2px solid #1A3661;padding-bottom:3px;color:#1A3661;text-transform:uppercase;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:8px;}.field label{font-size:9px;font-weight:bold;text-transform:uppercase;color:#888;display:block;}.field p{margin:0;padding:3px 0 3px;border-bottom:1px solid #ddd;font-weight:bold;}table{width:100%;border-collapse:collapse;margin-top:4px;}th{background:#1A3661;color:white;padding:6px 8px;text-align:left;font-size:11px;}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;}.total td{background:#f5f5f5;font-weight:bold;}.note-box{background:#fff3cd;padding:8px 12px;border-left:3px solid #ffc107;font-size:11px;margin-top:10px;}.approved{color:green;font-weight:bold;margin-top:16px;}@media print{button{display:none!important;}}</style></head><body>')
+    win.document.write('<button onclick="window.print()" style="margin-bottom:16px;padding:8px 20px;background:#1A3661;color:white;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#128438; Stampa / Salva PDF</button>')
+    win.document.write('<h1>Modulo di Trasferta Excogita</h1><p style="font-size:10px;color:#999;">Generato il '+new Date().toLocaleDateString('it-IT')+'</p>')
+    win.document.write('<h2>Dati Trasferta</h2><div class="grid">')
+    win.document.write('<div class="field"><label>Dipendente</label><p>'+(modulo.userName||'—')+'</p></div>')
+    win.document.write('<div class="field"><label>Commessa Excogita</label><p>'+(modulo.commessa||'—')+'</p></div>')
+    win.document.write('<div class="field"><label>Destinazione</label><p>'+(modulo.destinazione||'—')+'</p></div>')
+    win.document.write('<div class="field"><label>Indirizzo</label><p>'+(modulo.indirizzo||'—')+'</p></div>')
+    win.document.write('<div class="field"><label>Data/Ora Inizio</label><p>'+(modulo.dataInizio||'—')+' '+(modulo.oraInizio||'')+'</p></div>')
+    win.document.write('<div class="field"><label>Data/Ora Fine</label><p>'+(modulo.dataFine||'—')+' '+(modulo.oraFine||'')+'</p></div>')
+    win.document.write('</div>')
+    win.document.write('<h2>Spese Sostenute</h2><table><thead><tr><th>Descrizione</th><th>Data</th><th>Totale €</th><th>Note</th></tr></thead><tbody>')
+    win.document.write(rows_spese)
+    win.document.write('<tr class="total"><td colspan="2">TOTALE SPESE</td><td style="text-align:right">€ '+totalSpese+'</td><td></td></tr></tbody></table>')
+    win.document.write('<h2>Indennità Kilometrica</h2><table><thead><tr><th>Tipo veicolo</th><th>Km</th><th>Data</th><th>Ind. €/km</th><th>Totale €</th><th>Note</th></tr></thead><tbody>')
+    win.document.write(rows_km)
+    win.document.write('<tr class="total"><td colspan="4">TOTALE RIMBORSO KM</td><td style="text-align:right">€ '+totalKm+'</td><td></td></tr></tbody></table>')
+    win.document.write('<div class="note-box">Indennizzo Kilometrico e Totale Rimborso sono a cura dell'HR Manager.</div>')
+    if (modulo.status === 'approvato') {
+      win.document.write('<p class="approved">&#10003; APPROVATO da '+(modulo.approvedBy||'—')+' il '+(modulo.approvedAt ? new Date(modulo.approvedAt).toLocaleDateString('it-IT') : '—')+'</p>')
+    }
+    win.document.write('</body></html>');
+    win.document.close();
   };
 
   // BottomSheet component (shared)
@@ -2994,6 +3095,370 @@ export default function App() {
   );
 
   if (user.role === 'amministratore' && view === 'notifications') setView('calendar');
+  // ─── MODULISTICA VIEW ────────────────────────────────────────────────────
+  const ModulisticaView = () => {
+    const isHR = user.role === 'hrmanager';
+    const selectedModulo = moduliList.find(m => m.id === moduloSelectedId);
+
+    // ── DETAIL ────────────────────────────────────────────────────────────────
+    if (moduloSelectedId && selectedModulo) {
+      return (
+        <div className="px-4 py-4 max-w-2xl mx-auto pb-24">
+          <div className="flex items-center gap-3 mb-5">
+            <button onClick={() => { setModuloSelectedId(null); setHrKmEdits({}); }} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
+            <div className="flex-1">
+              <h2 className="font-black uppercase italic text-lg">Modulo Trasferta</h2>
+              <p className="text-xs text-slate-400">{selectedModulo.destinazione} · {selectedModulo.dataInizio}</p>
+            </div>
+            <span className={'px-3 py-1 rounded-full text-[10px] font-black uppercase ' + (selectedModulo.status === 'approvato' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700')}>
+              {selectedModulo.status === 'approvato' ? '✓ Approvato' : 'In attesa'}
+            </span>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+            <h3 className="font-black uppercase text-[10px] text-slate-400 mb-3">Dati Trasferta</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {[['Dipendente', selectedModulo.userName], ['Commessa', selectedModulo.commessa||'—'], ['Destinazione', selectedModulo.destinazione||'—'], ['Indirizzo', selectedModulo.indirizzo||'—'], ['Inizio', (selectedModulo.dataInizio||'—')+' '+selectedModulo.oraInizio], ['Fine', (selectedModulo.dataFine||'—')+' '+selectedModulo.oraFine]].map(([k,v]) => (
+                <div key={k}><p className="text-[9px] font-black text-slate-400 uppercase">{k}</p><p className="font-bold text-sm">{v}</p></div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+            <h3 className="font-black uppercase text-[10px] text-slate-400 mb-3">Spese Sostenute</h3>
+            {(selectedModulo.spese||[]).length === 0
+              ? <p className="text-slate-300 text-sm">Nessuna spesa inserita</p>
+              : <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="bg-slate-900 text-white"><th className="p-2 text-left rounded-tl-lg">Descrizione</th><th className="p-2 text-left">Data</th><th className="p-2 text-right">Tot. €</th><th className="p-2 text-left rounded-tr-lg">Note</th></tr></thead>
+                    <tbody>
+                      {(selectedModulo.spese||[]).map((r,i) => (
+                        <tr key={i} className="border-b border-slate-100"><td className="p-2 font-bold">{r.descrizione}</td><td className="p-2">{r.data}</td><td className="p-2 text-right font-bold">€ {r.totale}</td><td className="p-2 text-slate-400">{r.note||'—'}</td></tr>
+                      ))}
+                      <tr className="bg-slate-50"><td colSpan="2" className="p-2 font-black text-xs uppercase">Totale spese</td><td className="p-2 text-right font-black text-blue-600">€ {(selectedModulo.spese||[]).reduce((s,r)=>s+parseFloat(r.totale||0),0).toFixed(2)}</td><td></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+            }
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+            <h3 className="font-black uppercase text-[10px] text-slate-400 mb-1">Indennità Kilometrica</h3>
+            <p className="text-[10px] text-orange-500 font-bold mb-3">Indennizzo e Totale sono a cura dell'HR Manager</p>
+            {(selectedModulo.kmRows||[]).length === 0
+              ? <p className="text-slate-300 text-sm">Nessuna riga inserita</p>
+              : <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="bg-slate-900 text-white"><th className="p-2 text-left rounded-tl-lg">Tipo</th><th className="p-2 text-right">Km</th><th className="p-2 text-left">Data</th><th className="p-2 text-right">Ind. €/km</th><th className="p-2 text-right">Totale €</th><th className="p-2 text-left rounded-tr-lg">Note</th></tr></thead>
+                    <tbody>
+                      {(selectedModulo.kmRows||[]).map((r,i) => (
+                        <tr key={i} className="border-b border-slate-100">
+                          <td className="p-2 font-bold">{r.tipo}</td>
+                          <td className="p-2 text-right">{r.km}</td>
+                          <td className="p-2">{r.data}</td>
+                          <td className="p-2 text-right">
+                            {isHR && selectedModulo.status !== 'approvato'
+                              ? <input type="number" step="0.01" min="0" value={hrKmEdits[i]?.indennizzo ?? r.indennizzo ?? ''} onChange={e => setHrKmEdits(prev => ({...prev, [i]: {...(prev[i]||{}), indennizzo: e.target.value}}))} className="w-16 border rounded p-0.5 text-right outline-none focus:border-blue-400 text-xs" placeholder="0.00"/>
+                              : (r.indennizzo ? '€ '+r.indennizzo : '—')
+                            }
+                          </td>
+                          <td className="p-2 text-right font-bold text-blue-600">
+                            {isHR && selectedModulo.status !== 'approvato'
+                              ? (hrKmEdits[i]?.indennizzo ? '€ '+(parseFloat(r.km||0)*parseFloat(hrKmEdits[i].indennizzo||0)).toFixed(2) : '—')
+                              : (r.totale ? '€ '+r.totale : '—')
+                            }
+                          </td>
+                          <td className="p-2 text-slate-400">{r.note||'—'}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-slate-50">
+                        <td colSpan="4" className="p-2 font-black text-xs uppercase">Totale rimborso km</td>
+                        <td className="p-2 text-right font-black text-blue-600">€ {
+                          isHR && selectedModulo.status !== 'approvato'
+                            ? (selectedModulo.kmRows||[]).reduce((s,r,i) => s+(parseFloat(r.km||0)*parseFloat(hrKmEdits[i]?.indennizzo||0)),0).toFixed(2)
+                            : (selectedModulo.kmRows||[]).reduce((s,r) => s+parseFloat(r.totale||0),0).toFixed(2)
+                        }</td>
+                        <td></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+            }
+          </div>
+
+          <div className="flex gap-3">
+            <button onClick={() => printModulo(selectedModulo)} className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2">
+              <Download size={15}/> Esporta PDF
+            </button>
+            {isHR && selectedModulo.status !== 'approvato' && (
+              <button onClick={() => approveModulo(selectedModulo)} className="flex-1 bg-green-500 text-white py-4 rounded-2xl font-black uppercase text-sm">
+                ✓ Approva
+              </button>
+            )}
+          </div>
+          {isHR && selectedModulo.status === 'approvato' && (
+            <p className="text-center text-green-600 font-black text-sm mt-4">✓ Approvato da {selectedModulo.approvedBy}</p>
+          )}
+        </div>
+      );
+    }
+
+    // ── NUOVO MODULO ───────────────────────────────────────────────────────────
+    if (moduloStep === 'new') {
+
+      // HEADER
+      if (moduloMainStep === 'header') return (
+        <div className="px-4 py-4 max-w-lg mx-auto pb-24">
+          <div className="flex items-center gap-3 mb-5">
+            <button onClick={resetModuloForm} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
+            <div><h2 className="font-black uppercase italic text-lg">Modulo di Trasferta</h2><p className="text-xs text-slate-400">Passo 1 di 3 — Dati trasferta</p></div>
+          </div>
+          <div className="space-y-3">
+            <div className="bg-blue-50 rounded-2xl p-3 flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-lg">1</div>
+              <div><p className="font-black text-slate-800 text-sm">Dati Trasferta</p><p className="text-xs text-slate-400">Destinazione e periodo</p></div>
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Dipendente</p>
+              <p className="font-black text-slate-800">{user.name}</p>
+            </div>
+            {[['Destinazione *','destinazione','Es. Milano, Ufficio ABC'],['Indirizzo destinazione','indirizzo','Via Roma 1, 20100 Milano'],['Commessa Excogita','commessa','Codice commessa (es. E26C001)']].map(([label,key,ph]) => (
+              <div key={key} className="bg-white rounded-2xl p-4 shadow-sm">
+                <label className="text-[10px] font-black text-slate-400 uppercase">{label}</label>
+                <input type="text" value={moduloFormData[key]} onChange={e => setModuloFormData(p => ({...p, [key]: e.target.value}))} placeholder={ph} className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm focus:border-blue-400"/>
+              </div>
+            ))}
+            <div className="grid grid-cols-2 gap-3">
+              {[['Data Inizio *','dataInizio','date'],['Ora Inizio','oraInizio','time'],['Data Fine *','dataFine','date'],['Ora Fine','oraFine','time']].map(([label,key,type]) => (
+                <div key={key} className="bg-white rounded-2xl p-4 shadow-sm">
+                  <label className="text-[10px] font-black text-slate-400 uppercase">{label}</label>
+                  <input type={type} value={moduloFormData[key]} onChange={e => setModuloFormData(p => ({...p, [key]: e.target.value}))} className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm focus:border-blue-400"/>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => {
+              if (!moduloFormData.destinazione || !moduloFormData.dataInizio || !moduloFormData.dataFine) { alert('Compila Destinazione, Data Inizio e Data Fine'); return; }
+              setModuloMainStep('spese'); setModuloSpesa({descrizione:'Aereo',data:'',totale:'',note:''}); setModuloSpesaPhase('editing');
+            }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">Avanti → Spese</button>
+          </div>
+        </div>
+      );
+
+      // SPESE
+      if (moduloMainStep === 'spese') return (
+        <div className="px-4 py-4 max-w-lg mx-auto pb-24">
+          <div className="flex items-center gap-3 mb-3">
+            <button onClick={() => setModuloMainStep('header')} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
+            <div><h2 className="font-black uppercase italic text-lg">Spese Sostenute</h2><p className="text-xs text-slate-400">Passo 2 di 3 · {moduloFormData.spese.length} inserita/e</p></div>
+          </div>
+          {moduloFormData.spese.length > 0 && (
+            <div className="bg-white rounded-2xl p-3 shadow-sm mb-4 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="bg-slate-900 text-white"><th className="p-2 text-left rounded-tl">Descrizione</th><th className="p-2">Data</th><th className="p-2 text-right">€</th><th className="p-2 rounded-tr">Note</th></tr></thead>
+                <tbody>{moduloFormData.spese.map((r,i) => <tr key={i} className="border-b border-slate-100"><td className="p-2 font-bold">{r.descrizione}</td><td className="p-2">{r.data}</td><td className="p-2 text-right font-bold">€{r.totale}</td><td className="p-2 text-slate-400 text-[10px]">{r.note||'—'}</td></tr>)}</tbody>
+              </table>
+            </div>
+          )}
+          {moduloSpesaPhase === 'editing' && (
+            <div className="space-y-3">
+              <div className="bg-white rounded-2xl p-4 shadow-sm">
+                <label className="text-[10px] font-black text-slate-400 uppercase">Descrizione</label>
+                <select value={moduloSpesa.descrizione} onChange={e => setModuloSpesa(p => ({...p, descrizione: e.target.value}))} className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm">
+                  {['Aereo','Treno','Trasporto pubblico','Taxi','Alloggio','Pasto','Imprevisto','Altro'].map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white rounded-2xl p-4 shadow-sm">
+                  <label className="text-[10px] font-black text-slate-400 uppercase">Data</label>
+                  <input type="date" value={moduloSpesa.data} onChange={e => setModuloSpesa(p => ({...p, data: e.target.value}))} className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm"/>
+                </div>
+                <div className="bg-white rounded-2xl p-4 shadow-sm">
+                  <label className="text-[10px] font-black text-slate-400 uppercase">Totale €</label>
+                  <input type="number" step="0.01" min="0" value={moduloSpesa.totale} onChange={e => setModuloSpesa(p => ({...p, totale: e.target.value}))} placeholder="0.00" className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm"/>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl p-4 shadow-sm">
+                <label className="text-[10px] font-black text-slate-400 uppercase">Note (opzionale)</label>
+                <input type="text" value={moduloSpesa.note} onChange={e => setModuloSpesa(p => ({...p, note: e.target.value}))} placeholder="Es. scontrino fiscale allegato" className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm"/>
+              </div>
+              <button onClick={() => {
+                if (!moduloSpesa.data || !moduloSpesa.totale) { alert('Inserisci data e importo'); return; }
+                setModuloFormData(p => ({...p, spese: [...p.spese, {...moduloSpesa}]}));
+                setModuloSpesaPhase('confirm');
+              }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">+ Aggiungi spesa</button>
+              <button onClick={() => { setModuloMainStep('km'); setModuloKm({tipo:'Auto',km:'',data:'',note:''}); setModuloKmPhase('editing'); }} className="w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black uppercase text-sm">
+                {moduloFormData.spese.length === 0 ? 'Nessuna spesa → Avanti' : 'Avanti senza aggiungere'}
+              </button>
+            </div>
+          )}
+          {moduloSpesaPhase === 'confirm' && (
+            <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
+              <p className="font-black text-slate-800 text-base mb-5">Vuoi aggiungere un'altra spesa?</p>
+              <div className="flex gap-3">
+                <button onClick={() => { setModuloSpesa({descrizione:'Aereo',data:'',totale:'',note:''}); setModuloSpesaPhase('editing'); }} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">Sì</button>
+                <button onClick={() => { setModuloMainStep('km'); setModuloKm({tipo:'Auto',km:'',data:'',note:''}); setModuloKmPhase('editing'); }} className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-2xl font-black uppercase">No, avanti</button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+
+      // KM
+      if (moduloMainStep === 'km') return (
+        <div className="px-4 py-4 max-w-lg mx-auto pb-24">
+          <div className="flex items-center gap-3 mb-3">
+            <button onClick={() => { setModuloMainStep('spese'); setModuloSpesaPhase(moduloFormData.spese.length > 0 ? 'confirm' : 'editing'); }} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
+            <div><h2 className="font-black uppercase italic text-lg">Indennità Km</h2><p className="text-xs text-slate-400">Passo 3 di 3 · {moduloFormData.kmRows.length} riga/e inserita/e</p></div>
+          </div>
+          <div className="bg-blue-50 rounded-2xl p-3 mb-4">
+            <p className="text-xs text-blue-700 font-bold">Indennizzo Km e Totale Rimborso saranno completati dall'HR Manager dopo l'invio.</p>
+          </div>
+          {moduloFormData.kmRows.length > 0 && (
+            <div className="bg-white rounded-2xl p-3 shadow-sm mb-4 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="bg-slate-900 text-white"><th className="p-2 rounded-tl">Tipo</th><th className="p-2 text-right">Km</th><th className="p-2">Data</th><th className="p-2 rounded-tr">Note</th></tr></thead>
+                <tbody>{moduloFormData.kmRows.map((r,i) => <tr key={i} className="border-b border-slate-100"><td className="p-2 font-bold">{r.tipo}</td><td className="p-2 text-right">{r.km}</td><td className="p-2">{r.data}</td><td className="p-2 text-slate-400 text-[10px]">{r.note||'—'}</td></tr>)}</tbody>
+              </table>
+            </div>
+          )}
+          {moduloKmPhase === 'editing' && (
+            <div className="space-y-3">
+              <div className="bg-white rounded-2xl p-4 shadow-sm">
+                <label className="text-[10px] font-black text-slate-400 uppercase">Tipo autoveicolo</label>
+                <select value={moduloKm.tipo} onChange={e => setModuloKm(p => ({...p, tipo: e.target.value}))} className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm">
+                  {['Auto','Moto','Altro (specificare nelle note)'].map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white rounded-2xl p-4 shadow-sm">
+                  <label className="text-[10px] font-black text-slate-400 uppercase">Km percorsi</label>
+                  <input type="number" min="0" value={moduloKm.km} onChange={e => setModuloKm(p => ({...p, km: e.target.value}))} placeholder="0" className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm"/>
+                </div>
+                <div className="bg-white rounded-2xl p-4 shadow-sm">
+                  <label className="text-[10px] font-black text-slate-400 uppercase">Data</label>
+                  <input type="date" value={moduloKm.data} onChange={e => setModuloKm(p => ({...p, data: e.target.value}))} className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm"/>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl p-4 shadow-sm">
+                <label className="text-[10px] font-black text-slate-400 uppercase">Note (opzionale)</label>
+                <input type="text" value={moduloKm.note} onChange={e => setModuloKm(p => ({...p, note: e.target.value}))} placeholder="Es. tipo veicolo se Altro" className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm"/>
+              </div>
+              <button onClick={() => {
+                if (!moduloKm.km || !moduloKm.data) { alert('Inserisci km e data'); return; }
+                setModuloFormData(p => ({...p, kmRows: [...p.kmRows, {...moduloKm}]}));
+                setModuloKmPhase('confirm');
+              }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">+ Aggiungi riga km</button>
+              <button onClick={() => setModuloMainStep('review')} className="w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black uppercase text-sm">
+                {moduloFormData.kmRows.length === 0 ? 'Nessun km → Avanti' : 'Avanti senza aggiungere'}
+              </button>
+            </div>
+          )}
+          {moduloKmPhase === 'confirm' && (
+            <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
+              <p className="font-black text-slate-800 text-base mb-5">Vuoi aggiungere un'altra riga km?</p>
+              <div className="flex gap-3">
+                <button onClick={() => { setModuloKm({tipo:'Auto',km:'',data:'',note:''}); setModuloKmPhase('editing'); }} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">Sì</button>
+                <button onClick={() => setModuloMainStep('review')} className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-2xl font-black uppercase">No, avanti</button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+
+      // REVIEW + SUBMIT
+      if (moduloMainStep === 'review') return (
+        <div className="px-4 py-4 max-w-lg mx-auto pb-24">
+          <div className="flex items-center gap-3 mb-5">
+            <button onClick={() => { setModuloMainStep('km'); setModuloKmPhase(moduloFormData.kmRows.length > 0 ? 'confirm' : 'editing'); }} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
+            <div><h2 className="font-black uppercase italic text-lg">Riepilogo</h2><p className="text-xs text-slate-400">Verifica e invia</p></div>
+          </div>
+          <div className="space-y-3">
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase mb-2">Dati Trasferta</h3>
+              <p className="font-black">{user.name}</p>
+              <p className="text-sm text-slate-600">{moduloFormData.destinazione}{moduloFormData.indirizzo ? ' — '+moduloFormData.indirizzo : ''}</p>
+              <p className="text-sm text-slate-600">{moduloFormData.dataInizio} {moduloFormData.oraInizio} → {moduloFormData.dataFine} {moduloFormData.oraFine}</p>
+              {moduloFormData.commessa && <p className="text-sm text-slate-500">Commessa: {moduloFormData.commessa}</p>}
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase mb-2">{moduloFormData.spese.length} spesa/e · Tot. € {moduloFormData.spese.reduce((s,r)=>s+parseFloat(r.totale||0),0).toFixed(2)}</h3>
+              {moduloFormData.spese.map((r,i) => <p key={i} className="text-sm">{r.descrizione} · {r.data} · <b>€{r.totale}</b>{r.note?' · '+r.note:''}</p>)}
+              {moduloFormData.spese.length === 0 && <p className="text-slate-300 text-sm">Nessuna spesa inserita</p>}
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase mb-2">{moduloFormData.kmRows.length} riga/e km</h3>
+              {moduloFormData.kmRows.map((r,i) => <p key={i} className="text-sm">{r.tipo} · {r.km} km · {r.data}{r.note?' · '+r.note:''}</p>)}
+              {moduloFormData.kmRows.length === 0 && <p className="text-slate-300 text-sm">Nessuna riga km inserita</p>}
+            </div>
+            <button onClick={submitModulo} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-base">
+              📤 Invia Modulo
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── LIST VIEW ─────────────────────────────────────────────────────────────
+    const myModuli = isHR
+      ? [...moduliList].sort((a,b) => {
+          if (a.status==='in_attesa' && b.status!=='in_attesa') return -1;
+          if (b.status==='in_attesa' && a.status!=='in_attesa') return 1;
+          return (b.createdAt||'').localeCompare(a.createdAt||'');
+        })
+      : moduliList.filter(m => m.userId === user.id).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+
+    const inAttesa = myModuli.filter(m => m.status === 'in_attesa').length;
+
+    return (
+      <div className="px-4 py-4 max-w-lg mx-auto pb-24">
+        <h2 className="text-xl font-black uppercase italic mb-1">Modulistica</h2>
+        <p className="text-sm text-slate-400 mb-5">{isHR ? 'Gestione e approvazione moduli' : 'Compila e invia i moduli aziendali'}</p>
+
+        {!isHR && (
+          <div className="mb-6">
+            <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Moduli disponibili</p>
+            <button onClick={() => { setModuloStep('new'); setModuloMainStep('header'); setModuloFormData({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',spese:[],kmRows:[]}); setModuloSpesaPhase('editing'); setModuloKmPhase('editing'); }}
+              className="w-full bg-white border-2 border-blue-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm active:bg-blue-50 text-left">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <Briefcase size={22} className="text-blue-600"/>
+              </div>
+              <div className="flex-1">
+                <p className="font-black text-slate-800">Modulo di Trasferta</p>
+                <p className="text-xs text-slate-400 mt-0.5">Rimborso spese e indennità km</p>
+              </div>
+              <ChevronRight size={18} className="text-slate-300"/>
+            </button>
+          </div>
+        )}
+
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-[10px] font-black text-slate-400 uppercase">{isHR ? 'Tutti i moduli' : 'Le mie richieste'}</p>
+            {inAttesa > 0 && <span className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full text-[9px] font-black">{inAttesa} in attesa</span>}
+          </div>
+          {myModuli.length === 0
+            ? <p className="text-slate-300 text-sm font-bold text-center py-10">Nessun modulo {isHR ? 'ricevuto' : 'inviato'}</p>
+            : <div className="space-y-3">
+                {myModuli.map(m => (
+                  <button key={m.id} onClick={() => { setModuloSelectedId(m.id); setHrKmEdits({}); }}
+                    className={'w-full text-left rounded-2xl p-4 shadow-sm border-l-4 ' + (m.status==='approvato' ? 'bg-green-50 border-green-400' : 'bg-orange-50 border-orange-400')}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-black text-sm">{isHR ? m.userName+' — ' : ''}Trasferta a {m.destinazione}</p>
+                      <span className={'shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ' + (m.status==='approvato' ? 'bg-green-200 text-green-700' : 'bg-orange-200 text-orange-700')}>
+                        {m.status==='approvato' ? '✓ Appr.' : 'In attesa'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">{m.dataInizio} → {m.dataFine} · {(m.spese||[]).length} spese · {(m.kmRows||[]).length} km</p>
+                    {m.commessa && <p className="text-xs text-slate-400">Commessa: {m.commessa}</p>}
+                  </button>
+                ))}
+              </div>
+          }
+        </div>
+      </div>
+    );
+  };
+
   const pendingCount = requests.filter(r => r.assignedTo?.toLowerCase() === user.name?.toLowerCase() && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco')).length;
   const unreadNotifCount = notifications.filter(n => (n.to || '').toLowerCase() === (user.name || '').toLowerCase() && n.createdAt && n.createdAt > (lastNotifView || '0')).length;
   const showAdmin = user.role === 'amministratore' || user.role === 'CEO';
@@ -3020,6 +3485,7 @@ export default function App() {
           {view === 'card' && (user.role === 'amministratore' || user.role === 'CEO') && <EmployeeCardView users={users} requests={requests} closures={closures} currentUser={user} />}
           {view === 'hr' && (user.role === 'amministratore' || user.role === 'CEO') && <HRView users={users} requests={requests} closures={closures} auditLogs={auditLogs} />}
           {view === 'notifications' && <NotificationsView />}
+      {view === 'modulistica' && <ModulisticaView />}
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && (showAdmin || user.role === 'hrmanager') && <ClosuresView />}
           {view === 'log' && (showAdmin || user.role === 'hrmanager') && <LogView auditLogs={auditLogs} db={db} />}
@@ -3061,6 +3527,12 @@ export default function App() {
         {user.role !== 'hrmanager' && <button onClick={() => setView('calendar')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'calendar' ? 'text-blue-400' : 'text-slate-500')}>
           <Calendar size={22}/><span className="text-[10px] font-black uppercase">Calendario</span>
         </button>}
+        {(user.role === 'dipendente' || user.role === 'responsabile' || user.role === 'hrmanager') && (
+          <button onClick={() => { setView('modulistica'); setModuloStep('list'); setModuloSelectedId(null); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'modulistica' ? 'text-blue-400' : 'text-slate-500')}>
+            <Briefcase size={22}/>
+            <span className="text-[9px] font-black uppercase">Modulistica</span>
+          </button>
+        )}
         {user.role !== 'hrmanager' && user.role !== 'amministratore' && <button onClick={() => { setView('notifications'); setLastNotifView(new Date().toISOString()); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
           <Bell size={22}/><span className="text-[10px] font-black uppercase">Notifiche</span>
           {(pendingCount > 0 || unreadNotifCount > 0) && (
