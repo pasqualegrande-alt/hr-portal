@@ -3485,7 +3485,7 @@ export default function App() {
           {view === 'card' && (user.role === 'amministratore' || user.role === 'CEO') && <EmployeeCardView users={users} requests={requests} closures={closures} currentUser={user} />}
           {view === 'hr' && (user.role === 'amministratore' || user.role === 'CEO') && <HRView users={users} requests={requests} closures={closures} auditLogs={auditLogs} />}
           {view === 'notifications' && <NotificationsView />}
-      {view === 'modulistica' && <ModulisticaView />}
+      {view === 'modulistica' && ModulisticaView()}
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && (showAdmin || user.role === 'hrmanager') && <ClosuresView />}
           {view === 'log' && (showAdmin || user.role === 'hrmanager') && <LogView auditLogs={auditLogs} db={db} />}
