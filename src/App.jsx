@@ -3232,22 +3232,23 @@ export default function App() {
               <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Dipendente</p>
               <p className="font-black text-slate-800">{user.name}</p>
             </div>
-            {[['Destinazione *','destinazione','Es. Milano, Ufficio ABC'],['Indirizzo destinazione','indirizzo','Via Roma 1, 20100 Milano'],['Commessa Excogita','commessa','Codice commessa (es. E26C001)']].map(([label,key,ph]) => (
+            {[['Destinazione *','destinazione','Es. Milano, Ufficio ABC'],['Indirizzo destinazione (opzionale)','indirizzo','Via Roma 1, 20100 Milano'],['Commessa Excogita *','commessa','Codice commessa (es. E26C001)']].map(([label,key,ph]) => (
               <div key={key} className="bg-white rounded-2xl p-4 shadow-sm">
                 <label className="text-[10px] font-black text-slate-400 uppercase">{label}</label>
                 <input type="text" value={moduloFormData[key]} onChange={e => setModuloFormData(p => ({...p, [key]: e.target.value}))} placeholder={ph} className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm focus:border-blue-400"/>
               </div>
             ))}
             <div className="grid grid-cols-2 gap-3">
-              {[['Data Inizio *','dataInizio','date'],['Ora Inizio','oraInizio','time'],['Data Fine *','dataFine','date'],['Ora Fine','oraFine','time']].map(([label,key,type]) => (
+              {[['Data Inizio *','dataInizio','date'],['Ora Inizio *','oraInizio','time'],['Data Fine *','dataFine','date'],['Ora Fine *','oraFine','time']].map(([label,key,type]) => (
                 <div key={key} className="bg-white rounded-2xl p-4 shadow-sm">
                   <label className="text-[10px] font-black text-slate-400 uppercase">{label}</label>
                   <input type={type} value={moduloFormData[key]} onChange={e => setModuloFormData(p => ({...p, [key]: e.target.value}))} className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm focus:border-blue-400"/>
                 </div>
               ))}
             </div>
+            <p className="text-[10px] text-slate-400 font-bold px-1">* campo obbligatorio</p>
             <button onClick={() => {
-              if (!moduloFormData.destinazione || !moduloFormData.dataInizio || !moduloFormData.dataFine) { alert('Compila Destinazione, Data Inizio e Data Fine'); return; }
+              if (!moduloFormData.destinazione || !moduloFormData.commessa || !moduloFormData.dataInizio || !moduloFormData.oraInizio || !moduloFormData.dataFine || !moduloFormData.oraFine) { alert('Compila tutti i campi obbligatori (*)'); return; }
               setModuloMainStep('spese'); setModuloSpesa({descrizione:'Aereo',data:'',totale:'',note:''}); setModuloSpesaPhase('editing');
             }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">Avanti → Spese</button>
           </div>
