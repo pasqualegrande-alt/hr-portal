@@ -1706,6 +1706,15 @@ export default function App() {
   };
 
   const approveModulo = async (modulo) => {
+    // Avvisa se ci sono righe km con indennizzo non compilato
+    const hasKmRows = (modulo.kmRows||[]).length > 0;
+    const anyZero = hasKmRows && (modulo.kmRows||[]).some((r,i) => {
+      const ind = parseFloat(hrKmEdits[i]?.indennizzo ?? r.indennizzo ?? 0);
+      return ind === 0;
+    });
+    if (anyZero) {
+      if (!window.confirm('Attenzione: alcune righe km hanno indennizzo €/km a 0. Vuoi approvare comunque?')) return;
+    }
     try {
       const updatedKmRows = (modulo.kmRows||[]).map((row, i) => {
         const ind = parseFloat(hrKmEdits[i]?.indennizzo ?? row.indennizzo ?? 0);
@@ -1734,7 +1743,7 @@ export default function App() {
     const rows_spese = (modulo.spese||[]).map(r=>'<tr><td>'+r.descrizione+'</td><td>'+r.data+'</td><td style="text-align:right">€ '+r.totale+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
     const rows_km = (modulo.kmRows||[]).map(r=>'<tr><td>'+r.tipo+'</td><td style="text-align:right">'+r.km+'</td><td>'+r.data+'</td><td style="text-align:right">'+(r.indennizzo?'€ '+r.indennizzo:'—')+'</td><td style="text-align:right">'+(r.totale?'€ '+r.totale:'—')+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
     win.document.write('<!DOCTYPE html><html><head><title>'+nomeFile+'</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#222;}h1{font-size:20px;font-weight:bold;text-transform:uppercase;margin-bottom:4px;color:#1A3661;}h2{font-size:13px;font-weight:bold;margin:20px 0 6px;border-bottom:2px solid #1A3661;padding-bottom:3px;color:#1A3661;text-transform:uppercase;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:8px;}.field label{font-size:9px;font-weight:bold;text-transform:uppercase;color:#888;display:block;}.field p{margin:0;padding:3px 0 3px;border-bottom:1px solid #ddd;font-weight:bold;}table{width:100%;border-collapse:collapse;margin-top:4px;}th{background:#1A3661;color:white;padding:6px 8px;text-align:left;font-size:11px;}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;}.total td{background:#f5f5f5;font-weight:bold;}.note-box{background:#fff3cd;padding:8px 12px;border-left:3px solid #ffc107;font-size:11px;margin-top:10px;}.approved{color:green;font-weight:bold;margin-top:16px;}@media print{button{display:none!important;}}</style></head><body>')
-    win.document.write('<button onclick="window.print()" style="margin-bottom:16px;padding:8px 20px;background:#1A3661;color:white;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#128438; Stampa / Salva PDF</button>')
+    win.document.write('<div style="display:flex;gap:10px;margin-bottom:16px;"><button onclick="window.print()" style="padding:8px 20px;background:#1A3661;color:white;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#128438; Stampa / Salva PDF</button><button onclick="window.close()" style="padding:8px 16px;background:#f0f0f0;color:#555;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#8592; Chiudi</button></div>')
     win.document.write('<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><h1 style="margin:0;">Modulo di Trasferta Excogita</h1><span style="font-size:10px;color:#999;text-align:right;">MOD. TR/02<br>del '+new Date().toLocaleDateString('it-IT')+'</span></div><p style="font-size:10px;color:#999;margin:0 0 12px;">Generato il '+new Date().toLocaleDateString('it-IT')+'</p>')
     win.document.write('<h2>Dati Trasferta</h2><div class="grid">')
     win.document.write('<div class="field"><label>Dipendente</label><p>'+(modulo.userName||'—')+'</p></div>')
@@ -3158,14 +3167,14 @@ export default function App() {
                           <td className="p-2 text-right">{r.km}</td>
                           <td className="p-2">{r.data}</td>
                           <td className="p-2 text-right">
-                            {isHR && selectedModulo.status !== 'approvato'
+                            {isHR
                               ? <input type="number" step="0.01" min="0" value={hrKmEdits[i]?.indennizzo ?? r.indennizzo ?? ''} onChange={e => setHrKmEdits(prev => ({...prev, [i]: {...(prev[i]||{}), indennizzo: e.target.value}}))} className="w-16 border rounded p-0.5 text-right outline-none focus:border-blue-400 text-xs" placeholder="0.00"/>
                               : (r.indennizzo ? '€ '+r.indennizzo : '—')
                             }
                           </td>
                           <td className="p-2 text-right font-bold text-blue-600">
-                            {isHR && selectedModulo.status !== 'approvato'
-                              ? (hrKmEdits[i]?.indennizzo ? '€ '+(parseFloat(r.km||0)*parseFloat(hrKmEdits[i].indennizzo||0)).toFixed(2) : '—')
+                            {isHR
+                              ? (hrKmEdits[i]?.indennizzo != null && hrKmEdits[i]?.indennizzo !== '' ? '€ '+(parseFloat(r.km||0)*parseFloat(hrKmEdits[i].indennizzo||0)).toFixed(2) : (r.totale ? '€ '+r.totale : '—'))
                               : (r.totale ? '€ '+r.totale : '—')
                             }
                           </td>
@@ -3175,8 +3184,8 @@ export default function App() {
                       <tr className="bg-slate-50">
                         <td colSpan="4" className="p-2 font-black text-xs uppercase">Totale rimborso km</td>
                         <td className="p-2 text-right font-black text-blue-600">€ {
-                          isHR && selectedModulo.status !== 'approvato'
-                            ? (selectedModulo.kmRows||[]).reduce((s,r,i) => s+(parseFloat(r.km||0)*parseFloat(hrKmEdits[i]?.indennizzo||0)),0).toFixed(2)
+                          isHR
+                            ? (selectedModulo.kmRows||[]).reduce((s,r,i) => s+(parseFloat(r.km||0)*parseFloat(hrKmEdits[i]?.indennizzo ?? r.indennizzo ?? 0)),0).toFixed(2)
                             : (selectedModulo.kmRows||[]).reduce((s,r) => s+parseFloat(r.totale||0),0).toFixed(2)
                         }</td>
                         <td></td>
@@ -3191,13 +3200,13 @@ export default function App() {
             <button onClick={() => printModulo(selectedModulo)} className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2">
               <Download size={15}/> Esporta PDF
             </button>
-            {isHR && selectedModulo.status !== 'approvato' && (
-              <button onClick={() => approveModulo(selectedModulo)} className="flex-1 bg-green-500 text-white py-4 rounded-2xl font-black uppercase text-sm">
-                ✓ Approva
+            {isHR && (
+              <button onClick={() => approveModulo(selectedModulo)} className={'flex-1 py-4 rounded-2xl font-black uppercase text-sm ' + (selectedModulo.status === 'approvato' ? 'bg-yellow-500 text-white' : 'bg-green-500 text-white')}>
+                {selectedModulo.status === 'approvato' ? '✏️ Ri-approva' : '✓ Approva'}
               </button>
             )}
           </div>
-          {isHR && selectedModulo.status === 'approvato' && (
+          {selectedModulo.status === 'approvato' && (
             <p className="text-center text-green-600 font-black text-sm mt-4">✓ Approvato da {selectedModulo.approvedBy}</p>
           )}
         </div>
