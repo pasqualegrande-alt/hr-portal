@@ -1778,7 +1778,7 @@ export default function App() {
     win.document.write('<div class="field"><label>Data/Ora Inizio</label><p>'+fmtDate(modulo.dataInizio)+' '+(modulo.oraInizio||'')+'</p></div>')
     win.document.write('<div class="field"><label>Data/Ora Fine</label><p>'+fmtDate(modulo.dataFine)+' '+(modulo.oraFine||'')+'</p></div>')
     win.document.write('</div>')
-    win.document.write('<h2>Spese Sostenute</h2><table><thead><tr><th>Descrizione</th><th>Data</th><th>Totale €</th><th>Note</th></tr></thead><tbody>')
+    win.document.write('<h2>Spese Sostenute</h2><table><colgroup><col style="width:40%"><col style="width:15%"><col style="width:15%"><col style="width:30%"></colgroup><thead><tr><th>Descrizione</th><th>Data</th><th style="text-align:right">Totale €</th><th>Note</th></tr></thead><tbody>')
     win.document.write(rows_spese)
     win.document.write('<tr class="total"><td colspan="2">TOTALE SPESE</td><td style="text-align:right">€ '+totalSpese+'</td><td></td></tr></tbody></table>')
     win.document.write('<h2>Indennità Kilometrica</h2><table><colgroup><col style="width:16%"><col style="width:6%"><col style="width:9%"><col style="width:9%"><col style="width:14%"><col style="width:11%"><col style="width:11%"><col style="width:24%"></colgroup><thead><tr><th>Tipo</th><th style="text-align:right">Km</th><th>Data</th><th>Targa</th><th>Marca/Modello</th><th style="text-align:right">Ind. €/km</th><th style="text-align:right">Totale €</th><th>Note</th></tr></thead><tbody>')
