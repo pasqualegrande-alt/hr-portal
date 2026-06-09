@@ -3134,6 +3134,7 @@ export default function App() {
   const ModulisticaView = () => {
     const isHR = user.role === 'hrmanager';
     const selectedModulo = moduliList.find(m => m.id === moduloSelectedId);
+    const fmtD = (s) => { if (!s) return '—'; const p = s.split('-'); if (p.length !== 3) return s; return p[2]+'/'+p[1]+'/'+p[0].slice(2); };
 
     // ── DETAIL ────────────────────────────────────────────────────────────────
     if (moduloSelectedId && selectedModulo) {
@@ -3143,7 +3144,7 @@ export default function App() {
             <button onClick={() => { setModuloSelectedId(null); setHrKmEdits({}); }} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
             <div className="flex-1">
               <h2 className="font-black uppercase italic text-lg">Modulo Trasferta</h2>
-              <p className="text-xs text-slate-400">{selectedModulo.destinazione} · {selectedModulo.dataInizio}</p>
+              <p className="text-xs text-slate-400">{selectedModulo.destinazione} · {fmtD(selectedModulo.dataInizio)}</p>
             </div>
             <span className={'px-3 py-1 rounded-full text-[10px] font-black uppercase ' + (selectedModulo.status === 'approvato' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700')}>
               {selectedModulo.status === 'approvato' ? '✓ Approvato' : 'In attesa'}
@@ -3153,7 +3154,7 @@ export default function App() {
           <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
             <h3 className="font-black uppercase text-[10px] text-slate-400 mb-3">Dati Trasferta</h3>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              {[['Dipendente', selectedModulo.userName], ['Commessa', selectedModulo.commessa||'—'], ['Destinazione', selectedModulo.destinazione||'—'], ['Indirizzo', selectedModulo.indirizzo||'—'], ['Inizio', (selectedModulo.dataInizio||'—')+' '+selectedModulo.oraInizio], ['Fine', (selectedModulo.dataFine||'—')+' '+selectedModulo.oraFine]].map(([k,v]) => (
+              {[['Dipendente', selectedModulo.userName], ['Commessa', selectedModulo.commessa||'—'], ['Destinazione', selectedModulo.destinazione||'—'], ['Indirizzo', selectedModulo.indirizzo||'—'], ['Inizio', (fmtD(selectedModulo.dataInizio))+' '+selectedModulo.oraInizio], ['Fine', (fmtD(selectedModulo.dataFine))+' '+selectedModulo.oraFine]].map(([k,v]) => (
                 <div key={k}><p className="text-[9px] font-black text-slate-400 uppercase">{k}</p><p className="font-bold text-sm">{v}</p></div>
               ))}
             </div>
@@ -3168,7 +3169,7 @@ export default function App() {
                     <thead><tr className="bg-slate-900 text-white"><th className="p-2 text-left rounded-tl-lg">Descrizione</th><th className="p-2 text-left">Data</th><th className="p-2 text-right">Tot. €</th><th className="p-2 text-left rounded-tr-lg">Note</th></tr></thead>
                     <tbody>
                       {(selectedModulo.spese||[]).map((r,i) => (
-                        <tr key={i} className="border-b border-slate-100"><td className="p-2 font-bold">{r.descrizione}</td><td className="p-2">{r.data}</td><td className="p-2 text-right font-bold">€ {r.totale}</td><td className="p-2 text-slate-400">{r.note||'—'}</td></tr>
+                        <tr key={i} className="border-b border-slate-100"><td className="p-2 font-bold">{r.descrizione}</td><td className="p-2">{fmtD(r.data)}</td><td className="p-2 text-right font-bold">€ {r.totale}</td><td className="p-2 text-slate-400">{r.note||'—'}</td></tr>
                       ))}
                       <tr className="bg-slate-50"><td colSpan="2" className="p-2 font-black text-xs uppercase">Totale spese</td><td className="p-2 text-right font-black text-blue-600">€ {(selectedModulo.spese||[]).reduce((s,r)=>s+parseFloat(r.totale||0),0).toFixed(2)}</td><td></td></tr>
                     </tbody>
@@ -3190,7 +3191,7 @@ export default function App() {
                         <tr key={i} className="border-b border-slate-100">
                           <td className="p-2 font-bold">{r.tipo}</td>
                           <td className="p-2 text-right">{r.km}</td>
-                          <td className="p-2">{r.data}</td>
+                          <td className="p-2">{fmtD(r.data)}</td>
                           <td className="p-2 text-right">
                             {isHR
                               ? <input type="number" step="0.01" min="0" value={hrKmEdits[i]?.indennizzo ?? r.indennizzo ?? ''} onChange={e => setHrKmEdits(prev => ({...prev, [i]: {...(prev[i]||{}), indennizzo: e.target.value}}))} className="w-16 border rounded p-0.5 text-right outline-none focus:border-blue-400 text-xs" placeholder="0.00"/>
@@ -3294,7 +3295,7 @@ export default function App() {
                 <tbody>{moduloFormData.spese.map((r,i) => (
                   <tr key={i} className="border-b border-slate-100">
                     <td className="p-2 font-bold">{r.descrizione}</td>
-                    <td className="p-2">{r.data}</td>
+                    <td className="p-2">{fmtD(r.data)}</td>
                     <td className="p-2 text-right font-bold">€{r.totale}</td>
                     <td className="p-2 text-slate-400 text-[10px]">{r.note||'—'}</td>
                     <td className="p-2 text-center">
@@ -3367,7 +3368,7 @@ export default function App() {
                   <tr key={i} className="border-b border-slate-100">
                     <td className="p-2 font-bold">{r.tipo}</td>
                     <td className="p-2 text-right">{r.km}</td>
-                    <td className="p-2">{r.data}</td>
+                    <td className="p-2">{fmtD(r.data)}</td>
                     <td className="p-2 font-bold">{r.targa||'—'}</td>
                     <td className="p-2 text-slate-400 text-[10px]">{r.note||'—'}</td>
                     <td className="p-2 text-center">
@@ -3449,12 +3450,12 @@ export default function App() {
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <h3 className="text-[10px] font-black text-slate-400 uppercase mb-2">{moduloFormData.spese.length} spesa/e · Tot. € {moduloFormData.spese.reduce((s,r)=>s+parseFloat(r.totale||0),0).toFixed(2)}</h3>
-              {moduloFormData.spese.map((r,i) => <p key={i} className="text-sm">{r.descrizione} · {r.data} · <b>€{r.totale}</b>{r.note?' · '+r.note:''}</p>)}
+              {moduloFormData.spese.map((r,i) => <p key={i} className="text-sm">{r.descrizione} · {fmtD(r.data)} · <b>€{r.totale}</b>{r.note?' · '+r.note:''}</p>)}
               {moduloFormData.spese.length === 0 && <p className="text-slate-300 text-sm">Nessuna spesa inserita</p>}
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <h3 className="text-[10px] font-black text-slate-400 uppercase mb-2">{moduloFormData.kmRows.length} riga/e km</h3>
-              {moduloFormData.kmRows.map((r,i) => <p key={i} className="text-sm">{r.tipo} · {r.km} km · {r.data}{r.note?' · '+r.note:''}</p>)}
+              {moduloFormData.kmRows.map((r,i) => <p key={i} className="text-sm">{r.tipo} · {r.km} km · {fmtD(r.data)}{r.note?' · '+r.note:''}</p>)}
               {moduloFormData.kmRows.length === 0 && <p className="text-slate-300 text-sm">Nessuna riga km inserita</p>}
             </div>
             <button onClick={() => { setModuloMainStep('header'); }} className="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2">
@@ -3518,7 +3519,7 @@ export default function App() {
                           {m.status==='approvato' ? '✓ Appr.' : 'In attesa'}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500">{m.dataInizio} → {m.dataFine} · {(m.spese||[]).length} spese · {(m.kmRows||[]).length} km</p>
+                      <p className="text-xs text-slate-500">{fmtD(m.dataInizio)} → {fmtD(m.dataFine)} · {(m.spese||[]).length} spese · {(m.kmRows||[]).length} km</p>
                       {m.commessa && <p className="text-xs text-slate-400">Commessa: {m.commessa}</p>}
                     </button>
                     {!isHR && (
