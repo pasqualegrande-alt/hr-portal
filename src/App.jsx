@@ -3288,8 +3288,18 @@ export default function App() {
           {moduloFormData.spese.length > 0 && (
             <div className="bg-white rounded-2xl p-3 shadow-sm mb-4 overflow-x-auto">
               <table className="w-full text-xs">
-                <thead><tr className="bg-slate-900 text-white"><th className="p-2 text-left rounded-tl">Descrizione</th><th className="p-2">Data</th><th className="p-2 text-right">€</th><th className="p-2 rounded-tr">Note</th></tr></thead>
-                <tbody>{moduloFormData.spese.map((r,i) => <tr key={i} className="border-b border-slate-100"><td className="p-2 font-bold">{r.descrizione}</td><td className="p-2">{r.data}</td><td className="p-2 text-right font-bold">€{r.totale}</td><td className="p-2 text-slate-400 text-[10px]">{r.note||'—'}</td></tr>)}</tbody>
+                <thead><tr className="bg-slate-900 text-white"><th className="p-2 text-left rounded-tl">Descrizione</th><th className="p-2">Data</th><th className="p-2 text-right">€</th><th className="p-2">Note</th><th className="p-2 rounded-tr"></th></tr></thead>
+                <tbody>{moduloFormData.spese.map((r,i) => (
+                  <tr key={i} className="border-b border-slate-100">
+                    <td className="p-2 font-bold">{r.descrizione}</td>
+                    <td className="p-2">{r.data}</td>
+                    <td className="p-2 text-right font-bold">€{r.totale}</td>
+                    <td className="p-2 text-slate-400 text-[10px]">{r.note||'—'}</td>
+                    <td className="p-2 text-center">
+                      <button onClick={() => setModuloFormData(p => ({...p, spese: p.spese.filter((_,idx) => idx !== i)}))} className="text-red-400 hover:text-red-600 font-black text-sm leading-none">✕</button>
+                    </td>
+                  </tr>
+                ))}</tbody>
               </table>
             </div>
           )}
@@ -3350,8 +3360,19 @@ export default function App() {
           {moduloFormData.kmRows.length > 0 && (
             <div className="bg-white rounded-2xl p-3 shadow-sm mb-4 overflow-x-auto">
               <table className="w-full text-xs">
-                <thead><tr className="bg-slate-900 text-white"><th className="p-2 rounded-tl">Tipo</th><th className="p-2 text-right">Km</th><th className="p-2">Data</th><th className="p-2">Targa</th><th className="p-2 rounded-tr">Note</th></tr></thead>
-                <tbody>{moduloFormData.kmRows.map((r,i) => <tr key={i} className="border-b border-slate-100"><td className="p-2 font-bold">{r.tipo}</td><td className="p-2 text-right">{r.km}</td><td className="p-2">{r.data}</td><td className="p-2 font-bold text-xs">{r.targa||'—'}</td><td className="p-2 text-slate-400 text-[10px]">{r.note||'—'}</td></tr>)}</tbody>
+                <thead><tr className="bg-slate-900 text-white"><th className="p-2 rounded-tl">Tipo</th><th className="p-2 text-right">Km</th><th className="p-2">Data</th><th className="p-2">Targa</th><th className="p-2">Note</th><th className="p-2 rounded-tr"></th></tr></thead>
+                <tbody>{moduloFormData.kmRows.map((r,i) => (
+                  <tr key={i} className="border-b border-slate-100">
+                    <td className="p-2 font-bold">{r.tipo}</td>
+                    <td className="p-2 text-right">{r.km}</td>
+                    <td className="p-2">{r.data}</td>
+                    <td className="p-2 font-bold">{r.targa||'—'}</td>
+                    <td className="p-2 text-slate-400 text-[10px]">{r.note||'—'}</td>
+                    <td className="p-2 text-center">
+                      <button onClick={() => setModuloFormData(p => ({...p, kmRows: p.kmRows.filter((_,idx) => idx !== i)}))} className="text-red-400 hover:text-red-600 font-black text-sm leading-none">✕</button>
+                    </td>
+                  </tr>
+                ))}</tbody>
               </table>
             </div>
           )}
