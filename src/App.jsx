@@ -1515,7 +1515,7 @@ export default function App() {
   const [moduloFormData, setModuloFormData] = useState({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',spese:[],kmRows:[]});
   const [moduloSpesa, setModuloSpesa] = useState({descrizione:'Aereo',data:'',totale:'',note:''});
   const [moduloSpesaPhase, setModuloSpesaPhase] = useState('editing');
-  const [moduloKm, setModuloKm] = useState({tipo:'Auto',km:'',data:'',note:''});
+  const [moduloKm, setModuloKm] = useState({tipo:'Auto',km:'',data:'',targa:'',note:''});
   const [moduloKmPhase, setModuloKmPhase] = useState('editing');
   const [moduliList, setModuliList] = useState([]);
   const [moduloSelectedId, setModuloSelectedId] = useState(null);
@@ -1678,7 +1678,7 @@ export default function App() {
     setModuloFormData({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',spese:[],kmRows:[]});
     setModuloSpesa({descrizione:'Aereo',data:'',totale:'',note:''});
     setModuloSpesaPhase('editing');
-    setModuloKm({tipo:'Auto',km:'',data:'',note:''});
+    setModuloKm({tipo:'Auto',km:'',data:'',targa:'',note:''});
     setModuloKmPhase('editing');
     setModuloSelectedId(null); setHrKmEdits({});
   };
@@ -1741,7 +1741,7 @@ export default function App() {
     const totalSpese = (modulo.spese||[]).reduce((s,r)=>s+parseFloat(r.totale||0),0).toFixed(2);
     const totalKm = (modulo.kmRows||[]).reduce((s,r)=>s+parseFloat(r.totale||0),0).toFixed(2);
     const rows_spese = (modulo.spese||[]).map(r=>'<tr><td>'+r.descrizione+'</td><td>'+r.data+'</td><td style="text-align:right">€ '+r.totale+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
-    const rows_km = (modulo.kmRows||[]).map(r=>'<tr><td>'+r.tipo+'</td><td style="text-align:right">'+r.km+'</td><td>'+r.data+'</td><td style="text-align:right">'+(r.indennizzo?'€ '+r.indennizzo:'—')+'</td><td style="text-align:right">'+(r.totale?'€ '+r.totale:'—')+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
+    const rows_km = (modulo.kmRows||[]).map(r=>'<tr><td>'+r.tipo+'</td><td style="text-align:right">'+r.km+'</td><td>'+r.data+'</td><td>'+(r.targa||'—')+'</td><td style="text-align:right">'+(r.indennizzo?'€ '+r.indennizzo:'—')+'</td><td style="text-align:right">'+(r.totale?'€ '+r.totale:'—')+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
     win.document.write('<!DOCTYPE html><html><head><title>'+nomeFile+'</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#222;}h1{font-size:20px;font-weight:bold;text-transform:uppercase;margin-bottom:4px;color:#1A3661;}h2{font-size:13px;font-weight:bold;margin:20px 0 6px;border-bottom:2px solid #1A3661;padding-bottom:3px;color:#1A3661;text-transform:uppercase;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:8px;}.field label{font-size:9px;font-weight:bold;text-transform:uppercase;color:#888;display:block;}.field p{margin:0;padding:3px 0 3px;border-bottom:1px solid #ddd;font-weight:bold;}table{width:100%;border-collapse:collapse;margin-top:4px;}th{background:#1A3661;color:white;padding:6px 8px;text-align:left;font-size:11px;}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;}.total td{background:#f5f5f5;font-weight:bold;}.note-box{background:#fff3cd;padding:8px 12px;border-left:3px solid #ffc107;font-size:11px;margin-top:10px;}.approved{color:green;font-weight:bold;margin-top:16px;}@media print{button{display:none!important;}}</style></head><body>')
     win.document.write('<div style="display:flex;gap:10px;margin-bottom:16px;"><button onclick="window.print()" style="padding:8px 20px;background:#1A3661;color:white;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#128438; Stampa / Salva PDF</button><button onclick="window.close()" style="padding:8px 16px;background:#f0f0f0;color:#555;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#8592; Chiudi</button></div>')
     win.document.write('<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><h1 style="margin:0;">Modulo di Trasferta Excogita</h1><span style="font-size:10px;color:#999;text-align:right;">MOD. TR/02<br>del '+new Date().toLocaleDateString('it-IT')+'</span></div><p style="font-size:10px;color:#999;margin:0 0 12px;">Generato il '+new Date().toLocaleDateString('it-IT')+'</p>')
@@ -1756,7 +1756,7 @@ export default function App() {
     win.document.write('<h2>Spese Sostenute</h2><table><thead><tr><th>Descrizione</th><th>Data</th><th>Totale €</th><th>Note</th></tr></thead><tbody>')
     win.document.write(rows_spese)
     win.document.write('<tr class="total"><td colspan="2">TOTALE SPESE</td><td style="text-align:right">€ '+totalSpese+'</td><td></td></tr></tbody></table>')
-    win.document.write('<h2>Indennità Kilometrica</h2><table><colgroup><col style="width:28%"><col style="width:8%;text-align:right"><col style="width:12%"><col style="width:15%;text-align:right"><col style="width:15%;text-align:right"><col style="width:22%"></colgroup><thead><tr><th>Tipo veicolo</th><th style="text-align:right">Km</th><th>Data</th><th style="text-align:right">Ind. €/km</th><th style="text-align:right">Totale €</th><th>Note</th></tr></thead><tbody>')
+    win.document.write('<h2>Indennità Kilometrica</h2><table><colgroup><col style="width:22%"><col style="width:7%"><col style="width:10%"><col style="width:10%"><col style="width:13%"><col style="width:13%"><col style="width:25%"></colgroup><thead><tr><th>Tipo veicolo</th><th style="text-align:right">Km</th><th>Data</th><th>Targa</th><th style="text-align:right">Ind. €/km</th><th style="text-align:right">Totale €</th><th>Note</th></tr></thead><tbody>')
     win.document.write(rows_km)
     win.document.write('<tr class="total"><td colspan="4">TOTALE RIMBORSO KM</td><td style="text-align:right">€ '+totalKm+'</td><td></td></tr></tbody></table>')
     win.document.write('<div class="note-box">Indennizzo Kilometrico e Totale Rimborso sono a cura dell\'HR Manager.</div>')
@@ -3297,7 +3297,7 @@ export default function App() {
                 setModuloFormData(p => ({...p, spese: [...p.spese, {...moduloSpesa}]}));
                 setModuloSpesaPhase('confirm');
               }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">+ Aggiungi spesa</button>
-              <button onClick={() => { setModuloMainStep('km'); setModuloKm({tipo:'Auto',km:'',data:'',note:''}); setModuloKmPhase('editing'); }} className="w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black uppercase text-sm">
+              <button onClick={() => { setModuloMainStep('km'); setModuloKm({tipo:'Auto',km:'',data:'',targa:'',note:''}); setModuloKmPhase('editing'); }} className="w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black uppercase text-sm">
                 {moduloFormData.spese.length === 0 ? 'Nessuna spesa → Avanti' : 'Avanti senza aggiungere'}
               </button>
             </div>
@@ -3307,7 +3307,7 @@ export default function App() {
               <p className="font-black text-slate-800 text-base mb-5">Vuoi aggiungere un'altra spesa?</p>
               <div className="flex gap-3">
                 <button onClick={() => { setModuloSpesa({descrizione:'Aereo',data:'',totale:'',note:''}); setModuloSpesaPhase('editing'); }} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">Sì</button>
-                <button onClick={() => { setModuloMainStep('km'); setModuloKm({tipo:'Auto',km:'',data:'',note:''}); setModuloKmPhase('editing'); }} className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-2xl font-black uppercase">No, avanti</button>
+                <button onClick={() => { setModuloMainStep('km'); setModuloKm({tipo:'Auto',km:'',data:'',targa:'',note:''}); setModuloKmPhase('editing'); }} className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-2xl font-black uppercase">No, avanti</button>
               </div>
             </div>
           )}
@@ -3327,8 +3327,8 @@ export default function App() {
           {moduloFormData.kmRows.length > 0 && (
             <div className="bg-white rounded-2xl p-3 shadow-sm mb-4 overflow-x-auto">
               <table className="w-full text-xs">
-                <thead><tr className="bg-slate-900 text-white"><th className="p-2 rounded-tl">Tipo</th><th className="p-2 text-right">Km</th><th className="p-2">Data</th><th className="p-2 rounded-tr">Note</th></tr></thead>
-                <tbody>{moduloFormData.kmRows.map((r,i) => <tr key={i} className="border-b border-slate-100"><td className="p-2 font-bold">{r.tipo}</td><td className="p-2 text-right">{r.km}</td><td className="p-2">{r.data}</td><td className="p-2 text-slate-400 text-[10px]">{r.note||'—'}</td></tr>)}</tbody>
+                <thead><tr className="bg-slate-900 text-white"><th className="p-2 rounded-tl">Tipo</th><th className="p-2 text-right">Km</th><th className="p-2">Data</th><th className="p-2">Targa</th><th className="p-2 rounded-tr">Note</th></tr></thead>
+                <tbody>{moduloFormData.kmRows.map((r,i) => <tr key={i} className="border-b border-slate-100"><td className="p-2 font-bold">{r.tipo}</td><td className="p-2 text-right">{r.km}</td><td className="p-2">{r.data}</td><td className="p-2 font-bold text-xs">{r.targa||'—'}</td><td className="p-2 text-slate-400 text-[10px]">{r.note||'—'}</td></tr>)}</tbody>
               </table>
             </div>
           )}
@@ -3351,14 +3351,19 @@ export default function App() {
                 </div>
               </div>
               <div className="bg-white rounded-2xl p-4 shadow-sm">
+                <label className="text-[10px] font-black text-slate-400 uppercase">Targa veicolo *</label>
+                <input type="text" value={moduloKm.targa||''} onChange={e => setModuloKm(p => ({...p, targa: e.target.value.toUpperCase()}))} placeholder="Es. AB123CD" className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm"/>
+              </div>
+              <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <label className="text-[10px] font-black text-slate-400 uppercase">Note (opzionale)</label>
                 <input type="text" value={moduloKm.note} onChange={e => setModuloKm(p => ({...p, note: e.target.value}))} placeholder="Es. tipo veicolo se Altro" className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm"/>
               </div>
               <button onClick={() => {
                 if (!moduloKm.km || !moduloKm.data) { alert('Inserisci km e data'); return; }
+                if (!moduloKm.targa) { alert('Inserisci la targa del veicolo'); return; }
                 setModuloFormData(p => ({...p, kmRows: [...p.kmRows, {...moduloKm}]}));
                 setModuloKmPhase('confirm');
-              }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">+ Aggiungi riga km</button>
+              }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">Conferma</button>
               <button onClick={() => setModuloMainStep('review')} className="w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black uppercase text-sm">
                 {moduloFormData.kmRows.length === 0 ? 'Nessun km → Avanti' : 'Avanti senza aggiungere'}
               </button>
@@ -3368,7 +3373,7 @@ export default function App() {
             <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
               <p className="font-black text-slate-800 text-base mb-5">Vuoi aggiungere un'altra riga km?</p>
               <div className="flex gap-3">
-                <button onClick={() => { setModuloKm({tipo:'Auto',km:'',data:'',note:''}); setModuloKmPhase('editing'); }} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">Sì</button>
+                <button onClick={() => { setModuloKm({tipo:'Auto',km:'',data:'',targa:'',note:''}); setModuloKmPhase('editing'); }} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">Sì</button>
                 <button onClick={() => setModuloMainStep('review')} className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-2xl font-black uppercase">No, avanti</button>
               </div>
             </div>
