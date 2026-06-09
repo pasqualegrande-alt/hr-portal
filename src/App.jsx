@@ -1780,10 +1780,10 @@ export default function App() {
     win.document.write('</div>')
     win.document.write('<h2>Spese Sostenute</h2><table><colgroup><col style="width:40%"><col style="width:15%"><col style="width:15%"><col style="width:30%"></colgroup><thead><tr><th>Descrizione</th><th>Data</th><th style="text-align:right">Totale €</th><th>Note</th></tr></thead><tbody>')
     win.document.write(rows_spese)
-    win.document.write('<tr class="total"><td colspan="2">TOTALE SPESE</td><td style="text-align:right">€ '+totalSpese+'</td><td></td></tr></tbody></table>')
+    win.document.write('<tr class="total"><td colspan="2" style="font-size:14px;color:#b03030;">TOTALE SPESE</td><td style="text-align:right;font-size:14px;color:#b03030;">€ '+totalSpese+'</td><td></td></tr></tbody></table>')
     win.document.write('<h2>Indennità Kilometrica</h2><table><colgroup><col style="width:16%"><col style="width:6%"><col style="width:9%"><col style="width:9%"><col style="width:14%"><col style="width:11%"><col style="width:11%"><col style="width:24%"></colgroup><thead><tr><th>Tipo</th><th style="text-align:right">Km</th><th>Data</th><th>Targa</th><th>Marca/Modello</th><th style="text-align:right">Ind. €/km</th><th style="text-align:right">Totale €</th><th>Note</th></tr></thead><tbody>')
     win.document.write(rows_km)
-    win.document.write('<tr class="total"><td colspan="4">TOTALE RIMBORSO KM</td><td style="text-align:right">€ '+totalKm+'</td><td></td></tr></tbody></table>')
+    win.document.write('<tr class="total"><td colspan="4" style="font-size:14px;color:#b03030;">TOTALE RIMBORSO KM</td><td style="text-align:right;font-size:14px;color:#b03030;">€ '+totalKm+'</td><td></td></tr></tbody></table>')
     win.document.write('<div class="note-box">Indennizzo Kilometrico e Totale Rimborso sono a cura dell\'HR Manager.</div>')
     if (modulo.status === 'approvato') {
       win.document.write('<p class="approved">&#10003; APPROVATO da '+(modulo.approvedBy||'—')+' il '+(modulo.approvedAt ? new Date(modulo.approvedAt).toLocaleDateString('it-IT') : '—')+'</p>')
