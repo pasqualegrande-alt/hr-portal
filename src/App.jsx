@@ -1520,6 +1520,7 @@ export default function App() {
   const [moduliList, setModuliList] = useState([]);
   const [moduloSelectedId, setModuloSelectedId] = useState(null);
   const [hrKmEdits, setHrKmEdits] = useState({});
+  const [moduloEditingId, setModuloEditingId] = useState(null);
   const [typeFilter, setTypeFilter] = useState('tutti');
 
   useEffect(() => { userRef.current = user; }, [user]);
@@ -1680,28 +1681,50 @@ export default function App() {
     setModuloSpesaPhase('editing');
     setModuloKm({tipo:'Auto',km:'',data:'',targa:'',modello:'',note:''});
     setModuloKmPhase('editing');
-    setModuloSelectedId(null); setHrKmEdits({});
+    setModuloSelectedId(null); setHrKmEdits({}); setModuloEditingId(null);
   };
 
   const submitModulo = async () => {
     try {
       const hrUser = users.find(u => u.role === 'hrmanager');
-      const docRef = await addDoc(collection(db, 'moduliTrasferta'), {
-        userId: user.id, userName: user.name,
-        ...moduloFormData,
-        status: 'in_attesa',
-        createdAt: new Date().toISOString(),
-      });
-      if (hrUser) {
-        await addDoc(collection(db, 'notifications'), {
-          to: hrUser.name,
-          message: 'Nuovo Modulo di Trasferta da ' + user.name + ' — ' + moduloFormData.destinazione,
-          type: 'modulistica', reqId: docRef.id,
-          createdAt: new Date().toISOString(), read: false,
+      const isEditing = !!moduloEditingId;
+      if (isEditing) {
+        // Modifica modulo esistente → torna in_attesa
+        await updateDoc(doc(db, 'moduliTrasferta', moduloEditingId), {
+          ...moduloFormData,
+          status: 'in_attesa',
+          updatedAt: new Date().toISOString(),
+          approvedAt: null, approvedBy: null,
         });
+        if (hrUser) {
+          await addDoc(collection(db, 'notifications'), {
+            to: hrUser.name,
+            message: user.name + ' ha modificato il Modulo di Trasferta per ' + moduloFormData.destinazione + ' — richiede riapprovazione',
+            type: 'modulistica', reqId: moduloEditingId,
+            createdAt: new Date().toISOString(), read: false,
+          });
+        }
+        resetModuloForm();
+        alert('Modulo modificato. L\'HR Manager sarà notificato per la riapprovazione.');
+      } else {
+        // Nuovo modulo
+        const docRef = await addDoc(collection(db, 'moduliTrasferta'), {
+          userId: user.id, userName: user.name,
+          ...moduloFormData,
+          status: 'in_attesa',
+          createdAt: new Date().toISOString(),
+        });
+        if (hrUser) {
+          await addDoc(collection(db, 'notifications'), {
+            to: hrUser.name,
+            message: 'Nuovo Modulo di Trasferta da ' + user.name + ' — ' + moduloFormData.destinazione,
+            type: 'modulistica', reqId: docRef.id,
+            createdAt: new Date().toISOString(), read: false,
+          });
+        }
+        resetModuloForm();
+        alert('Modulo inviato con successo!');
       }
-      resetModuloForm();
-      alert('Modulo inviato con successo!');
     } catch(e) { console.error(e); alert("Errore nell'invio del modulo"); }
   };
 
@@ -3415,7 +3438,7 @@ export default function App() {
               ✏️ Correggi Modulo
             </button>
             <button onClick={submitModulo} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-base">
-              📤 Invia Modulo
+              {moduloEditingId ? '💾 Salva modifiche' : '📤 Invia Modulo'}
             </button>
           </div>
         </div>
@@ -3476,13 +3499,30 @@ export default function App() {
                       {m.commessa && <p className="text-xs text-slate-400">Commessa: {m.commessa}</p>}
                     </button>
                     {!isHR && (
-                      <button onClick={async (e) => {
-                        e.stopPropagation();
-                        if (!window.confirm('Sei sicuro di voler cancellare il modulo?')) return;
-                        await deleteDoc(doc(db, 'moduliTrasferta', m.id));
-                      }} className="w-full flex items-center justify-center gap-2 py-2 border-t border-red-100 text-red-500 text-xs font-black uppercase rounded-b-2xl hover:bg-red-50">
-                        <X size={12}/> Cancella modulo
-                      </button>
+                      <div className="flex border-t border-slate-100">
+                        <button onClick={(e) => {
+                          e.stopPropagation();
+                          // Pre-compila il form con i dati esistenti
+                          setModuloEditingId(m.id);
+                          setModuloFormData({
+                            destinazione: m.destinazione||'', indirizzo: m.indirizzo||'',
+                            dataInizio: m.dataInizio||'', oraInizio: m.oraInizio||'08:00',
+                            dataFine: m.dataFine||'', oraFine: m.oraFine||'17:00',
+                            commessa: m.commessa||'', spese: m.spese||[], kmRows: m.kmRows||[]
+                          });
+                          setModuloStep('new'); setModuloMainStep('header');
+                          setModuloSpesaPhase('editing'); setModuloKmPhase('editing');
+                        }} className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-500 text-xs font-black uppercase hover:bg-blue-50 rounded-bl-2xl border-r border-slate-100">
+                          ✏️ Modifica
+                        </button>
+                        <button onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!window.confirm('Sei sicuro di voler cancellare il modulo?')) return;
+                          await deleteDoc(doc(db, 'moduliTrasferta', m.id));
+                        }} className="flex-1 flex items-center justify-center gap-1 py-2 text-red-500 text-xs font-black uppercase hover:bg-red-50 rounded-br-2xl">
+                          <X size={12}/> Cancella
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
