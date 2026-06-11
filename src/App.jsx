@@ -1456,7 +1456,7 @@ const RESET_PWD_HASH = btoa('Excogita!234');
 // Input orario con minuti a step 15 (00/15/30/45)
 const TimeSelect = ({ value, onChange, className = '' }) => {
   const [hh, mm] = (value || '09:00').split(':');
-  const hours = Array.from({length: 13}, (_, i) => String(i + 7).padStart(2, '0')); // 07-19
+  const hours = Array.from({length: 24}, (_, i) => String(i).padStart(2, '0')); // 00-23
   const minutes = ['00', '15', '30', '45'];
   const selClass = 'bg-slate-50 border rounded-xl font-bold text-base outline-none p-3 ' + className;
   return (
