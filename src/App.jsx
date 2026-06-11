@@ -3055,13 +3055,17 @@ export default function App() {
           const { thisWeek, lastThirty, older } = classifyByTime(myHistory, n => n.createdAt || new Date().toISOString());
           const NotifItem = ({ n }) => {
             const isAlert = n.message && n.message.startsWith('ATTENZIONE!!!');
+            const canDelete = user.username === 'p.grande';
             return (
-              <div className={'flex gap-3 border-b pb-3 last:border-0 ' + (isAlert ? 'border-red-100 bg-red-50 rounded-2xl px-3 py-2' : 'border-slate-50')}>
+              <div className={'flex gap-3 border-b pb-3 last:border-0 items-start ' + (isAlert ? 'border-red-100 bg-red-50 rounded-2xl px-3 py-2' : 'border-slate-50')}>
                 <div className={'w-2 h-2 rounded-full mt-1.5 shrink-0 ' + (isAlert ? 'bg-red-500' : 'bg-blue-500')}></div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className={'text-sm font-bold ' + (isAlert ? 'text-red-600' : 'text-slate-700')}>{n.message}</p>
                   <p className="text-[9px] font-black text-slate-400 uppercase mt-0.5">{n.date}</p>
                 </div>
+                {canDelete && (
+                  <button onClick={() => deleteDoc(doc(db, 'notifications', n.id))} className="shrink-0 text-red-400 hover:text-red-600 font-black text-base leading-none ml-1 mt-0.5" title="Elimina notifica">✕</button>
+                )}
               </div>
             );
           };
