@@ -1507,7 +1507,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [auditLogs, setAuditLogs] = useState([]);
   const [calFilter, setCalFilter] = useState(null); // inizializzato dopo login
-  const [lastNotifView, setLastNotifView] = useState('');
+  const [lastNotifView, setLastNotifView] = useState(() => localStorage.getItem('lastNotifView_' + (JSON.parse(localStorage.getItem('hrportal_user') || 'null')?.id || 'guest')) || '');
   const userRef = React.useRef(null);
   // ─── MODULISTICA STATE ───────────────────────────────────────────────────
   const [moduloStep, setModuloStep] = useState('list');
@@ -3124,6 +3124,7 @@ export default function App() {
             if (f) {
               await signInAnonymously(auth);
               setUser(f);
+              setLastNotifView(localStorage.getItem('lastNotifView_' + f.id) || '');
               if (f.role === 'hrmanager') { setView('hr'); setCalFilter('all'); }
               else if (f.role === 'CEO' || f.role === 'amministratore') { setCalFilter('all'); setView('calendar'); }
               else if (f.role === 'responsabile') { setCalFilter('all'); setView('calendar'); }
@@ -3637,7 +3638,7 @@ export default function App() {
             <span className="text-[9px] font-black uppercase">Modulistica</span>
           </button>
         )}
-        {user.role !== 'hrmanager' && user.role !== 'amministratore' && <button onClick={() => { setView('notifications'); setLastNotifView(new Date().toISOString()); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
+        {user.role !== 'hrmanager' && user.role !== 'amministratore' && <button onClick={() => { const ts = new Date().toISOString(); setView('notifications'); setLastNotifView(ts); localStorage.setItem('lastNotifView_' + user.id, ts); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
           <Bell size={22}/><span className="text-[10px] font-black uppercase">Notifiche</span>
           {(pendingCount > 0 || unreadNotifCount > 0) && (
             <span className="absolute top-2 right-[calc(50%-20px)] bg-red-500 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[9px] font-black px-1 text-white">
