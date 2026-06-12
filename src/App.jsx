@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, Bell, LogOut, ChevronLeft, ChevronRight, Trash2, Edit3, CheckCircle, XCircle, UserPlus, Save, X, Building2, GitBranch, Briefcase, Clock, ClipboardList, RefreshCw, LayoutGrid, Download} from 'lucide-react';
+import { Calendar, Users, Bell, LogOut, LogIn, ChevronLeft, ChevronRight, Trash2, Edit3, CheckCircle, XCircle, UserPlus, Save, X, Building2, GitBranch, Briefcase, Clock, ClipboardList, RefreshCw, LayoutGrid, Download} from 'lucide-react';
 import { db, getMessagingInstance } from './firebase';
 import { collection, doc, setDoc, getDocs, onSnapshot, deleteDoc, updateDoc, addDoc, query, orderBy } from 'firebase/firestore';
 import { getToken, onMessage } from 'firebase/messaging';
@@ -349,6 +349,114 @@ const LogView = ({ auditLogs, db }) => {
     </div>
   );
 };
+
+
+const AccessLogView = ({ accessLog, db }) => {
+  const [filterUser, setFilterUser] = useState('');
+  const [filterDate, setFilterDate] = useState('');
+
+  const handleClearAll = async () => {
+    if (!window.confirm('Sei sicuro di voler svuotare tutto il registro accessi?')) return;
+    const snap = await getDocs(collection(db, 'accessLog'));
+    await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'accessLog', d.id))));
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Sei sicuro di voler cancellare questo accesso?')) return;
+    await deleteDoc(doc(db, 'accessLog', id));
+  };
+
+  const handleExportCSV = () => {
+    if (accessLog.length === 0) { alert('Nessun accesso da esportare.'); return; }
+    const cols = ['Username','Nome','Ruolo','Data','Ora'];
+    const rows = accessLog.map(l => [l.username||'', l.name||'', l.role||'', l.date||'', l.time||'']);
+    const csv = [cols,...rows].map(r => r.map(v => `"${v}"`).join(';')).join('\r\n');
+    const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const d = new Date();
+    a.download = `accessi_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const filtered = accessLog.filter(l =>
+    (!filterUser || (l.username||'').toLowerCase().includes(filterUser.toLowerCase()) || (l.name||'').toLowerCase().includes(filterUser.toLowerCase())) &&
+    (!filterDate || (l.date||'').includes(filterDate))
+  );
+
+  return (
+    <div className="space-y-3 pb-6 px-6">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black uppercase italic">Registro Accessi</h2>
+          <p className="text-[10px] text-slate-400 font-bold mt-0.5">{accessLog.length} accessi totali</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleClearAll} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
+            <Trash2 size={14}/> Svuota
+          </button>
+          <button onClick={handleExportCSV} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
+            <Save size={14}/> Esporta CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Filtri */}
+      <div className="flex gap-3">
+        <input type="text" placeholder="Filtra per utente..." value={filterUser} onChange={e => setFilterUser(e.target.value)}
+          className="p-2 border rounded-xl text-xs font-bold outline-none focus:border-blue-400 w-48"/>
+        <input type="text" placeholder="Filtra per data..." value={filterDate} onChange={e => setFilterDate(e.target.value)}
+          className="p-2 border rounded-xl text-xs font-bold outline-none focus:border-blue-400 w-40"/>
+        {(filterUser || filterDate) && (
+          <button onClick={() => { setFilterUser(''); setFilterDate(''); }}
+            className="flex items-center gap-1 bg-slate-100 text-slate-500 px-3 py-2 rounded-xl font-black uppercase text-xs">
+            <X size={12}/> Reset
+          </button>
+        )}
+      </div>
+
+      <p className="text-[10px] font-bold text-slate-400">{filtered.length} di {accessLog.length} accessi{(filterUser||filterDate) ? ' (filtrati)' : ''}</p>
+
+      {accessLog.length === 0 && <p className="text-slate-400 text-sm font-bold text-center py-8">Nessun accesso registrato.</p>}
+
+      {filtered.length > 0 && (
+        <div className="bg-white border-y overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[11px]">
+              <thead className="bg-slate-900">
+                <tr className="text-[9px] font-black uppercase tracking-widest text-slate-300">
+                  <th className="px-3 py-2 w-32">Username</th>
+                  <th className="px-3 py-2 w-40">Nome</th>
+                  <th className="px-3 py-2 w-28">Ruolo</th>
+                  <th className="px-3 py-2 w-28">Data</th>
+                  <th className="px-3 py-2 w-24">Ora</th>
+                  <th className="px-3 py-2 w-10"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filtered.map(l => (
+                  <tr key={l.id} className="border-b border-slate-100 hover:bg-blue-50/40 transition-colors">
+                    <td className="px-3 py-2 font-black text-slate-800 uppercase whitespace-nowrap">{l.username}</td>
+                    <td className="px-3 py-2 font-bold text-slate-600 whitespace-nowrap">{l.name}</td>
+                    <td className="px-3 py-2"><span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">{l.role}</span></td>
+                    <td className="px-3 py-2 font-bold text-slate-600 whitespace-nowrap tabular-nums">{l.date}</td>
+                    <td className="px-3 py-2 font-bold text-slate-500 whitespace-nowrap tabular-nums">{l.time}</td>
+                    <td className="px-3 py-2 text-center">
+                      <button onClick={() => handleDelete(l.id)} className="text-red-400 hover:text-red-600 font-black text-sm leading-none" title="Elimina">✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 
 const TYPE_COLORS = {
@@ -1506,6 +1614,7 @@ export default function App() {
   const [polivalenze, setPolivalenze] = useState([]);
   const [loading, setLoading] = useState(true);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [accessLog, setAccessLog] = useState([]);
   const [calFilter, setCalFilter] = useState(null); // inizializzato dopo login
   const [lastNotifView, setLastNotifView] = useState(() => localStorage.getItem('lastNotifView_' + (JSON.parse(localStorage.getItem('hrportal_user') || 'null')?.id || 'guest')) || '');
   const userRef = React.useRef(null);
@@ -1556,7 +1665,8 @@ export default function App() {
     const unsubClosures = onSnapshot(collection(db, 'closures'), snap => setClosures(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubPoli = onSnapshot(collection(db, 'polivalenze'), snap => setPolivalenze(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubAudit = onSnapshot(query(collection(db, 'auditLog'), orderBy('createdAt', 'desc')), snap => setAuditLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => { unsubUsers(); unsubReqs(); unsubNotifs(); unsubClosures(); unsubPoli(); unsubAudit(); };
+    const unsubAccess = onSnapshot(query(collection(db, 'accessLog'), orderBy('createdAt', 'desc')), snap => setAccessLog(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return () => { unsubUsers(); unsubReqs(); unsubNotifs(); unsubClosures(); unsubPoli(); unsubAudit(); unsubAccess(); };
   }, []);
 
   useEffect(() => {
@@ -3125,6 +3235,14 @@ export default function App() {
               await signInAnonymously(auth);
               setUser(f);
               setLastNotifView(localStorage.getItem('lastNotifView_' + f.id) || '');
+              // Registra accesso
+              const now = new Date();
+              await addDoc(collection(db, 'accessLog'), {
+                userId: f.id, username: f.username, name: f.name, role: f.role,
+                date: now.toLocaleDateString('it-IT'),
+                time: now.toLocaleTimeString('it-IT'),
+                createdAt: now.toISOString()
+              });
               if (f.role === 'hrmanager') { setView('hr'); setCalFilter('all'); }
               else if (f.role === 'CEO' || f.role === 'amministratore') { setCalFilter('all'); setView('calendar'); }
               else if (f.role === 'responsabile') { setCalFilter('all'); setView('calendar'); }
@@ -3580,8 +3698,8 @@ export default function App() {
           <button onClick={() => { signOut(auth); setUser(null); setCalFilter(null); setTypeFilter('tutti'); }} className="p-2 text-red-400"><LogOut size={20}/></button>
         </div>
       </header>
-      <main className={"flex-1 pt-16 pb-24 overflow-y-auto " + (["log","overview","hr","card"].includes(view) ? "px-0" : "px-4")}>
-        <div className={["log","overview","hr","card"].includes(view) ? "pt-5" : "max-w-2xl mx-auto pt-5"}>
+      <main className={"flex-1 pt-16 pb-24 overflow-y-auto " + (["log","accesslog","overview","hr","card"].includes(view) ? "px-0" : "px-4")}>
+        <div className={["log","accesslog","overview","hr","card"].includes(view) ? "pt-5" : "max-w-2xl mx-auto pt-5"}>
           {view === 'calendar' && <CalendarView />}
           {view === 'card' && user.role === 'dipendente' && <EmployeeCardView users={users} requests={requests} closures={closures} currentUser={user} />}
           {view === 'card' && user.role === 'responsabile' && <EmployeeCardView users={users} requests={requests} closures={closures} currentUser={user} />}
@@ -3594,6 +3712,7 @@ export default function App() {
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && (showAdmin || user.role === 'hrmanager') && <ClosuresView />}
           {view === 'log' && (showAdmin || user.role === 'hrmanager') && <LogView auditLogs={auditLogs} db={db} />}
+          {view === 'accesslog' && user.role === 'amministratore' && <AccessLogView accessLog={accessLog} db={db} />}
           {view === 'overview' && (showAdmin || user.role === 'responsabile') && <OverviewView users={users} requests={requests} closures={closures} />}
         </div>
       </main>
@@ -3655,6 +3774,11 @@ export default function App() {
         {(user.role === 'amministratore') && (
           <button onClick={() => setView('log')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'log' ? 'text-blue-400' : 'text-slate-500')}>
             <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Registro</span>
+          </button>
+        )}
+        {(user.role === 'amministratore') && (
+          <button onClick={() => setView('accesslog')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'accesslog' ? 'text-blue-400' : 'text-slate-500')}>
+            <LogIn size={22}/><span className="text-[10px] font-black uppercase">Accessi</span>
           </button>
         )}
         {showAdmin && (
