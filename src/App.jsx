@@ -3433,19 +3433,35 @@ export default function App() {
           {(isMirco || selectedRapporto.userId === user.id) && (
             <button onClick={() => {
               setRapportoEditingId(selectedRapporto.id);
-              setRapportoFormData({
-                data: selectedRapporto.data||'', cliente: selectedRapporto.cliente||'', luogo: selectedRapporto.luogo||'',
-                cSede: selectedRapporto.cSede||'si', cSedeSpecifica: selectedRapporto.cSedeSpecifica||'',
-                mezzo: selectedRapporto.mezzo||'proprio', mezzoTipo: selectedRapporto.mezzoTipo||'',
-                operatore: selectedRapporto.operatore||'', dalleOre: selectedRapporto.dalleOre||'', alleOre: selectedRapporto.alleOre||'', durata: selectedRapporto.durata||'',
-                righe: selectedRapporto.righe||[{commessa:'',descrizione:''}],
-                esito: selectedRapporto.esito||'positivo', note: selectedRapporto.note||''
-              });
               setRapportoStep('new'); setRapportoSelectedId(null);
             }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-sm mb-3">
               ✏️ {isMirco && selectedRapporto.userId !== user.id ? 'Modifica (come Mirco)' : 'Modifica'}
             </button>
           )}
+          <button onClick={() => {
+            const r = selectedRapporto;
+            const rev = r.revisione || 0;
+            const fmtDate = (s) => { if (!s) return '—'; const p = s.split('-'); if (p.length !== 3) return s; return p[2]+'/'+p[1]+'/'+p[0].slice(2); };
+            const esitoLabel = { positivo:'✓ Positivo', negativo:'✗ Negativo', sospeso:'⏸ Sospeso', altro:'◎ Altro' }[r.esito] || r.esito;
+            const esitoColor = { positivo:'#16a34a', negativo:'#dc2626', sospeso:'#ea580c', altro:'#64748b' }[r.esito] || '#64748b';
+            const orario = [r.dalleOre&&'dalle '+r.dalleOre, r.alleOre&&'alle '+r.alleOre, r.durata&&'('+r.durata+')'].filter(Boolean).join(' ') || '—';
+            const righeRows = (r.righe||[]).map(riga => `<tr><td style="padding:6px 12px 6px 0;font-weight:bold;vertical-align:top;width:130px;border-bottom:1px solid #f1f5f9">${riga.commessa||'—'}</td><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;white-space:pre-wrap">${riga.descrizione||'—'}</td></tr>`).join('');
+            const nomeFile = 'Rapporto_'+r.cliente.replace(/\s+/g,'-')+'_'+fmtDate(r.data).replace(/\//g,'-');
+            const win = window.open('','_blank');
+            win.document.write(`<!DOCTYPE html><html><head><title>${nomeFile}</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#222;}h1{font-size:18px;font-weight:bold;text-transform:uppercase;color:#1A3661;margin-bottom:2px;}h2{font-size:12px;font-weight:bold;border-bottom:2px solid #1A3661;padding-bottom:3px;color:#1A3661;text-transform:uppercase;margin:18px 0 8px;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 24px;}.field label{font-size:9px;font-weight:bold;text-transform:uppercase;color:#888;display:block;}.field p{margin:2px 0 4px;padding-bottom:3px;border-bottom:1px solid #ddd;font-weight:bold;}table{width:100%;border-collapse:collapse;}th{background:#1A3661;color:white;padding:6px 8px;text-align:left;font-size:11px;}@media print{button{display:none!important;}}</style></head><body>`);
+            win.document.write(`<div style="display:flex;gap:10px;margin-bottom:16px;"><button onclick="window.print()" style="padding:8px 20px;background:#1A3661;color:white;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#128438; Stampa / Salva PDF</button><button onclick="window.close()" style="padding:8px 16px;background:#f0f0f0;color:#555;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#8592; Chiudi</button></div>`);
+            win.document.write(`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;"><div><h1>Rapporto di Intervento Excogita</h1><p style="font-size:10px;color:#999;margin:0">Generato il ${new Date().toLocaleDateString('it-IT')}</p></div><span style="font-size:10px;color:#999;text-align:right">MOD. RA01<br>REV ${String(rev).padStart(2,'0')}</span></div>`);
+            win.document.write(`<h2>Dati Intervento</h2><div class="grid">`);
+            win.document.write(`<div class="field"><label>Data</label><p>${fmtDate(r.data)}</p></div><div class="field"><label>Cliente</label><p>${r.cliente||'—'}</p></div><div class="field"><label>Luogo</label><p>${r.luogo||'—'}</p></div><div class="field"><label>Operatore</label><p>${r.operatore||'—'}</p></div><div class="field"><label>C/o Sede Cliente</label><p>${r.cSede==='si'?'Sì':'No'+(r.cSedeSpecifica?' — '+r.cSedeSpecifica:'')}</p></div><div class="field"><label>Mezzo</label><p>${r.mezzo==='proprio'?'Mezzo Proprio':'Mezzo Aziendale'+(r.mezzoTipo?' — '+r.mezzoTipo:'')}</p></div><div class="field"><label>Orario</label><p>${orario}</p></div><div class="field"><label>Compilato da</label><p>${r.userName||'—'}</p></div></div>`);
+            win.document.write(`<h2>Descrizione Intervento</h2><table><thead><tr><th style="width:130px">N° Commessa</th><th>Descrizione</th></tr></thead><tbody>${righeRows}</tbody></table>`);
+            win.document.write(`<h2>Esito dell'Intervento</h2><p style="font-weight:bold;font-size:14px;color:${esitoColor}">${esitoLabel}</p>`);
+            if (r.note) win.document.write(`<p style="margin-top:6px;white-space:pre-wrap;font-size:11px;color:#555">${r.note}</p>`);
+            win.document.write(`<div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px"><div style="border-top:1px solid #ccc;padding-top:6px;font-size:10px;color:#888">Firma del Tecnico</div><div style="border-top:1px solid #ccc;padding-top:6px;font-size:10px;color:#888">Firma del Cliente</div></div>`);
+            win.document.write('</body></html>');
+            win.document.close();
+          }} className="w-full bg-slate-800 text-white py-4 rounded-2xl font-black uppercase text-sm mb-3">
+            🖨️ Stampa / Salva PDF
+          </button>
           {selectedRapporto.userId === user.id && !isMirco && (
             <button onClick={async () => {
               if (!window.confirm('Sei sicuro di voler cancellare questo rapporto?')) return;
@@ -3481,7 +3497,7 @@ export default function App() {
 
     // ── LIST ────────────────────────────────────────────────────────────────
     return (
-      <div className="px-4 pt-8 pb-24 max-w-lg mx-auto">
+      <div className="px-4 pt-16 pb-24 max-w-lg mx-auto">
         <button onClick={() => { setRapportoStep('new'); setRapportoEditingId(null); }}
           className="w-full bg-white border-2 border-slate-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm active:bg-slate-50 text-left mb-6">
           <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
