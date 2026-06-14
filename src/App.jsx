@@ -3187,10 +3187,32 @@ export default function App() {
       return req.type + ': ' + (req.dates?.length || 0) + ' giorni';
     };
 
+    const unreadRapporti = myHistory.filter(n => n.type === 'rapporto' && !n.read);
+
     return (
       <div className="space-y-4 pb-6">
         <h2 className="text-xl font-black uppercase italic">Centro Notifiche</h2>
-        {myPending.length === 0 && <p className="text-slate-400 text-sm font-bold">Nessuna richiesta in attesa.</p>}
+
+        {/* Notifiche rapporto non lette — solo per Mirco, in cima */}
+        {unreadRapporti.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">📋 Rapporti da visionare ({unreadRapporti.length})</p>
+            {unreadRapporti.map(n => (
+              <div key={n.id} className="bg-blue-50 border-2 border-blue-200 rounded-3xl p-4 shadow-sm flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <p className="font-black text-blue-800 text-sm">{n.message}</p>
+                  <p className="text-[9px] font-black text-blue-400 uppercase mt-1">{n.date}</p>
+                </div>
+                <button onClick={() => updateDoc(doc(db, 'notifications', n.id), { read: true })}
+                  className="shrink-0 bg-blue-600 text-white px-3 py-2 rounded-xl font-black text-xs uppercase">
+                  ✓ Visto
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {myPending.length === 0 && unreadRapporti.length === 0 && <p className="text-slate-400 text-sm font-bold">Nessuna richiesta in attesa.</p>}
         {myPending.length > 0 && (() => {
           const { thisWeek: pw, lastThirty: p30, older: pOld } = classifyByTime(myPending, r => r.createdAt || new Date().toISOString());
           if (pw.length > 0) return <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2">Questa settimana</p>;
@@ -3287,12 +3309,14 @@ export default function App() {
           const { thisWeek, lastThirty, older } = classifyByTime(myHistory, n => n.createdAt || new Date().toISOString());
           const NotifItem = ({ n }) => {
             const isAlert = n.message && n.message.startsWith('ATTENZIONE!!!');
+            const isRapporto = n.type === 'rapporto';
             const canDelete = user.username === 'p.grande';
             return (
-              <div className={'flex gap-3 border-b pb-3 last:border-0 items-start ' + (isAlert ? 'border-red-100 bg-red-50 rounded-2xl px-3 py-2' : 'border-slate-50')}>
-                <div className={'w-2 h-2 rounded-full mt-1.5 shrink-0 ' + (isAlert ? 'bg-red-500' : 'bg-blue-500')}></div>
+              <div className={'flex gap-3 border-b pb-3 last:border-0 items-start ' + (isAlert ? 'border-red-100 bg-red-50 rounded-2xl px-3 py-2' : isRapporto ? 'border-blue-100 bg-blue-50 rounded-2xl px-3 py-2' : 'border-slate-50')}>
+                <div className={'w-2 h-2 rounded-full mt-1.5 shrink-0 ' + (isAlert ? 'bg-red-500' : isRapporto ? 'bg-blue-600' : 'bg-blue-500')}></div>
                 <div className="flex-1 min-w-0">
-                  <p className={'text-sm font-bold ' + (isAlert ? 'text-red-600' : 'text-slate-700')}>{n.message}</p>
+                  {isRapporto && <p className="text-[9px] font-black text-blue-500 uppercase mb-0.5">📋 Rapporto Intervento</p>}
+                  <p className={'text-sm font-bold ' + (isAlert ? 'text-red-600' : isRapporto ? 'text-blue-800' : 'text-slate-700')}>{n.message}</p>
                   <p className="text-[9px] font-black text-slate-400 uppercase mt-0.5">{n.date}</p>
                 </div>
                 {canDelete && (
@@ -3304,7 +3328,6 @@ export default function App() {
           return (
             <div className="bg-white rounded-3xl border p-5 space-y-1">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-3 mb-3">Cronologia</p>
-              {user.username === 'mirco.ceo' && <p className="text-[9px] text-slate-300 mb-2">debug: {notifications.length} totali, {myHistory.length} per "{user.name}"</p>}
               {myHistory.length === 0 && <p className="text-slate-400 text-sm font-bold py-2">Nessuna notifica.</p>}
 
               {/* Questa settimana */}
@@ -3323,8 +3346,8 @@ export default function App() {
                 </>
               )}
 
-              {/* Archivio precedente */}
-              {older.length > 0 && (
+              {/* Archivio precedente — nascosto per Mirco */}
+              {older.length > 0 && user.username !== 'mirco.ceo' && (
                 <>
                   <SectionDivider label="Archivio precedente" count={older.length}/>
                   <div className="space-y-1 opacity-60">{older.map(n => <NotifItem key={n.id} n={n}/>)}</div>
