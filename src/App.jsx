@@ -1631,6 +1631,21 @@ export default function App() {
   const [hrKmEdits, setHrKmEdits] = useState({});
   const [moduloEditingId, setModuloEditingId] = useState(null);
   const [typeFilter, setTypeFilter] = useState('tutti');
+  // ─── TAB MODULISTICA ─────────────────────────────────────────────────────
+  const [modulisticaTab, setModulisticaTab] = useState('trasferta'); // 'trasferta' | 'rapporto'
+  // ─── RAPPORTO INTERVENTO STATE ───────────────────────────────────────────
+  const [rapportiList, setRapportiList] = useState([]);
+  const [rapportoSelectedId, setRapportoSelectedId] = useState(null);
+  const [rapportoStep, setRapportoStep] = useState('list'); // 'list' | 'new' | 'detail'
+  const [rapportoFormData, setRapportoFormData] = useState({
+    data:'', cliente:'', luogo:'',
+    cSede: 'si', cSedeSpecifica:'',
+    mezzo:'proprio', mezzoTipo:'',
+    operatore:'', dalleOre:'', alleOre:'', durata:'',
+    righe:[{commessa:'', descrizione:''}],
+    esito:'positivo', note:''
+  });
+  const [rapportoEditingId, setRapportoEditingId] = useState(null);
 
   useEffect(() => { userRef.current = user; }, [user]);
 
@@ -1666,7 +1681,8 @@ export default function App() {
     const unsubPoli = onSnapshot(collection(db, 'polivalenze'), snap => setPolivalenze(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubAudit = onSnapshot(query(collection(db, 'auditLog'), orderBy('createdAt', 'desc')), snap => setAuditLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubAccess = onSnapshot(query(collection(db, 'accessLog'), orderBy('createdAt', 'desc')), snap => setAccessLog(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => { unsubUsers(); unsubReqs(); unsubNotifs(); unsubClosures(); unsubPoli(); unsubAudit(); unsubAccess(); };
+    const unsubRapporti = onSnapshot(query(collection(db, 'rapportiIntervento'), orderBy('createdAt', 'desc')), snap => setRapportiList(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return () => { unsubUsers(); unsubReqs(); unsubNotifs(); unsubClosures(); unsubPoli(); unsubAudit(); unsubAccess(); unsubRapporti(); };
   }, []);
 
   useEffect(() => {
@@ -3255,6 +3271,272 @@ export default function App() {
   );
 
   if (user.role === 'amministratore' && view === 'notifications') setView('calendar');
+
+  // ─── RAPPORTO INTERVENTO FUNCTIONS ───────────────────────────────────────
+  const resetRapportoForm = () => setRapportoFormData({
+    data:'', cliente:'', luogo:'',
+    cSede:'si', cSedeSpecifica:'',
+    mezzo:'proprio', mezzoTipo:'',
+    operatore:'', dalleOre:'', alleOre:'', durata:'',
+    righe:[{commessa:'', descrizione:''}],
+    esito:'positivo', note:''
+  });
+
+  const submitRapporto = async () => {
+    if (!rapportoFormData.data || !rapportoFormData.cliente || !rapportoFormData.operatore) {
+      alert('Compila i campi obbligatori: Data, Cliente, Operatore'); return;
+    }
+    const now = new Date();
+    const payload = {
+      ...rapportoFormData,
+      userId: user.id, userName: user.name, username: user.username,
+      createdAt: now.toISOString(),
+      revisione: 0,
+      revisioniStorico: []
+    };
+    if (rapportoEditingId) {
+      const existing = rapportiList.find(r => r.id === rapportoEditingId);
+      const newRev = (existing?.revisione || 0) + 1;
+      const storico = [...(existing?.revisioniStorico || []), { ...existing, salvatoIl: now.toISOString() }];
+      await updateDoc(doc(db, 'rapportiIntervento', rapportoEditingId), {
+        ...rapportoFormData, revisione: newRev, revisioniStorico: storico, updatedAt: now.toISOString()
+      });
+      // Notifica al compilatore se Mirco ha modificato
+      if (user.username === 'mirco.ceo' && existing && existing.userId !== user.id) {
+        const compilatore = users.find(u => u.id === existing.userId);
+        if (compilatore) {
+          await addDoc(collection(db, 'notifications'), {
+            to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'0')}`,
+            type: 'rapporto', reqId: rapportoEditingId, createdAt: now.toISOString(),
+            date: now.toLocaleString('it-IT')
+          });
+        }
+      }
+      setRapportoEditingId(null);
+    } else {
+      await addDoc(collection(db, 'rapportiIntervento'), payload);
+    }
+    resetRapportoForm();
+    setRapportoStep('list');
+  };
+
+  // ─── RAPPORTO VIEW ───────────────────────────────────────────────────────
+  const RapportoView = () => {
+    const isMirco = user.username === 'mirco.ceo';
+    const fmtD = (s) => { if (!s) return '—'; const p = s.split('-'); if (p.length !== 3) return s; return p[2]+'/'+p[1]+'/'+p[0].slice(2); };
+    const selectedRapporto = rapportiList.find(r => r.id === rapportoSelectedId);
+
+    const myRapporti = isMirco
+      ? [...rapportiList].sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''))
+      : rapportiList.filter(r => r.userId === user.id || r.userId === 'mirco').sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+
+    // ── DETAIL ──────────────────────────────────────────────────────────────
+    if (rapportoSelectedId && selectedRapporto) {
+      const rev = selectedRapporto.revisione || 0;
+      const esitoCfg = { positivo:{col:'text-green-600',label:'✓ Positivo'}, negativo:{col:'text-red-500',label:'✗ Negativo'}, sospeso:{col:'text-orange-500',label:'⏸ Sospeso'}, altro:{col:'text-slate-500',label:'◎ Altro'} };
+      const ec = esitoCfg[selectedRapporto.esito] || esitoCfg.positivo;
+      return (
+        <div className="px-4 py-4 max-w-2xl mx-auto pb-24">
+          <div className="flex items-center gap-3 mb-5">
+            <button onClick={() => setRapportoSelectedId(null)} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
+            <div className="flex-1">
+              <h2 className="font-black uppercase italic text-lg">Rapporto di Intervento</h2>
+              <p className="text-xs text-slate-400">{selectedRapporto.cliente} · {fmtD(selectedRapporto.data)}</p>
+            </div>
+            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-slate-100 text-slate-600">REV {String(rev).padStart(2,'0')}</span>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+            <h3 className="font-black uppercase text-[10px] text-slate-400 mb-3">Dati Intervento</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {[['Operatore', selectedRapporto.operatore||'—'],['Cliente', selectedRapporto.cliente||'—'],['Luogo', selectedRapporto.luogo||'—'],['Data', fmtD(selectedRapporto.data)],['Compilato da', selectedRapporto.userName||'—'],['C/o Sede Cliente', selectedRapporto.cSede==='si'?'Sì':`No${selectedRapporto.cSedeSpecifica?' — '+selectedRapporto.cSedeSpecifica:''}` ],['Mezzo', selectedRapporto.mezzo==='proprio'?'Proprio':'Aziendale'+(selectedRapporto.mezzoTipo?' — '+selectedRapporto.mezzoTipo:'')],['Orario', [selectedRapporto.dalleOre&&'dalle '+selectedRapporto.dalleOre, selectedRapporto.alleOre&&'alle '+selectedRapporto.alleOre, selectedRapporto.durata&&'('+selectedRapporto.durata+')'].filter(Boolean).join(' ')||'—']].map(([k,v]) => (
+                <div key={k}><p className="text-[9px] font-black text-slate-400 uppercase">{k}</p><p className="font-bold text-sm">{v}</p></div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+            <h3 className="font-black uppercase text-[10px] text-slate-400 mb-3">Descrizione Intervento</h3>
+            <table className="w-full text-sm">
+              <thead><tr className="border-b"><th className="text-left py-1 pr-3 text-[10px] text-slate-400 font-black uppercase w-28">N° Commessa</th><th className="text-left py-1 text-[10px] text-slate-400 font-black uppercase">Descrizione</th></tr></thead>
+              <tbody>{(selectedRapporto.righe||[]).map((r,i) => (
+                <tr key={i} className="border-b border-slate-50"><td className="py-2 pr-3 font-bold text-slate-700 align-top">{r.commessa||'—'}</td><td className="py-2 text-slate-600 whitespace-pre-wrap">{r.descrizione||'—'}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+            <h3 className="font-black uppercase text-[10px] text-slate-400 mb-2">Esito</h3>
+            <p className={'font-black text-base ' + ec.col}>{ec.label}</p>
+            {selectedRapporto.note && <p className="text-sm text-slate-500 mt-2 whitespace-pre-wrap">{selectedRapporto.note}</p>}
+          </div>
+
+          {(selectedRapporto.revisioniStorico||[]).length > 0 && (
+            <div className="bg-slate-50 rounded-2xl p-4 mb-4">
+              <h3 className="font-black uppercase text-[10px] text-slate-400 mb-2">Storico revisioni</h3>
+              {(selectedRapporto.revisioniStorico||[]).map((rv,i) => (
+                <p key={i} className="text-xs text-slate-400 py-1 border-b border-slate-200">REV {String(rv.revisione||0).padStart(2,'0')} — {rv.cliente} — {fmtD(rv.data)} — salvato il {new Date(rv.salvatoIl||rv.createdAt).toLocaleString('it-IT')}</p>
+              ))}
+            </div>
+          )}
+
+          {(isMirco || selectedRapporto.userId === user.id) && (
+            <button onClick={() => {
+              setRapportoEditingId(selectedRapporto.id);
+              setRapportoFormData({
+                data: selectedRapporto.data||'', cliente: selectedRapporto.cliente||'', luogo: selectedRapporto.luogo||'',
+                cSede: selectedRapporto.cSede||'si', cSedeSpecifica: selectedRapporto.cSedeSpecifica||'',
+                mezzo: selectedRapporto.mezzo||'proprio', mezzoTipo: selectedRapporto.mezzoTipo||'',
+                operatore: selectedRapporto.operatore||'', dalleOre: selectedRapporto.dalleOre||'', alleOre: selectedRapporto.alleOre||'', durata: selectedRapporto.durata||'',
+                righe: selectedRapporto.righe||[{commessa:'',descrizione:''}],
+                esito: selectedRapporto.esito||'positivo', note: selectedRapporto.note||''
+              });
+              setRapportoStep('new'); setRapportoSelectedId(null);
+            }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-sm mb-3">
+              ✏️ {isMirco && selectedRapporto.userId !== user.id ? 'Modifica (come Mirco)' : 'Modifica'}
+            </button>
+          )}
+          {selectedRapporto.userId === user.id && !isMirco && (
+            <button onClick={async () => {
+              if (!window.confirm('Sei sicuro di voler cancellare questo rapporto?')) return;
+              await deleteDoc(doc(db, 'rapportiIntervento', selectedRapporto.id));
+              setRapportoSelectedId(null);
+            }} className="w-full bg-red-50 text-red-500 py-3 rounded-2xl font-black uppercase text-sm">
+              <X size={14} className="inline mr-1"/> Cancella
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    // ── FORM NEW / EDIT ─────────────────────────────────────────────────────
+    if (rapportoStep === 'new') {
+      const fd = rapportoFormData;
+      const setFd = (k, v) => setRapportoFormData(p => ({...p, [k]: v}));
+      const addRiga = () => setRapportoFormData(p => ({...p, righe:[...p.righe, {commessa:'',descrizione:''}]}));
+      const setRiga = (i, k, v) => setRapportoFormData(p => { const r=[...p.righe]; r[i]={...r[i],[k]:v}; return {...p, righe:r}; });
+      const removeRiga = (i) => setRapportoFormData(p => ({...p, righe: p.righe.filter((_,idx)=>idx!==i)}));
+      const inputCls = "w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-blue-400 text-sm font-bold";
+      const labelCls = "text-[10px] font-black text-slate-400 uppercase block mb-1";
+      return (
+        <div className="px-4 py-4 max-w-2xl mx-auto pb-32">
+          <div className="flex items-center gap-3 mb-5">
+            <button onClick={() => { setRapportoStep('list'); setRapportoEditingId(null); resetRapportoForm(); }} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
+            <h2 className="font-black uppercase italic text-lg flex-1">{rapportoEditingId ? 'Modifica Rapporto' : 'Nuovo Rapporto di Intervento'}</h2>
+          </div>
+
+          {/* Dati principali */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 space-y-3">
+            <h3 className="font-black uppercase text-[10px] text-slate-400">Dati Intervento *</h3>
+            <div className="grid grid-cols-3 gap-3">
+              <div><label className={labelCls}>Data *</label><input type="date" value={fd.data} onChange={e=>setFd('data',e.target.value)} className={inputCls}/></div>
+              <div><label className={labelCls}>Cliente *</label><input type="text" value={fd.cliente} onChange={e=>setFd('cliente',e.target.value)} placeholder="es. SILAM" className={inputCls}/></div>
+              <div><label className={labelCls}>Luogo</label><input type="text" value={fd.luogo} onChange={e=>setFd('luogo',e.target.value)} placeholder="es. Cannara" className={inputCls}/></div>
+            </div>
+            <div><label className={labelCls}>Operatore *</label><input type="text" value={fd.operatore} onChange={e=>setFd('operatore',e.target.value)} placeholder="Nome e cognome operatore" className={inputCls}/></div>
+          </div>
+
+          {/* Presenza e mezzo */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 space-y-3">
+            <h3 className="font-black uppercase text-[10px] text-slate-400">Presenza e Mezzo</h3>
+            <div>
+              <label className={labelCls}>C/o Sede Cliente</label>
+              <div className="flex gap-3">
+                {['si','no'].map(v => <button key={v} onClick={() => setFd('cSede',v)} className={'px-4 py-2 rounded-xl font-black uppercase text-xs border-2 ' + (fd.cSede===v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-400')}>{v==='si'?'Sì':'No'}</button>)}
+              </div>
+              {fd.cSede==='no' && <input type="text" value={fd.cSedeSpecifica} onChange={e=>setFd('cSedeSpecifica',e.target.value)} placeholder="Specificare luogo alternativo..." className={inputCls + ' mt-2'}/>}
+            </div>
+            <div>
+              <label className={labelCls}>Mezzo</label>
+              <div className="flex gap-3">
+                {['proprio','aziendale'].map(v => <button key={v} onClick={() => setFd('mezzo',v)} className={'px-4 py-2 rounded-xl font-black uppercase text-xs border-2 ' + (fd.mezzo===v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-400')}>{v==='proprio'?'Mezzo Proprio':'Mezzo Aziendale'}</button>)}
+              </div>
+              {fd.mezzo==='aziendale' && <input type="text" value={fd.mezzoTipo} onChange={e=>setFd('mezzoTipo',e.target.value)} placeholder="Specificare tipo mezzo..." className={inputCls + ' mt-2'}/>}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><label className={labelCls}>Dalle ore</label><input type="time" value={fd.dalleOre} onChange={e=>setFd('dalleOre',e.target.value)} className={inputCls}/></div>
+              <div><label className={labelCls}>Alle ore</label><input type="time" value={fd.alleOre} onChange={e=>setFd('alleOre',e.target.value)} className={inputCls}/></div>
+              <div><label className={labelCls}>Durata</label><input type="text" value={fd.durata} onChange={e=>setFd('durata',e.target.value)} placeholder="es. 1,5h" className={inputCls}/></div>
+            </div>
+          </div>
+
+          {/* Righe intervento */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 space-y-3">
+            <h3 className="font-black uppercase text-[10px] text-slate-400">Descrizione Intervento</h3>
+            {fd.righe.map((r,i) => (
+              <div key={i} className="border border-slate-100 rounded-xl p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1"><label className={labelCls}>N° Commessa</label><input type="text" value={r.commessa} onChange={e=>setRiga(i,'commessa',e.target.value)} placeholder="es. E26C014" className={inputCls}/></div>
+                  {fd.righe.length > 1 && <button onClick={() => removeRiga(i)} className="text-red-400 font-black text-sm mt-4">✕</button>}
+                </div>
+                <div><label className={labelCls}>Descrizione</label><textarea value={r.descrizione} onChange={e=>setRiga(i,'descrizione',e.target.value)} placeholder="Descrivi l'intervento..." rows={3} className={inputCls + ' resize-none'}/></div>
+              </div>
+            ))}
+            <button onClick={addRiga} className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 font-black text-xs uppercase hover:border-blue-300 hover:text-blue-400">+ Aggiungi riga</button>
+          </div>
+
+          {/* Esito e note */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 space-y-3">
+            <h3 className="font-black uppercase text-[10px] text-slate-400">Esito e Note</h3>
+            <div>
+              <label className={labelCls}>Esito dell'intervento</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[['positivo','✓ Positivo','green'],['negativo','✗ Negativo','red'],['sospeso','⏸ Sospeso','orange'],['altro','◎ Altro','slate']].map(([v,lbl,col]) => (
+                  <button key={v} onClick={() => setFd('esito',v)} className={`py-2 px-3 rounded-xl font-black uppercase text-xs border-2 ${fd.esito===v ? `border-${col}-500 bg-${col}-50 text-${col}-700` : 'border-slate-200 text-slate-400'}`}>{lbl}</button>
+                ))}
+              </div>
+            </div>
+            <div><label className={labelCls}>Note / Tariffario / Altre info</label><textarea value={fd.note} onChange={e=>setFd('note',e.target.value)} rows={4} placeholder="Note libere, tariffario, rimborso km, ecc..." className={inputCls + ' resize-none'}/></div>
+          </div>
+
+          <button onClick={submitRapporto} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-base">
+            {rapportoEditingId ? '💾 Salva modifiche' : '📋 Salva Rapporto'}
+          </button>
+          <button onClick={() => { setRapportoStep('list'); setRapportoEditingId(null); resetRapportoForm(); }} className="w-full mt-3 py-3 text-slate-400 font-black uppercase text-sm">Annulla</button>
+        </div>
+      );
+    }
+
+    // ── LIST ────────────────────────────────────────────────────────────────
+    return (
+      <div className="px-4 py-4 max-w-lg mx-auto pb-24">
+        <button onClick={() => { setRapportoStep('new'); setRapportoEditingId(null); resetRapportoForm(); }}
+          className="w-full bg-white border-2 border-slate-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm active:bg-slate-50 text-left mb-6">
+          <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
+            <ClipboardList size={22} className="text-slate-600"/>
+          </div>
+          <div className="flex-1">
+            <p className="font-black text-slate-800">Nuovo Rapporto di Intervento</p>
+            <p className="text-xs text-slate-400 mt-0.5">Compila il rapporto MOD RA01</p>
+          </div>
+          <ChevronRight size={18} className="text-slate-300"/>
+        </button>
+
+        <p className="text-[10px] font-black text-slate-400 uppercase mb-3">{isMirco ? 'Tutti i rapporti' : 'I miei rapporti'} ({myRapporti.length})</p>
+        {myRapporti.length === 0
+          ? <p className="text-slate-300 text-sm font-bold text-center py-10">Nessun rapporto salvato</p>
+          : <div className="space-y-3">
+              {myRapporti.map(r => {
+                const rev = r.revisione || 0;
+                const esitoCols = { positivo:'border-green-400 bg-green-50', negativo:'border-red-400 bg-red-50', sospeso:'border-orange-400 bg-orange-50', altro:'border-slate-300 bg-slate-50' };
+                return (
+                  <button key={r.id} onClick={() => setRapportoSelectedId(r.id)}
+                    className={'w-full text-left rounded-2xl shadow-sm border-l-4 p-4 ' + (esitoCols[r.esito]||esitoCols.altro)}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-black text-sm">{isMirco ? r.userName+' — ' : ''}{r.cliente}</p>
+                      <span className="shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-slate-500 border">REV {String(rev).padStart(2,'0')}</span>
+                    </div>
+                    <p className="text-xs text-slate-500">{fmtD(r.data)} · {r.luogo||'—'} · {r.operatore}</p>
+                    {(r.righe||[]).filter(x=>x.commessa).map((x,i)=><p key={i} className="text-xs text-slate-400">{x.commessa}</p>)}
+                  </button>
+                );
+              })}
+            </div>
+        }
+      </div>
+    );
+  };
+
   // ─── MODULISTICA VIEW ────────────────────────────────────────────────────
   const ModulisticaView = () => {
     const isHR = user.role === 'hrmanager';
@@ -3594,7 +3876,7 @@ export default function App() {
       );
     }
 
-    // ── LIST VIEW ─────────────────────────────────────────────────────────────
+    // ── LIST VIEW (with tabs) ─────────────────────────────────────────────
     const myModuli = isHR
       ? [...moduliList].sort((a,b) => {
           if (a.status==='in_attesa' && b.status!=='in_attesa') return -1;
@@ -3606,78 +3888,93 @@ export default function App() {
     const inAttesa = myModuli.filter(m => m.status === 'in_attesa').length;
 
     return (
-      <div className="px-4 py-4 max-w-lg mx-auto pb-24">
-        <h2 className="text-xl font-black uppercase italic mb-1">Modulistica</h2>
-        <p className="text-sm text-slate-400 mb-5">{isHR ? 'Gestione e approvazione moduli' : 'Compila e invia i moduli aziendali'}</p>
+      <div className="pb-24">
+        {/* Tab selector */}
+        <div className="flex border-b border-slate-200 bg-white sticky top-16 z-20">
+          <button onClick={() => setModulisticaTab('trasferta')}
+            className={'flex-1 py-3 font-black uppercase text-xs border-b-2 transition-colors ' + (modulisticaTab==='trasferta' ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-400')}>
+            🧳 Trasferta
+          </button>
+          <button onClick={() => setModulisticaTab('rapporto')}
+            className={'flex-1 py-3 font-black uppercase text-xs border-b-2 transition-colors ' + (modulisticaTab==='rapporto' ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-400')}>
+            📋 Rapporto Intervento
+          </button>
+        </div>
 
-        {!isHR && (
-          <div className="mb-6">
-            <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Moduli disponibili</p>
-            <button onClick={() => { setModuloStep('new'); setModuloMainStep('header'); setModuloFormData({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',spese:[],kmRows:[]}); setModuloSpesaPhase('editing'); setModuloKmPhase('editing'); }}
-              className="w-full bg-white border-2 border-blue-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm active:bg-blue-50 text-left">
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Briefcase size={22} className="text-blue-600"/>
+        {modulisticaTab === 'rapporto' ? <RapportoView /> : (
+          <div className="px-4 py-4 max-w-lg mx-auto">
+            <h2 className="text-xl font-black uppercase italic mb-1">Modulistica</h2>
+            <p className="text-sm text-slate-400 mb-5">{isHR ? 'Gestione e approvazione moduli' : 'Compila e invia i moduli aziendali'}</p>
+
+            {!isHR && (
+              <div className="mb-6">
+                <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Moduli disponibili</p>
+                <button onClick={() => { setModuloStep('new'); setModuloMainStep('header'); setModuloFormData({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',spese:[],kmRows:[]}); setModuloSpesaPhase('editing'); setModuloKmPhase('editing'); }}
+                  className="w-full bg-white border-2 border-blue-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm active:bg-blue-50 text-left">
+                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <Briefcase size={22} className="text-blue-600"/>
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-black text-slate-800">Modulo di Trasferta</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Rimborso spese e indennità km</p>
+                  </div>
+                  <ChevronRight size={18} className="text-slate-300"/>
+                </button>
               </div>
-              <div className="flex-1">
-                <p className="font-black text-slate-800">Modulo di Trasferta</p>
-                <p className="text-xs text-slate-400 mt-0.5">Rimborso spese e indennità km</p>
+            )}
+
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-[10px] font-black text-slate-400 uppercase">{isHR ? 'Tutti i moduli' : 'Le mie richieste'}</p>
+                {inAttesa > 0 && <span className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full text-[9px] font-black">{inAttesa} in attesa</span>}
               </div>
-              <ChevronRight size={18} className="text-slate-300"/>
-            </button>
+              {myModuli.length === 0
+                ? <p className="text-slate-300 text-sm font-bold text-center py-10">Nessun modulo {isHR ? 'ricevuto' : 'inviato'}</p>
+                : <div className="space-y-3">
+                    {myModuli.map(m => (
+                    <div key={m.id} className={'rounded-2xl shadow-sm border-l-4 ' + (m.status==='approvato' ? 'bg-green-50 border-green-400' : 'bg-orange-50 border-orange-400')}>
+                        <button onClick={() => { setModuloSelectedId(m.id); setHrKmEdits({}); }} className="w-full text-left p-4">
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <p className="font-black text-sm">{isHR ? m.userName+' — ' : ''}Trasferta a {m.destinazione}</p>
+                            <span className={'shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ' + (m.status==='approvato' ? 'bg-green-200 text-green-700' : 'bg-orange-200 text-orange-700')}>
+                              {m.status==='approvato' ? '✓ Appr.' : 'In attesa'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500">{fmtD(m.dataInizio)} → {fmtD(m.dataFine)} · {(m.spese||[]).length} spese · {(m.kmRows||[]).length} km</p>
+                          {m.commessa && <p className="text-xs text-slate-400">Commessa: {m.commessa}</p>}
+                        </button>
+                        {!isHR && (
+                          <div className="flex border-t border-slate-100">
+                            <button onClick={(e) => {
+                              e.stopPropagation();
+                              setModuloEditingId(m.id);
+                              setModuloFormData({
+                                destinazione: m.destinazione||'', indirizzo: m.indirizzo||'',
+                                dataInizio: m.dataInizio||'', oraInizio: m.oraInizio||'08:00',
+                                dataFine: m.dataFine||'', oraFine: m.oraFine||'17:00',
+                                commessa: m.commessa||'', spese: m.spese||[], kmRows: m.kmRows||[]
+                              });
+                              setModuloStep('new'); setModuloMainStep('header');
+                              setModuloSpesaPhase('editing'); setModuloKmPhase('editing');
+                            }} className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-500 text-xs font-black uppercase hover:bg-blue-50 rounded-bl-2xl border-r border-slate-100">
+                              ✏️ Modifica
+                            </button>
+                            <button onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!window.confirm('Sei sicuro di voler cancellare il modulo?')) return;
+                              await deleteDoc(doc(db, 'moduliTrasferta', m.id));
+                            }} className="flex-1 flex items-center justify-center gap-1 py-2 text-red-500 text-xs font-black uppercase hover:bg-red-50 rounded-br-2xl">
+                              <X size={12}/> Cancella
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+              }
+            </div>
           </div>
         )}
-
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase">{isHR ? 'Tutti i moduli' : 'Le mie richieste'}</p>
-            {inAttesa > 0 && <span className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full text-[9px] font-black">{inAttesa} in attesa</span>}
-          </div>
-          {myModuli.length === 0
-            ? <p className="text-slate-300 text-sm font-bold text-center py-10">Nessun modulo {isHR ? 'ricevuto' : 'inviato'}</p>
-            : <div className="space-y-3">
-                {myModuli.map(m => (
-                <div key={m.id} className={'rounded-2xl shadow-sm border-l-4 ' + (m.status==='approvato' ? 'bg-green-50 border-green-400' : 'bg-orange-50 border-orange-400')}>
-                    <button onClick={() => { setModuloSelectedId(m.id); setHrKmEdits({}); }} className="w-full text-left p-4">
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <p className="font-black text-sm">{isHR ? m.userName+' — ' : ''}Trasferta a {m.destinazione}</p>
-                        <span className={'shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ' + (m.status==='approvato' ? 'bg-green-200 text-green-700' : 'bg-orange-200 text-orange-700')}>
-                          {m.status==='approvato' ? '✓ Appr.' : 'In attesa'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500">{fmtD(m.dataInizio)} → {fmtD(m.dataFine)} · {(m.spese||[]).length} spese · {(m.kmRows||[]).length} km</p>
-                      {m.commessa && <p className="text-xs text-slate-400">Commessa: {m.commessa}</p>}
-                    </button>
-                    {!isHR && (
-                      <div className="flex border-t border-slate-100">
-                        <button onClick={(e) => {
-                          e.stopPropagation();
-                          // Pre-compila il form con i dati esistenti
-                          setModuloEditingId(m.id);
-                          setModuloFormData({
-                            destinazione: m.destinazione||'', indirizzo: m.indirizzo||'',
-                            dataInizio: m.dataInizio||'', oraInizio: m.oraInizio||'08:00',
-                            dataFine: m.dataFine||'', oraFine: m.oraFine||'17:00',
-                            commessa: m.commessa||'', spese: m.spese||[], kmRows: m.kmRows||[]
-                          });
-                          setModuloStep('new'); setModuloMainStep('header');
-                          setModuloSpesaPhase('editing'); setModuloKmPhase('editing');
-                        }} className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-500 text-xs font-black uppercase hover:bg-blue-50 rounded-bl-2xl border-r border-slate-100">
-                          ✏️ Modifica
-                        </button>
-                        <button onClick={async (e) => {
-                          e.stopPropagation();
-                          if (!window.confirm('Sei sicuro di voler cancellare il modulo?')) return;
-                          await deleteDoc(doc(db, 'moduliTrasferta', m.id));
-                        }} className="flex-1 flex items-center justify-center gap-1 py-2 text-red-500 text-xs font-black uppercase hover:bg-red-50 rounded-br-2xl">
-                          <X size={12}/> Cancella
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-          }
-        </div>
       </div>
     );
   };
