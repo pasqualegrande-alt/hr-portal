@@ -480,15 +480,18 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
       const newRev = (existing?.revisione || 0) + 1;
       const storico = [...(existing?.revisioniStorico || []), { ...existing, salvatoIl: now.toISOString() }];
       await updateDoc(doc(db, 'rapportiIntervento', editingId), { ...fd, revisione: newRev, revisioniStorico: storico, updatedAt: now.toISOString() });
+      // Notifica al compilatore se Mirco modifica un rapporto altrui
       if (user.username === 'mirco.ceo' && existing && existing.userId !== user.id) {
-        const compilatore = users.find(u => u.id === existing.userId);
-        if (compilatore) await addDoc(collection(db, 'notifications'), { to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
+        const uSnap = await getDocs(collection(db, 'users'));
+        const compilatore = uSnap.docs.map(d=>d.data()).find(u => u.id === existing.userId);
+        if (compilatore) await addDoc(collection(db, 'notifications'), { to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'00')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
       }
     } else {
       const docRef = await addDoc(collection(db, 'rapportiIntervento'), { ...fd, userId: user.id, userName: user.name, username: user.username, createdAt: now.toISOString(), revisione: 0, revisioniStorico: [] });
       // Notifica a Mirco se non è Mirco stesso a compilare
       if (user.username !== 'mirco.ceo') {
-        const mirco = users.find(u => u.username === 'mirco.ceo');
+        const uSnap = await getDocs(collection(db, 'users'));
+        const mirco = uSnap.docs.map(d=>d.data()).find(u => u.username === 'mirco.ceo');
         if (mirco) await addDoc(collection(db, 'notifications'), { to: mirco.name, message: `Nuovo rapporto di intervento da ${user.name} — ${fd.cliente}${fd.luogo ? ', '+fd.luogo : ''}`, type: 'rapporto', reqId: docRef.id, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
       }
     }
