@@ -3310,7 +3310,7 @@ export default function App() {
           const NotifItem = ({ n }) => {
             const isAlert = n.message && n.message.startsWith('ATTENZIONE!!!');
             const isRapporto = n.type === 'rapporto';
-            const canDelete = user.username === 'p.grande';
+            const canDelete = user.username === 'p.grande' || user.username === 'mirco.ceo';
             return (
               <div className={'flex gap-3 border-b pb-3 last:border-0 items-start ' + (isAlert ? 'border-red-100 bg-red-50 rounded-2xl px-3 py-2' : isRapporto ? 'border-blue-100 bg-blue-50 rounded-2xl px-3 py-2' : 'border-slate-50')}>
                 <div className={'w-2 h-2 rounded-full mt-1.5 shrink-0 ' + (isAlert ? 'bg-red-500' : isRapporto ? 'bg-blue-600' : 'bg-blue-500')}></div>
