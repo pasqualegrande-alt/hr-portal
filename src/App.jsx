@@ -459,6 +459,112 @@ const AccessLogView = ({ accessLog, db }) => {
 
 
 
+// ─── RAPPORTO INTERVENTO — componente esterno (stato locale per evitare re-render) ──
+const EMPTY_RAPPORTO = { data:'', cliente:'', luogo:'', cSede:'si', cSedeSpecifica:'', mezzo:'proprio', mezzoTipo:'', operatore:'', dalleOre:'', alleOre:'', durata:'', righe:[{commessa:'',descrizione:''}], esito:'positivo', note:'' };
+
+const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCancel }) => {
+  const [fd, setFdRaw] = useState(initialData || EMPTY_RAPPORTO);
+  const setFd = (k, v) => setFdRaw(p => ({...p, [k]: v}));
+  const addRiga = () => setFdRaw(p => ({...p, righe:[...p.righe, {commessa:'',descrizione:''}]}));
+  const setRiga = (i, k, v) => setFdRaw(p => { const r=[...p.righe]; r[i]={...r[i],[k]:v}; return {...p, righe:r}; });
+  const removeRiga = (i) => setFdRaw(p => ({...p, righe: p.righe.filter((_,idx)=>idx!==i)}));
+  const inputCls = "w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-blue-400 text-sm font-bold";
+  const labelCls = "text-[10px] font-black text-slate-400 uppercase block mb-1";
+
+  const handleSubmit = async () => {
+    if (!fd.data || !fd.cliente || !fd.operatore) { alert('Compila i campi obbligatori: Data, Cliente, Operatore'); return; }
+    const now = new Date();
+    if (editingId) {
+      const snap = await getDocs(query(collection(db, 'rapportiIntervento')));
+      const existing = snap.docs.map(d=>({id:d.id,...d.data()})).find(r=>r.id===editingId);
+      const newRev = (existing?.revisione || 0) + 1;
+      const storico = [...(existing?.revisioniStorico || []), { ...existing, salvatoIl: now.toISOString() }];
+      await updateDoc(doc(db, 'rapportiIntervento', editingId), { ...fd, revisione: newRev, revisioniStorico: storico, updatedAt: now.toISOString() });
+      if (user.username === 'mirco.ceo' && existing && existing.userId !== user.id) {
+        const compilatore = users.find(u => u.id === existing.userId);
+        if (compilatore) await addDoc(collection(db, 'notifications'), { to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
+      }
+    } else {
+      await addDoc(collection(db, 'rapportiIntervento'), { ...fd, userId: user.id, userName: user.name, username: user.username, createdAt: now.toISOString(), revisione: 0, revisioniStorico: [] });
+    }
+    onSaved();
+  };
+
+  return (
+    <div className="px-4 py-6 max-w-2xl mx-auto pb-32">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onCancel} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
+        <h2 className="font-black uppercase italic text-lg flex-1">{editingId ? 'Modifica Rapporto' : 'Nuovo Rapporto di Intervento'}</h2>
+      </div>
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-4">
+        <h3 className="font-black uppercase text-[10px] text-slate-400">Dati Intervento *</h3>
+        <div className="grid grid-cols-3 gap-3">
+          <div><label className={labelCls}>Data *</label><input type="date" value={fd.data} onChange={e=>setFd('data',e.target.value)} className={inputCls}/></div>
+          <div><label className={labelCls}>Cliente *</label><input type="text" value={fd.cliente} onChange={e=>setFd('cliente',e.target.value)} placeholder="es. SILAM" className={inputCls}/></div>
+          <div><label className={labelCls}>Luogo</label><input type="text" value={fd.luogo} onChange={e=>setFd('luogo',e.target.value)} placeholder="es. Cannara" className={inputCls}/></div>
+        </div>
+        <div><label className={labelCls}>Operatore *</label><input type="text" value={fd.operatore} onChange={e=>setFd('operatore',e.target.value)} placeholder="Nome e cognome operatore" className={inputCls}/></div>
+      </div>
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-4">
+        <h3 className="font-black uppercase text-[10px] text-slate-400">Presenza e Mezzo</h3>
+        <div>
+          <label className={labelCls}>C/o Sede Cliente</label>
+          <div className="flex gap-3">
+            {['si','no'].map(v => <button key={v} onClick={() => setFd('cSede',v)} className={'px-4 py-2 rounded-xl font-black uppercase text-xs border-2 ' + (fd.cSede===v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-400')}>{v==='si'?'Sì':'No'}</button>)}
+          </div>
+          {fd.cSede==='no' && <input type="text" value={fd.cSedeSpecifica} onChange={e=>setFd('cSedeSpecifica',e.target.value)} placeholder="Specificare luogo alternativo..." className={inputCls + ' mt-2'}/>}
+        </div>
+        <div>
+          <label className={labelCls}>Mezzo</label>
+          <div className="flex gap-3">
+            {['proprio','aziendale'].map(v => <button key={v} onClick={() => setFd('mezzo',v)} className={'px-4 py-2 rounded-xl font-black uppercase text-xs border-2 ' + (fd.mezzo===v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-400')}>{v==='proprio'?'Mezzo Proprio':'Mezzo Aziendale'}</button>)}
+          </div>
+          {fd.mezzo==='aziendale' && <input type="text" value={fd.mezzoTipo} onChange={e=>setFd('mezzoTipo',e.target.value)} placeholder="Specificare tipo mezzo..." className={inputCls + ' mt-2'}/>}
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div><label className={labelCls}>Dalle ore</label><input type="time" value={fd.dalleOre} onChange={e=>setFd('dalleOre',e.target.value)} className={inputCls}/></div>
+          <div><label className={labelCls}>Alle ore</label><input type="time" value={fd.alleOre} onChange={e=>setFd('alleOre',e.target.value)} className={inputCls}/></div>
+          <div><label className={labelCls}>Durata</label><input type="text" value={fd.durata} onChange={e=>setFd('durata',e.target.value)} placeholder="es. 1,5h" className={inputCls}/></div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-3">
+        <h3 className="font-black uppercase text-[10px] text-slate-400">Descrizione Intervento</h3>
+        {fd.righe.map((r,i) => (
+          <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="flex-1"><label className={labelCls}>N° Commessa</label><input type="text" value={r.commessa} onChange={e=>setRiga(i,'commessa',e.target.value)} placeholder="es. E26C014" className={inputCls}/></div>
+              {fd.righe.length > 1 && <button onClick={() => removeRiga(i)} className="text-red-400 font-black text-sm mt-5 shrink-0">✕</button>}
+            </div>
+            <div><label className={labelCls}>Descrizione</label><textarea value={r.descrizione} onChange={e=>setRiga(i,'descrizione',e.target.value)} placeholder="Descrivi l'intervento..." rows={3} className={inputCls + ' resize-none'}/></div>
+          </div>
+        ))}
+        <button onClick={addRiga} className="w-full py-3 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 font-black text-xs uppercase hover:border-blue-300 hover:text-blue-400">+ Aggiungi riga</button>
+      </div>
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-4">
+        <h3 className="font-black uppercase text-[10px] text-slate-400">Esito e Note</h3>
+        <div>
+          <label className={labelCls}>Esito dell'intervento</label>
+          <div className="grid grid-cols-2 gap-2">
+            {[['positivo','✓ Positivo','green'],['negativo','✗ Negativo','red'],['sospeso','⏸ Sospeso','orange'],['altro','◎ Altro','slate']].map(([v,lbl,col]) => (
+              <button key={v} onClick={() => setFd('esito',v)} className={'py-2 px-3 rounded-xl font-black uppercase text-xs border-2 ' + (fd.esito===v ? `border-${col}-500 bg-${col}-50 text-${col}-700` : 'border-slate-200 text-slate-400')}>{lbl}</button>
+            ))}
+          </div>
+        </div>
+        <div><label className={labelCls}>Note / Tariffario / Altre info</label><textarea value={fd.note} onChange={e=>setFd('note',e.target.value)} rows={4} placeholder="Note libere, tariffario, rimborso km, ecc..." className={inputCls + ' resize-none'}/></div>
+      </div>
+
+      <button onClick={handleSubmit} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-base">
+        {editingId ? '💾 Salva modifiche' : '📋 Salva Rapporto'}
+      </button>
+      <button onClick={onCancel} className="w-full mt-3 py-3 text-slate-400 font-black uppercase text-sm">Annulla</button>
+    </div>
+  );
+};
+
 const TYPE_COLORS = {
   ferie:       { bg: 'bg-red-500',    text: 'text-white', label: 'F'   },
   malattia:    { bg: 'bg-orange-400', text: 'text-white', label: 'M'   },
@@ -1636,15 +1742,7 @@ export default function App() {
   // ─── RAPPORTO INTERVENTO STATE ───────────────────────────────────────────
   const [rapportiList, setRapportiList] = useState([]);
   const [rapportoSelectedId, setRapportoSelectedId] = useState(null);
-  const [rapportoStep, setRapportoStep] = useState('list'); // 'list' | 'new' | 'detail'
-  const [rapportoFormData, setRapportoFormData] = useState({
-    data:'', cliente:'', luogo:'',
-    cSede: 'si', cSedeSpecifica:'',
-    mezzo:'proprio', mezzoTipo:'',
-    operatore:'', dalleOre:'', alleOre:'', durata:'',
-    righe:[{commessa:'', descrizione:''}],
-    esito:'positivo', note:''
-  });
+  const [rapportoStep, setRapportoStep] = useState('list');
   const [rapportoEditingId, setRapportoEditingId] = useState(null);
 
   useEffect(() => { userRef.current = user; }, [user]);
@@ -3272,54 +3370,6 @@ export default function App() {
 
   if (user.role === 'amministratore' && view === 'notifications') setView('calendar');
 
-  // ─── RAPPORTO INTERVENTO FUNCTIONS ───────────────────────────────────────
-  const resetRapportoForm = () => setRapportoFormData({
-    data:'', cliente:'', luogo:'',
-    cSede:'si', cSedeSpecifica:'',
-    mezzo:'proprio', mezzoTipo:'',
-    operatore:'', dalleOre:'', alleOre:'', durata:'',
-    righe:[{commessa:'', descrizione:''}],
-    esito:'positivo', note:''
-  });
-
-  const submitRapporto = async () => {
-    if (!rapportoFormData.data || !rapportoFormData.cliente || !rapportoFormData.operatore) {
-      alert('Compila i campi obbligatori: Data, Cliente, Operatore'); return;
-    }
-    const now = new Date();
-    const payload = {
-      ...rapportoFormData,
-      userId: user.id, userName: user.name, username: user.username,
-      createdAt: now.toISOString(),
-      revisione: 0,
-      revisioniStorico: []
-    };
-    if (rapportoEditingId) {
-      const existing = rapportiList.find(r => r.id === rapportoEditingId);
-      const newRev = (existing?.revisione || 0) + 1;
-      const storico = [...(existing?.revisioniStorico || []), { ...existing, salvatoIl: now.toISOString() }];
-      await updateDoc(doc(db, 'rapportiIntervento', rapportoEditingId), {
-        ...rapportoFormData, revisione: newRev, revisioniStorico: storico, updatedAt: now.toISOString()
-      });
-      // Notifica al compilatore se Mirco ha modificato
-      if (user.username === 'mirco.ceo' && existing && existing.userId !== user.id) {
-        const compilatore = users.find(u => u.id === existing.userId);
-        if (compilatore) {
-          await addDoc(collection(db, 'notifications'), {
-            to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'0')}`,
-            type: 'rapporto', reqId: rapportoEditingId, createdAt: now.toISOString(),
-            date: now.toLocaleString('it-IT')
-          });
-        }
-      }
-      setRapportoEditingId(null);
-    } else {
-      await addDoc(collection(db, 'rapportiIntervento'), payload);
-    }
-    resetRapportoForm();
-    setRapportoStep('list');
-  };
-
   // ─── RAPPORTO VIEW ───────────────────────────────────────────────────────
   const RapportoView = () => {
     const isMirco = user.username === 'mirco.ceo';
@@ -3411,96 +3461,28 @@ export default function App() {
 
     // ── FORM NEW / EDIT ─────────────────────────────────────────────────────
     if (rapportoStep === 'new') {
-      const fd = rapportoFormData;
-      const setFd = (k, v) => setRapportoFormData(p => ({...p, [k]: v}));
-      const addRiga = () => setRapportoFormData(p => ({...p, righe:[...p.righe, {commessa:'',descrizione:''}]}));
-      const setRiga = (i, k, v) => setRapportoFormData(p => { const r=[...p.righe]; r[i]={...r[i],[k]:v}; return {...p, righe:r}; });
-      const removeRiga = (i) => setRapportoFormData(p => ({...p, righe: p.righe.filter((_,idx)=>idx!==i)}));
-      const inputCls = "w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-blue-400 text-sm font-bold";
-      const labelCls = "text-[10px] font-black text-slate-400 uppercase block mb-1";
-      return (
-        <div className="px-4 py-4 max-w-2xl mx-auto pb-32">
-          <div className="flex items-center gap-3 mb-5">
-            <button onClick={() => { setRapportoStep('list'); setRapportoEditingId(null); resetRapportoForm(); }} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
-            <h2 className="font-black uppercase italic text-lg flex-1">{rapportoEditingId ? 'Modifica Rapporto' : 'Nuovo Rapporto di Intervento'}</h2>
-          </div>
-
-          {/* Dati principali */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 space-y-3">
-            <h3 className="font-black uppercase text-[10px] text-slate-400">Dati Intervento *</h3>
-            <div className="grid grid-cols-3 gap-3">
-              <div><label className={labelCls}>Data *</label><input type="date" value={fd.data} onChange={e=>setFd('data',e.target.value)} className={inputCls}/></div>
-              <div><label className={labelCls}>Cliente *</label><input type="text" value={fd.cliente} onChange={e=>setFd('cliente',e.target.value)} placeholder="es. SILAM" className={inputCls}/></div>
-              <div><label className={labelCls}>Luogo</label><input type="text" value={fd.luogo} onChange={e=>setFd('luogo',e.target.value)} placeholder="es. Cannara" className={inputCls}/></div>
-            </div>
-            <div><label className={labelCls}>Operatore *</label><input type="text" value={fd.operatore} onChange={e=>setFd('operatore',e.target.value)} placeholder="Nome e cognome operatore" className={inputCls}/></div>
-          </div>
-
-          {/* Presenza e mezzo */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 space-y-3">
-            <h3 className="font-black uppercase text-[10px] text-slate-400">Presenza e Mezzo</h3>
-            <div>
-              <label className={labelCls}>C/o Sede Cliente</label>
-              <div className="flex gap-3">
-                {['si','no'].map(v => <button key={v} onClick={() => setFd('cSede',v)} className={'px-4 py-2 rounded-xl font-black uppercase text-xs border-2 ' + (fd.cSede===v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-400')}>{v==='si'?'Sì':'No'}</button>)}
-              </div>
-              {fd.cSede==='no' && <input type="text" value={fd.cSedeSpecifica} onChange={e=>setFd('cSedeSpecifica',e.target.value)} placeholder="Specificare luogo alternativo..." className={inputCls + ' mt-2'}/>}
-            </div>
-            <div>
-              <label className={labelCls}>Mezzo</label>
-              <div className="flex gap-3">
-                {['proprio','aziendale'].map(v => <button key={v} onClick={() => setFd('mezzo',v)} className={'px-4 py-2 rounded-xl font-black uppercase text-xs border-2 ' + (fd.mezzo===v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-400')}>{v==='proprio'?'Mezzo Proprio':'Mezzo Aziendale'}</button>)}
-              </div>
-              {fd.mezzo==='aziendale' && <input type="text" value={fd.mezzoTipo} onChange={e=>setFd('mezzoTipo',e.target.value)} placeholder="Specificare tipo mezzo..." className={inputCls + ' mt-2'}/>}
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div><label className={labelCls}>Dalle ore</label><input type="time" value={fd.dalleOre} onChange={e=>setFd('dalleOre',e.target.value)} className={inputCls}/></div>
-              <div><label className={labelCls}>Alle ore</label><input type="time" value={fd.alleOre} onChange={e=>setFd('alleOre',e.target.value)} className={inputCls}/></div>
-              <div><label className={labelCls}>Durata</label><input type="text" value={fd.durata} onChange={e=>setFd('durata',e.target.value)} placeholder="es. 1,5h" className={inputCls}/></div>
-            </div>
-          </div>
-
-          {/* Righe intervento */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 space-y-3">
-            <h3 className="font-black uppercase text-[10px] text-slate-400">Descrizione Intervento</h3>
-            {fd.righe.map((r,i) => (
-              <div key={i} className="border border-slate-100 rounded-xl p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1"><label className={labelCls}>N° Commessa</label><input type="text" value={r.commessa} onChange={e=>setRiga(i,'commessa',e.target.value)} placeholder="es. E26C014" className={inputCls}/></div>
-                  {fd.righe.length > 1 && <button onClick={() => removeRiga(i)} className="text-red-400 font-black text-sm mt-4">✕</button>}
-                </div>
-                <div><label className={labelCls}>Descrizione</label><textarea value={r.descrizione} onChange={e=>setRiga(i,'descrizione',e.target.value)} placeholder="Descrivi l'intervento..." rows={3} className={inputCls + ' resize-none'}/></div>
-              </div>
-            ))}
-            <button onClick={addRiga} className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 font-black text-xs uppercase hover:border-blue-300 hover:text-blue-400">+ Aggiungi riga</button>
-          </div>
-
-          {/* Esito e note */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 space-y-3">
-            <h3 className="font-black uppercase text-[10px] text-slate-400">Esito e Note</h3>
-            <div>
-              <label className={labelCls}>Esito dell'intervento</label>
-              <div className="grid grid-cols-2 gap-2">
-                {[['positivo','✓ Positivo','green'],['negativo','✗ Negativo','red'],['sospeso','⏸ Sospeso','orange'],['altro','◎ Altro','slate']].map(([v,lbl,col]) => (
-                  <button key={v} onClick={() => setFd('esito',v)} className={`py-2 px-3 rounded-xl font-black uppercase text-xs border-2 ${fd.esito===v ? `border-${col}-500 bg-${col}-50 text-${col}-700` : 'border-slate-200 text-slate-400'}`}>{lbl}</button>
-                ))}
-              </div>
-            </div>
-            <div><label className={labelCls}>Note / Tariffario / Altre info</label><textarea value={fd.note} onChange={e=>setFd('note',e.target.value)} rows={4} placeholder="Note libere, tariffario, rimborso km, ecc..." className={inputCls + ' resize-none'}/></div>
-          </div>
-
-          <button onClick={submitRapporto} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-base">
-            {rapportoEditingId ? '💾 Salva modifiche' : '📋 Salva Rapporto'}
-          </button>
-          <button onClick={() => { setRapportoStep('list'); setRapportoEditingId(null); resetRapportoForm(); }} className="w-full mt-3 py-3 text-slate-400 font-black uppercase text-sm">Annulla</button>
-        </div>
-      );
+      const existing = rapportiList.find(r => r.id === rapportoEditingId);
+      const initialData = existing ? {
+        data: existing.data||'', cliente: existing.cliente||'', luogo: existing.luogo||'',
+        cSede: existing.cSede||'si', cSedeSpecifica: existing.cSedeSpecifica||'',
+        mezzo: existing.mezzo||'proprio', mezzoTipo: existing.mezzoTipo||'',
+        operatore: existing.operatore||'', dalleOre: existing.dalleOre||'', alleOre: existing.alleOre||'', durata: existing.durata||'',
+        righe: existing.righe||[{commessa:'',descrizione:''}],
+        esito: existing.esito||'positivo', note: existing.note||''
+      } : { ...EMPTY_RAPPORTO };
+      return <RapportoForm
+        initialData={initialData}
+        editingId={rapportoEditingId}
+        user={user} db={db} users={users}
+        onSaved={() => { setRapportoStep('list'); setRapportoEditingId(null); }}
+        onCancel={() => { setRapportoStep('list'); setRapportoEditingId(null); }}
+      />;
     }
 
     // ── LIST ────────────────────────────────────────────────────────────────
     return (
-      <div className="px-4 py-4 max-w-lg mx-auto pb-24">
-        <button onClick={() => { setRapportoStep('new'); setRapportoEditingId(null); resetRapportoForm(); }}
+      <div className="px-4 pt-8 pb-24 max-w-lg mx-auto">
+        <button onClick={() => { setRapportoStep('new'); setRapportoEditingId(null); }}
           className="w-full bg-white border-2 border-slate-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm active:bg-slate-50 text-left mb-6">
           <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
             <ClipboardList size={22} className="text-slate-600"/>
