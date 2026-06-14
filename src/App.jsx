@@ -485,13 +485,18 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
         if (compilatore) await addDoc(collection(db, 'notifications'), { to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
       }
     } else {
-      await addDoc(collection(db, 'rapportiIntervento'), { ...fd, userId: user.id, userName: user.name, username: user.username, createdAt: now.toISOString(), revisione: 0, revisioniStorico: [] });
+      const docRef = await addDoc(collection(db, 'rapportiIntervento'), { ...fd, userId: user.id, userName: user.name, username: user.username, createdAt: now.toISOString(), revisione: 0, revisioniStorico: [] });
+      // Notifica a Mirco se non è Mirco stesso a compilare
+      if (user.username !== 'mirco.ceo') {
+        const mirco = users.find(u => u.username === 'mirco.ceo');
+        if (mirco) await addDoc(collection(db, 'notifications'), { to: mirco.name, message: `Nuovo rapporto di intervento da ${user.name} — ${fd.cliente}${fd.luogo ? ', '+fd.luogo : ''}`, type: 'rapporto', reqId: docRef.id, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
+      }
     }
     onSaved();
   };
 
   return (
-    <div className="px-4 py-6 max-w-2xl mx-auto pb-32">
+    <div className="px-4 pt-16 pb-32 max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onCancel} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
         <h2 className="font-black uppercase italic text-lg flex-1">{editingId ? 'Modifica Rapporto' : 'Nuovo Rapporto di Intervento'}</h2>
@@ -3386,7 +3391,7 @@ export default function App() {
       const esitoCfg = { positivo:{col:'text-green-600',label:'✓ Positivo'}, negativo:{col:'text-red-500',label:'✗ Negativo'}, sospeso:{col:'text-orange-500',label:'⏸ Sospeso'}, altro:{col:'text-slate-500',label:'◎ Altro'} };
       const ec = esitoCfg[selectedRapporto.esito] || esitoCfg.positivo;
       return (
-        <div className="px-4 py-4 max-w-2xl mx-auto pb-24">
+        <div className="px-4 pt-14 pb-24 max-w-2xl mx-auto">
           <div className="flex items-center gap-3 mb-5">
             <button onClick={() => setRapportoSelectedId(null)} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
             <div className="flex-1">
@@ -4046,7 +4051,7 @@ export default function App() {
         {user.role !== 'hrmanager' && <button onClick={() => setView('calendar')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'calendar' ? 'text-blue-400' : 'text-slate-500')}>
           <Calendar size={22}/><span className="text-[10px] font-black uppercase">Calendario</span>
         </button>}
-        {(user.role === 'dipendente' || user.role === 'responsabile' || user.role === 'hrmanager') && (
+        {(user.role === 'dipendente' || user.role === 'responsabile' || user.role === 'hrmanager' || user.role === 'CEO') && (
           <button onClick={() => { setView('modulistica'); setModuloStep('list'); setModuloSelectedId(null); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'modulistica' ? 'text-blue-400' : 'text-slate-500')}>
             <Briefcase size={22}/>
             <span className="text-[9px] font-black uppercase">Modulistica</span>
@@ -4081,9 +4086,14 @@ export default function App() {
             <Briefcase size={22}/><span className="text-[10px] font-black uppercase">Presenze</span>
           </button>
         )}
-        {showAdmin && (
+        {user.role === 'amministratore' && (
           <button onClick={() => setView('card')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'card' ? 'text-blue-400' : 'text-slate-500')}>
             <Users size={22}/><span className="text-[10px] font-black uppercase">Scheda</span>
+          </button>
+        )}
+        {user.role === 'CEO' && (
+          <button onClick={() => { setView('modulistica'); setModuloStep('list'); setModuloSelectedId(null); setModulisticaTab('rapporto'); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'modulistica' ? 'text-blue-400' : 'text-slate-500')}>
+            <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Moduli</span>
           </button>
         )}
         {(showAdmin || user.role === 'responsabile') && (
