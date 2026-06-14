@@ -489,9 +489,7 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
       } else {
         const docRef = await addDoc(collection(db, 'rapportiIntervento'), { ...fd, userId: user.id, userName: user.name, username: user.username, createdAt: now.toISOString(), revisione: 0, revisioniStorico: [] });
         if (user.username !== 'mirco.ceo') {
-          const uSnap = await getDocs(collection(db, 'users'));
-          const mirco = uSnap.docs.map(d=>d.data()).find(u => u.username === 'mirco.ceo');
-          if (mirco) await addDoc(collection(db, 'notifications'), { to: mirco.name, message: `Nuovo rapporto di intervento da ${user.name} — ${fd.cliente}${fd.luogo ? ', '+fd.luogo : ''}`, type: 'rapporto', reqId: docRef.id, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
+          await addDoc(collection(db, 'notifications'), { to: 'Mirco Ronci', message: `Nuovo rapporto di intervento da ${user.name} — ${fd.cliente}${fd.luogo ? ', '+fd.luogo : ''}`, type: 'rapporto', reqId: docRef.id, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
         }
       }
     } catch(e) {
@@ -3306,6 +3304,7 @@ export default function App() {
           return (
             <div className="bg-white rounded-3xl border p-5 space-y-1">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-3 mb-3">Cronologia</p>
+              {user.username === 'mirco.ceo' && <p className="text-[9px] text-slate-300 mb-2">debug: {notifications.length} totali, {myHistory.length} per "{user.name}"</p>}
               {myHistory.length === 0 && <p className="text-slate-400 text-sm font-bold py-2">Nessuna notifica.</p>}
 
               {/* Questa settimana */}
