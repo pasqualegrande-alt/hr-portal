@@ -481,36 +481,21 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
         const newRev = (existing?.revisione || 0) + 1;
         const storico = [...(existing?.revisioniStorico || []), { ...existing, salvatoIl: now.toISOString() }];
         await updateDoc(doc(db, 'rapportiIntervento', editingId), { ...fd, revisione: newRev, revisioniStorico: storico, updatedAt: now.toISOString() });
-        console.log('[Rapporto] updateDoc OK, user.username:', user.username, 'existing.userId:', existing?.userId, 'user.id:', user.id);
         if (user.username === 'mirco.ceo' && existing && existing.userId !== user.id) {
           const uSnap = await getDocs(collection(db, 'users'));
-          const allUsers = uSnap.docs.map(d=>d.data());
-          console.log('[Rapporto] all users:', allUsers.map(u=>u.id+'/'+u.username));
-          const compilatore = allUsers.find(u => u.id === existing.userId);
-          console.log('[Rapporto] compilatore trovato:', compilatore?.name);
-          if (compilatore) {
-            await addDoc(collection(db, 'notifications'), { to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
-            console.log('[Rapporto] notifica a compilatore inviata:', compilatore.name);
-          }
+          const compilatore = uSnap.docs.map(d=>d.data()).find(u => u.id === existing.userId);
+          if (compilatore) await addDoc(collection(db, 'notifications'), { to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
         }
       } else {
         const docRef = await addDoc(collection(db, 'rapportiIntervento'), { ...fd, userId: user.id, userName: user.name, username: user.username, createdAt: now.toISOString(), revisione: 0, revisioniStorico: [] });
-        console.log('[Rapporto] nuovo rapporto salvato, user.username:', user.username);
         if (user.username !== 'mirco.ceo') {
           const uSnap = await getDocs(collection(db, 'users'));
-          const allUsers = uSnap.docs.map(d=>d.data());
-          console.log('[Rapporto] cerco mirco.ceo tra:', allUsers.map(u=>u.username));
-          const mirco = allUsers.find(u => u.username === 'mirco.ceo');
-          console.log('[Rapporto] mirco trovato:', mirco?.name);
-          if (mirco) {
-            await addDoc(collection(db, 'notifications'), { to: mirco.name, message: `Nuovo rapporto di intervento da ${user.name} — ${fd.cliente}${fd.luogo ? ', '+fd.luogo : ''}`, type: 'rapporto', reqId: docRef.id, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
-            console.log('[Rapporto] notifica a Mirco inviata:', mirco.name);
-          }
+          const mirco = uSnap.docs.map(d=>d.data()).find(u => u.username === 'mirco.ceo');
+          if (mirco) await addDoc(collection(db, 'notifications'), { to: mirco.name, message: `Nuovo rapporto di intervento da ${user.name} — ${fd.cliente}${fd.luogo ? ', '+fd.luogo : ''}`, type: 'rapporto', reqId: docRef.id, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
         }
       }
     } catch(e) {
-      console.error('[Rapporto] ERRORE notifica:', e);
-      alert('Rapporto salvato ma errore notifica: ' + e.message);
+      console.error('[Rapporto] errore:', e);
     }
     onSaved();
   };
