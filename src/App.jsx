@@ -960,9 +960,9 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
     const byType = {
       ferie: empty(), trasferta: empty(), malattia: empty(),
       permesso: empty(), fuorisede: empty(), recupero: empty(),
-      permesso104: empty(), congedo: empty()
+      permesso104: empty(), congedo: empty(), weekend: empty()
     };
-    const reqIds = { ferie: [], trasferta: [], malattia: [], permesso: [], fuorisede: [], recupero: [], permesso104: [], congedo: [] };
+    const reqIds = { ferie: [], trasferta: [], malattia: [], permesso: [], fuorisede: [], recupero: [], permesso104: [], congedo: [], weekend: [] };
 
     const isApproved = s => s === 'approvato' || s === 'comunicato';
     const isPending  = s => ['pendente','pendente_responsabile','pendente_mirco'].includes(s);
@@ -981,7 +981,14 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       if (r.type === 'trasferta') { byType.trasferta[b] += dayHrs; reqIds.trasferta.push(r.id); }
       if (r.type === 'malattia')  { byType.malattia[b]  += dayHrs; reqIds.malattia.push(r.id); }
       if (r.type === 'permesso')  { byType.permesso[b]  += dayHrs; reqIds.permesso.push(r.id); }
-      if (r.type === 'fuorisede') { byType.fuorisede[b] += dayHrs; reqIds.fuorisede.push(r.id); }
+      if (r.type === 'fuorisede') {
+        // Separa giorni feriali da weekend
+        const weekendDays = (r.dates || []).filter(d => { const dow = new Date(d+'T12:00:00').getDay(); return dow === 0 || dow === 6; }).filter(d => d.startsWith(monthISO)).length;
+        const ferialDays = daysInMonth - weekendDays;
+        const hrsPerDay = Math.round((r.durationMinutes || 0) / 60 * 10) / 10 / Math.max((r.dates||[]).length,1);
+        if (ferialDays > 0) { byType.fuorisede[b] += Math.round(hrsPerDay * ferialDays * 10)/10; reqIds.fuorisede.push(r.id); }
+        if (weekendDays > 0) { byType.weekend[b] += Math.round(hrsPerDay * weekendDays * 10)/10; reqIds.weekend.push(r.id); }
+      }
       if (r.type === 'permesso104' || r.type === 'congedo') {
         let hrs;
         if (r.extraMode === 'ore') {
@@ -1013,6 +1020,7 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       recupero:     byType.recupero.appr,
       permesso104:  sum(byType.permesso104),
       congedo:      sum(byType.congedo),
+      weekend:      sum(byType.weekend),
       byType, reqIds
     };
   };
@@ -1036,14 +1044,15 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
   };
 
   const COLS = [
-    { key: 'ferie',        label: 'Ferie',             bg: 'bg-red-50',     text: 'text-red-700',    dot: 'bg-red-500'    },
-    { key: 'trasferta',    label: 'Trasferta',          bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-500'   },
-    { key: 'malattia',     label: 'Malattia',           bg: 'bg-orange-50',  text: 'text-orange-700', dot: 'bg-orange-400' },
-    { key: 'permesso',     label: 'Permesso',           bg: 'bg-slate-50',   text: 'text-slate-700',  dot: 'bg-slate-400'  },
-    { key: 'fuorisede',    label: 'Fuori sede',         bg: 'bg-teal-50',    text: 'text-teal-700',   dot: 'bg-teal-500'   },
-    { key: 'recupero',     label: 'Ore recupero aut.',  bg: 'bg-amber-50',   text: 'text-amber-700',  dot: 'bg-amber-500'  },
-    { key: 'permesso104',  label: 'Permesso 104',       bg: 'bg-violet-50',  text: 'text-violet-700', dot: 'bg-violet-500' },
-    { key: 'congedo',      label: 'Congedo',            bg: 'bg-pink-50',    text: 'text-pink-700',   dot: 'bg-pink-500'   },
+    { key: 'ferie',        label: 'Ferie',                        bg: 'bg-red-50',     text: 'text-red-700',    dot: 'bg-red-500'    },
+    { key: 'trasferta',    label: 'Trasferta',                    bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-500'   },
+    { key: 'malattia',     label: 'Malattia',                     bg: 'bg-orange-50',  text: 'text-orange-700', dot: 'bg-orange-400' },
+    { key: 'permesso',     label: 'Permessi e Mancate Marc.',     bg: 'bg-slate-50',   text: 'text-slate-700',  dot: 'bg-slate-400'  },
+    { key: 'fuorisede',    label: 'Fuori sede',                   bg: 'bg-teal-50',    text: 'text-teal-700',   dot: 'bg-teal-500'   },
+    { key: 'weekend',      label: 'Weekend',                      bg: 'bg-indigo-50',  text: 'text-indigo-700', dot: 'bg-indigo-500' },
+    { key: 'recupero',     label: 'Ore recupero aut.',            bg: 'bg-amber-50',   text: 'text-amber-700',  dot: 'bg-amber-500'  },
+    { key: 'permesso104',  label: 'Permesso 104',                 bg: 'bg-violet-50',  text: 'text-violet-700', dot: 'bg-violet-500' },
+    { key: 'congedo',      label: 'Congedo',                      bg: 'bg-pink-50',    text: 'text-pink-700',   dot: 'bg-pink-500'   },
   ];
 
   // ─── Genera foglio presenze Excel ──────────────────────────────────────────
@@ -1227,6 +1236,35 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
           oreCopy.numFmt = '0.00';
           oreCell.style = oreCopy;
         } catch(e) {}
+
+        // Riga str. (ordRow + 1): ore weekend (mancate timbrature sab/dom)
+        const strRow = ws.getRow(ordRow + 1);
+        for (let d = 1; d <= daysInMonth; d++) {
+          if (d > cutoffDay) { strRow.getCell(3 + d).value = null; continue; }
+          const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+          const dow = new Date(dateStr + 'T12:00:00').getDay();
+          if (dow !== 0 && dow !== 6) { continue; } // solo weekend
+          // Cerca richieste fuorisede approvate per questo giorno
+          const weReqs = requests.filter(r =>
+            r.userId === emp.id &&
+            r.type === 'fuorisede' &&
+            (r.status === 'approvato' || r.status === 'comunicato') &&
+            Array.isArray(r.dates) && r.dates.includes(dateStr)
+          );
+          if (weReqs.length > 0) {
+            const req = weReqs[0];
+            const totalDays = (req.dates||[]).length || 1;
+            const hrsDay = Math.round((req.durationMinutes||0) / 60 / totalDays * 10) / 10;
+            if (hrsDay > 0) {
+              try {
+                const styleCopy = JSON.parse(JSON.stringify(strRow.getCell(3+d).style || {}));
+                styleCopy.numFmt = '0.##';
+                strRow.getCell(3+d).style = styleCopy;
+              } catch(e) {}
+              strRow.getCell(3+d).value = hrsDay;
+            }
+          }
+        }
 
         // Riga * (ordRow + 2): codice P / H / C per permesso/104/congedo
         const starRow = ws.getRow(ordRow + 2);
