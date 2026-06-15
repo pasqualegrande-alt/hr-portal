@@ -2613,7 +2613,23 @@ export default function App() {
     };
 
     const handleCellClick = (dStr, isWeekend, closure, dayReqs) => {
-      if (isWeekend || closure) return;
+      if (closure) return;
+
+      // Weekend: solo dipendente/responsabile (se stesso) può aprire form ridotto
+      if (isWeekend) {
+        if (user.role === 'dipendente' || (user.role === 'responsabile' && (effectiveFilter === 'mine' || effectiveFilter === user.name))) {
+          const myReq = dayReqs.find(r => r.userId === user.id);
+          if (myReq) {
+            setReqModal(myReq); setModifyMode(false);
+            setModifyForm({ start: myReq.dates[0], end: myReq.dates[myReq.dates.length - 1], type: myReq.type, timeFrom: myReq.timeFrom || '09:00', timeTo: myReq.timeTo || '10:00' });
+          } else {
+            setRequestType('fuorisede');
+            setForm({ end: '', type: 'fuorisede', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '', recuperoOre: false, extraMode: 'giorni', extraHours: '', extraEnd: '' });
+            setSelection(dStr);
+          }
+        }
+        return;
+      }
 
       // hrmanager: mostra sempre il dettaglio giorno, mai il form richiesta
       if (user.role === 'hrmanager') {
@@ -2678,11 +2694,25 @@ export default function App() {
       const isTrasferta = requestType === 'trasferta';
       const isFerie = requestType === 'ferie' || requestType === 'malattia';
       const isExtra = requestType === 'permesso104' || requestType === 'congedo';
+      const isWeekendDay = selection && (new Date(selection).getDay() === 0 || new Date(selection).getDay() === 6);
 
       return (
         <BottomSheet>
           <h3 className="text-xl font-black uppercase italic mb-4">{getTypeLabel(requestType)}</h3>
           <div className="space-y-3">
+            {isWeekendDay ? (
+              <>
+                <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest text-center mb-2">🗓 Weekend — solo Fuori Sede e Trasferta</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {['fuorisede', 'trasferta'].map(t => (
+                    <button key={t} onClick={() => setRequestType(t)} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all flex items-center justify-center gap-1 ' + (requestType === t ? (t === 'trasferta' ? 'bg-blue-800 text-white' : 'bg-teal-600 text-white') : 'bg-slate-100 text-slate-500')}>
+                      {t === 'trasferta' ? <Briefcase size={14}/> : <Clock size={14}/>} {getTypeLabel(t)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
             <div className="grid grid-cols-3 gap-2 mb-2">
               {['ferie', 'malattia', 'permesso'].map(t => (
                 <button key={t} onClick={() => setRequestType(t)} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all ' + (requestType === t ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500')}>{getTypeLabel(t)}</button>
@@ -2709,6 +2739,8 @@ export default function App() {
                 Congedo
               </button>
             </div>
+            </>
+            )}
 
             {!isExtra && <div className="border-t pt-3">
               <div><label className="text-[10px] font-black text-slate-400 uppercase">Data</label><input type="date" value={selection} readOnly className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
