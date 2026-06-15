@@ -471,8 +471,20 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
   const inputCls = "w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-blue-400 text-sm font-bold";
   const labelCls = "text-[10px] font-black text-slate-400 uppercase block mb-1";
 
+  // Stepper durata: incrementa/decrementa di 0.5
+  const stepDurata = (delta) => {
+    const current = parseFloat((fd.durata || '0').toString().replace(',','.')) || 0;
+    const next = Math.max(0, current + delta);
+    setFd('durata', next % 1 === 0 ? String(next) : next.toFixed(1).replace('.',','));
+  };
+
   const handleSubmit = async () => {
-    if (!fd.data || !fd.cliente || !fd.operatore) { alert('Compila i campi obbligatori: Data, Cliente, Operatore'); return; }
+    // Validazione campi obbligatori
+    const righeValide = (fd.righe||[]).every(r => r.commessa && r.descrizione);
+    if (!fd.data || !fd.cliente || !fd.operatore || !fd.luogo || !fd.durata || !fd.note || !righeValide) {
+      alert('Compila tutti i campi obbligatori:\nData, Cliente, Luogo, Operatore, Durata, N° Commessa, Descrizione, Note');
+      return;
+    }
     const now = new Date();
     try {
       if (editingId) {
@@ -481,10 +493,17 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
         const newRev = (existing?.revisione || 0) + 1;
         const storico = [...(existing?.revisioniStorico || []), { ...existing, salvatoIl: now.toISOString() }];
         await updateDoc(doc(db, 'rapportiIntervento', editingId), { ...fd, revisione: newRev, revisioniStorico: storico, updatedAt: now.toISOString() });
-        if (user.username === 'mirco.ceo' && existing && existing.userId !== user.id) {
-          const uSnap = await getDocs(collection(db, 'users'));
-          const compilatore = uSnap.docs.map(d=>d.data()).find(u => u.id === existing.userId);
-          if (compilatore) await addDoc(collection(db, 'notifications'), { to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
+        // Notifica bidirezionale: sempre notifica all'altra parte
+        if (user.username === 'mirco.ceo') {
+          // Mirco modifica → notifica al compilatore
+          if (existing && existing.userId !== user.id) {
+            const uSnap = await getDocs(collection(db, 'users'));
+            const compilatore = uSnap.docs.map(d=>d.data()).find(u => u.id === existing.userId);
+            if (compilatore) await addDoc(collection(db, 'notifications'), { to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
+          }
+        } else {
+          // Operatore modifica → notifica a Mirco
+          await addDoc(collection(db, 'notifications'), { to: 'Mirco Ronci', message: `Rapporto intervento "${existing?.cliente||fd.cliente}" modificato da ${user.name} — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
         }
       } else {
         const docRef = await addDoc(collection(db, 'rapportiIntervento'), { ...fd, userId: user.id, userName: user.name, username: user.username, createdAt: now.toISOString(), revisione: 0, revisioniStorico: [] });
@@ -500,21 +519,22 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
 
   return (
     <div className="px-4 pt-16 pb-32 max-w-2xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-2">
         <button onClick={onCancel} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
         <h2 className="font-black uppercase italic text-lg flex-1">{editingId ? 'Modifica Rapporto' : 'Nuovo Rapporto di Intervento'}</h2>
       </div>
+      <p className="text-[10px] text-slate-400 font-bold mb-5 ml-10">* campo obbligatorio</p>
 
+      {/* Dati intervento */}
       <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-4">
-        <h3 className="font-black uppercase text-[10px] text-slate-400">Dati Intervento *</h3>
-        <div className="grid grid-cols-1 gap-3">
-          <div><label className={labelCls}>Data *</label><input type="date" value={fd.data} onChange={e=>setFd('data',e.target.value)} className={inputCls}/></div>
-          <div><label className={labelCls}>Cliente *</label><input type="text" value={fd.cliente} onChange={e=>setFd('cliente',e.target.value)} placeholder="es. SILAM" className={inputCls}/></div>
-          <div><label className={labelCls}>Luogo</label><input type="text" value={fd.luogo} onChange={e=>setFd('luogo',e.target.value)} placeholder="es. Cannara" className={inputCls}/></div>
-        </div>
+        <h3 className="font-black uppercase text-[10px] text-slate-400">Dati Intervento</h3>
+        <div><label className={labelCls}>Data *</label><input type="date" value={fd.data} onChange={e=>setFd('data',e.target.value)} className={inputCls}/></div>
+        <div><label className={labelCls}>Cliente *</label><input type="text" value={fd.cliente} onChange={e=>setFd('cliente',e.target.value)} placeholder="es. SILAM" className={inputCls}/></div>
+        <div><label className={labelCls}>Luogo *</label><input type="text" value={fd.luogo} onChange={e=>setFd('luogo',e.target.value)} placeholder="es. Cannara" className={inputCls}/></div>
         <div><label className={labelCls}>Operatore *</label><input type="text" value={fd.operatore} onChange={e=>setFd('operatore',e.target.value)} placeholder="Nome e cognome operatore" className={inputCls}/></div>
       </div>
 
+      {/* Presenza e Mezzo */}
       <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-4">
         <h3 className="font-black uppercase text-[10px] text-slate-400">Presenza e Mezzo</h3>
         <div>
@@ -526,32 +546,52 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
         </div>
         <div>
           <label className={labelCls}>Mezzo</label>
-          <div className="flex gap-3">
+          <div className="flex gap-3 mb-2">
             {['proprio','aziendale'].map(v => <button key={v} onClick={() => setFd('mezzo',v)} className={'flex-1 py-3 rounded-xl font-black uppercase text-sm border-2 ' + (fd.mezzo===v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-400')}>{v==='proprio'?'Proprio':'Aziendale'}</button>)}
           </div>
-          {fd.mezzo==='aziendale' && <input type="text" value={fd.mezzoTipo} onChange={e=>setFd('mezzoTipo',e.target.value)} placeholder="Specificare tipo mezzo..." className={inputCls + ' mt-2'}/>}
+          <input type="text" value={fd.mezzoTipo} onChange={e=>setFd('mezzoTipo',e.target.value)} placeholder={fd.mezzo==='proprio' ? 'Targa / Tipo veicolo (facoltativo)' : 'Tipo mezzo aziendale (facoltativo)'} className={inputCls}/>
         </div>
+        {/* Durata — obbligatorio, con stepper */}
+        <div>
+          <label className={labelCls}>Durata *</label>
+          <div className="flex items-center gap-3">
+            <button onClick={() => stepDurata(-0.5)} className="w-12 h-12 rounded-xl border-2 border-slate-200 font-black text-xl text-slate-500 flex items-center justify-center active:bg-slate-100">−</button>
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                value={fd.durata}
+                onChange={e => setFd('durata', e.target.value)}
+                placeholder="0"
+                className={inputCls + ' text-center pr-8'}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">h</span>
+            </div>
+            <button onClick={() => stepDurata(0.5)} className="w-12 h-12 rounded-xl border-2 border-blue-200 font-black text-xl text-blue-500 flex items-center justify-center active:bg-blue-50">+</button>
+          </div>
+        </div>
+        {/* Orari facoltativi */}
         <div className="grid grid-cols-2 gap-3">
           <div><label className={labelCls}>Dalle ore</label><input type="time" value={fd.dalleOre} onChange={e=>setFd('dalleOre',e.target.value)} className={inputCls}/></div>
           <div><label className={labelCls}>Alle ore</label><input type="time" value={fd.alleOre} onChange={e=>setFd('alleOre',e.target.value)} className={inputCls}/></div>
         </div>
-        <div><label className={labelCls}>Durata (es. 1,5h)</label><input type="text" value={fd.durata} onChange={e=>setFd('durata',e.target.value)} placeholder="es. 1,5h" className={inputCls}/></div>
       </div>
 
+      {/* Descrizione intervento */}
       <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-3">
         <h3 className="font-black uppercase text-[10px] text-slate-400">Descrizione Intervento</h3>
         {fd.righe.map((r,i) => (
           <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-3">
             <div className="flex items-start gap-2">
-              <div className="flex-1"><label className={labelCls}>N° Commessa</label><input type="text" value={r.commessa} onChange={e=>setRiga(i,'commessa',e.target.value)} placeholder="es. E26C014" className={inputCls}/></div>
+              <div className="flex-1"><label className={labelCls}>N° Commessa *</label><input type="text" value={r.commessa} onChange={e=>setRiga(i,'commessa',e.target.value)} placeholder="es. E26C014" className={inputCls}/></div>
               {fd.righe.length > 1 && <button onClick={() => removeRiga(i)} className="text-red-400 font-black text-lg mt-5 shrink-0 px-1">✕</button>}
             </div>
-            <div><label className={labelCls}>Descrizione</label><textarea value={r.descrizione} onChange={e=>setRiga(i,'descrizione',e.target.value)} placeholder="Descrivi l'intervento..." rows={4} className={inputCls + ' resize-none'}/></div>
+            <div><label className={labelCls}>Descrizione *</label><textarea value={r.descrizione} onChange={e=>setRiga(i,'descrizione',e.target.value)} placeholder="Descrivi l'intervento..." rows={4} className={inputCls + ' resize-none'}/></div>
           </div>
         ))}
         <button onClick={addRiga} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 font-black text-xs uppercase">+ Aggiungi riga</button>
       </div>
 
+      {/* Esito e note */}
       <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-4">
         <h3 className="font-black uppercase text-[10px] text-slate-400">Esito e Note</h3>
         <div>
@@ -562,7 +602,7 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
             ))}
           </div>
         </div>
-        <div><label className={labelCls}>Note / Tariffario / Altre info</label><textarea value={fd.note} onChange={e=>setFd('note',e.target.value)} rows={4} placeholder="Note libere, tariffario, rimborso km, ecc..." className={inputCls + ' resize-none'}/></div>
+        <div><label className={labelCls}>Note *</label><textarea value={fd.note} onChange={e=>setFd('note',e.target.value)} rows={4} placeholder="Note, tariffario, rimborso km, ecc..." className={inputCls + ' resize-none'}/></div>
       </div>
 
       <button onClick={handleSubmit} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-base">
