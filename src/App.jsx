@@ -507,7 +507,7 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
 
       <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-4">
         <h3 className="font-black uppercase text-[10px] text-slate-400">Dati Intervento *</h3>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <div><label className={labelCls}>Data *</label><input type="date" value={fd.data} onChange={e=>setFd('data',e.target.value)} className={inputCls}/></div>
           <div><label className={labelCls}>Cliente *</label><input type="text" value={fd.cliente} onChange={e=>setFd('cliente',e.target.value)} placeholder="es. SILAM" className={inputCls}/></div>
           <div><label className={labelCls}>Luogo</label><input type="text" value={fd.luogo} onChange={e=>setFd('luogo',e.target.value)} placeholder="es. Cannara" className={inputCls}/></div>
@@ -520,45 +520,45 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
         <div>
           <label className={labelCls}>C/o Sede Cliente</label>
           <div className="flex gap-3">
-            {['si','no'].map(v => <button key={v} onClick={() => setFd('cSede',v)} className={'px-4 py-2 rounded-xl font-black uppercase text-xs border-2 ' + (fd.cSede===v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-400')}>{v==='si'?'Sì':'No'}</button>)}
+            {['si','no'].map(v => <button key={v} onClick={() => setFd('cSede',v)} className={'flex-1 py-3 rounded-xl font-black uppercase text-sm border-2 ' + (fd.cSede===v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-400')}>{v==='si'?'Sì':'No'}</button>)}
           </div>
           {fd.cSede==='no' && <input type="text" value={fd.cSedeSpecifica} onChange={e=>setFd('cSedeSpecifica',e.target.value)} placeholder="Specificare luogo alternativo..." className={inputCls + ' mt-2'}/>}
         </div>
         <div>
           <label className={labelCls}>Mezzo</label>
           <div className="flex gap-3">
-            {['proprio','aziendale'].map(v => <button key={v} onClick={() => setFd('mezzo',v)} className={'px-4 py-2 rounded-xl font-black uppercase text-xs border-2 ' + (fd.mezzo===v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-400')}>{v==='proprio'?'Mezzo Proprio':'Mezzo Aziendale'}</button>)}
+            {['proprio','aziendale'].map(v => <button key={v} onClick={() => setFd('mezzo',v)} className={'flex-1 py-3 rounded-xl font-black uppercase text-sm border-2 ' + (fd.mezzo===v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-400')}>{v==='proprio'?'Proprio':'Aziendale'}</button>)}
           </div>
           {fd.mezzo==='aziendale' && <input type="text" value={fd.mezzoTipo} onChange={e=>setFd('mezzoTipo',e.target.value)} placeholder="Specificare tipo mezzo..." className={inputCls + ' mt-2'}/>}
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div><label className={labelCls}>Dalle ore</label><input type="time" value={fd.dalleOre} onChange={e=>setFd('dalleOre',e.target.value)} className={inputCls}/></div>
           <div><label className={labelCls}>Alle ore</label><input type="time" value={fd.alleOre} onChange={e=>setFd('alleOre',e.target.value)} className={inputCls}/></div>
-          <div><label className={labelCls}>Durata</label><input type="text" value={fd.durata} onChange={e=>setFd('durata',e.target.value)} placeholder="es. 1,5h" className={inputCls}/></div>
         </div>
+        <div><label className={labelCls}>Durata (es. 1,5h)</label><input type="text" value={fd.durata} onChange={e=>setFd('durata',e.target.value)} placeholder="es. 1,5h" className={inputCls}/></div>
       </div>
 
       <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-3">
         <h3 className="font-black uppercase text-[10px] text-slate-400">Descrizione Intervento</h3>
         {fd.righe.map((r,i) => (
           <div key={i} className="border border-slate-100 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-start gap-2">
               <div className="flex-1"><label className={labelCls}>N° Commessa</label><input type="text" value={r.commessa} onChange={e=>setRiga(i,'commessa',e.target.value)} placeholder="es. E26C014" className={inputCls}/></div>
-              {fd.righe.length > 1 && <button onClick={() => removeRiga(i)} className="text-red-400 font-black text-sm mt-5 shrink-0">✕</button>}
+              {fd.righe.length > 1 && <button onClick={() => removeRiga(i)} className="text-red-400 font-black text-lg mt-5 shrink-0 px-1">✕</button>}
             </div>
-            <div><label className={labelCls}>Descrizione</label><textarea value={r.descrizione} onChange={e=>setRiga(i,'descrizione',e.target.value)} placeholder="Descrivi l'intervento..." rows={3} className={inputCls + ' resize-none'}/></div>
+            <div><label className={labelCls}>Descrizione</label><textarea value={r.descrizione} onChange={e=>setRiga(i,'descrizione',e.target.value)} placeholder="Descrivi l'intervento..." rows={4} className={inputCls + ' resize-none'}/></div>
           </div>
         ))}
-        <button onClick={addRiga} className="w-full py-3 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 font-black text-xs uppercase hover:border-blue-300 hover:text-blue-400">+ Aggiungi riga</button>
+        <button onClick={addRiga} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 font-black text-xs uppercase">+ Aggiungi riga</button>
       </div>
 
       <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-4">
         <h3 className="font-black uppercase text-[10px] text-slate-400">Esito e Note</h3>
         <div>
           <label className={labelCls}>Esito dell'intervento</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             {[['positivo','✓ Positivo','green'],['negativo','✗ Negativo','red'],['sospeso','⏸ Sospeso','orange'],['altro','◎ Altro','slate']].map(([v,lbl,col]) => (
-              <button key={v} onClick={() => setFd('esito',v)} className={'py-2 px-3 rounded-xl font-black uppercase text-xs border-2 ' + (fd.esito===v ? `border-${col}-500 bg-${col}-50 text-${col}-700` : 'border-slate-200 text-slate-400')}>{lbl}</button>
+              <button key={v} onClick={() => setFd('esito',v)} className={'py-3 px-3 rounded-xl font-black uppercase text-xs border-2 ' + (fd.esito===v ? `border-${col}-500 bg-${col}-50 text-${col}-700` : 'border-slate-200 text-slate-400')}>{lbl}</button>
             ))}
           </div>
         </div>
