@@ -55,6 +55,12 @@ const calcMinutesExcludingLunch = (fromStr, toStr) => {
   return Math.max(0, total);
 };
 
+// Calcola minuti senza escludere la pausa pranzo (per weekend)
+const calcMinutes = (fromStr, toStr) => {
+  const toMins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  return Math.max(0, toMins(toStr) - toMins(fromStr));
+};
+
 const getISOWeek = (date) => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -2503,7 +2509,10 @@ export default function App() {
     };
 
     const handleSendFuoriSede = async () => {
-      const mins = calcMinutesExcludingLunch(form.timeFrom, form.timeTo);
+      const isWE = selection && (new Date(selection+'T12:00:00').getDay() === 0 || new Date(selection+'T12:00:00').getDay() === 6);
+      const mins = isWE
+        ? calcMinutes(form.timeFrom, form.timeTo) // weekend: nessuna pausa pranzo esclusa
+        : calcMinutesExcludingLunch(form.timeFrom, form.timeTo);
       if (mins <= 0) return alert('Orario non valido');
       const assignedTo = user && user.resp1 && user.resp1 !== '/' ? user.resp1 : 'Mirco Ronci';
       const newReq = {
@@ -2653,8 +2662,13 @@ export default function App() {
     const handleCellClick = (dStr, isWeekend, closure, dayReqs) => {
       if (closure) return;
 
-      // Weekend: solo dipendente/responsabile (se stesso) può aprire form ridotto
+      // Weekend: mostra dettaglio se ci sono richieste (per tutti i ruoli)
       if (isWeekend) {
+        if (dayReqs.length > 0 && (user.role === 'hrmanager' || user.role === 'responsabile' || user.role === 'CEO' || user.role === 'amministratore' || (user.role === 'responsabile' && effectiveFilter !== 'mine' && effectiveFilter !== user.name))) {
+          setDayDetailModal({ date: dStr, reqs: dayReqs });
+          return;
+        }
+        // Dipendente o responsabile che guarda se stesso: può aprire form ridotto
         if (user.role === 'dipendente' || (user.role === 'responsabile' && (effectiveFilter === 'mine' || effectiveFilter === user.name))) {
           const myReq = dayReqs.find(r => r.userId === user.id);
           if (myReq) {
@@ -2664,6 +2678,10 @@ export default function App() {
             setRequestType('fuorisede');
             setForm({ end: '', type: 'fuorisede', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '', recuperoOre: false, extraMode: 'giorni', extraHours: '', extraEnd: '' });
             setSelection(dStr);
+          }
+          // Se ci sono richieste di altri, mostra anche il dettaglio
+          if (dayReqs.length > 0 && !dayReqs.find(r => r.userId === user.id)) {
+            setDayDetailModal({ date: dStr, reqs: dayReqs });
           }
         }
         return;
@@ -2964,27 +2982,25 @@ export default function App() {
             <span className="font-black uppercase italic text-sm">{currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}</span>
             <button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-3 bg-slate-50 rounded-2xl"><ChevronRight size={20}/></button>
           </div>
-          {/* Header giorni */}
+          {/* Header giorni — settimana lun-dom */}
           <div className="grid gap-0.5 mb-0.5" style={{gridTemplateColumns: '24px repeat(7, 1fr)'}}>
             <div className="text-center text-[9px] font-black text-slate-300 py-1">W</div>
-            {['D','L','M','M','G','V','S'].map((d, i) => <div key={i} className="text-center text-[9px] font-black text-slate-400 py-1 uppercase">{d}</div>)}
+            {['L','M','M','G','V','S','D'].map((d, i) => <div key={i} className={'text-center text-[9px] font-black py-1 uppercase ' + (i >= 5 ? 'text-red-300' : 'text-slate-400')}>{d}</div>)}
           </div>
           {/* Righe settimana */}
           {(() => {
             const cells = [];
-            // Riempi le celle: firstDay celle vuote + daysInMonth giorni
-            for (let i = 0; i < firstDay; i++) cells.push(null);
+            // firstDay: getDay() → 0=dom,1=lun,...,6=sab → converti a 0=lun,...,6=dom
+            const firstDayMon = (firstDay + 6) % 7;
+            for (let i = 0; i < firstDayMon; i++) cells.push(null);
             for (let i = 1; i <= daysInMonth; i++) cells.push(i);
-            // Aggiungi celle vuote in coda per completare l'ultima riga
             while (cells.length % 7 !== 0) cells.push(null);
             const rows = [];
             for (let r = 0; r < cells.length / 7; r++) rows.push(cells.slice(r * 7, r * 7 + 7));
             const todayStr = new Date().toISOString().split('T')[0];
             return rows.map((row, ri) => {
-              // Calcola numero settimana dal LUNEDÌ della riga (ISO: la settimana inizia il lunedì)
-              // row[0]=Dom, row[1]=Lun — se lunedì esiste usalo, altrimenti usa il primo giorno reale dopo domenica
-              const monday = row[1];
-              const firstWeekday = row.slice(1).find(d => d !== null); // primo giorno da lun in poi
+              // In layout lun-dom: row[0]=Lun ... row[5]=Sab, row[6]=Dom
+              const firstWeekday = row[0]; // lunedì
               const weekRef = firstWeekday ?? row.find(d => d !== null);
               const weekNum = weekRef ? getISOWeek(new Date(year, month, weekRef)) : null;
               return (
@@ -3002,8 +3018,9 @@ export default function App() {
                     let cellBg = 'bg-white';
                     if (isWeekend) cellBg = 'bg-red-50/30';
                     else if (closure) cellBg = closure.contaComeFerie ? 'bg-purple-50' : 'bg-slate-100';
+                    const canClick = !closure && (user.role !== 'CEO') && (!isWeekend || user.role === 'dipendente' || user.role === 'responsabile' || user.role === 'hrmanager' || dayReqs.length > 0);
                     return (
-                      <div key={di} onClick={() => handleCellClick(dStr, isWeekend, closure, dayReqs)} className={'h-16 p-1 rounded-xl transition-all flex flex-col ' + cellBg + (isToday ? ' border-2 border-blue-500' : ' border border-slate-100') + ((!isWeekend && !closure && user.role !== 'CEO') ? ' cursor-pointer active:bg-blue-50' : ' cursor-default')}>
+                      <div key={di} onClick={() => handleCellClick(dStr, isWeekend, closure, dayReqs)} className={'h-16 p-1 rounded-xl transition-all flex flex-col ' + cellBg + (isToday ? ' border-2 border-blue-500' : ' border border-slate-100') + (canClick ? ' cursor-pointer active:bg-blue-50' : ' cursor-default')}>
                         <span className={'text-[12px] font-bold shrink-0 ' + (isToday ? 'text-blue-600 font-black' : isWeekend ? 'text-red-300' : closure ? (closure.contaComeFerie ? 'text-purple-400' : 'text-slate-400') : 'text-slate-400')}>{day}</span>
                         <div className="overflow-y-auto flex-1 space-y-0.5 mt-0.5">
                           {closure && <div className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + (closure.contaComeFerie ? 'bg-purple-400' : 'bg-slate-400')}>Chiusura az.</div>}
