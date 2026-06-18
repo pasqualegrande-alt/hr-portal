@@ -1988,7 +1988,7 @@ export default function App() {
             to: hrUser.name,
             message: user.name + ' ha modificato il Modulo di Trasferta per ' + moduloFormData.destinazione + ' — richiede riapprovazione',
             type: 'modulistica', reqId: moduloEditingId,
-            createdAt: new Date().toISOString(), read: false,
+            date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false,
           });
         }
         resetModuloForm();
@@ -2006,7 +2006,7 @@ export default function App() {
             to: hrUser.name,
             message: 'Nuovo Modulo di Trasferta da ' + user.name + ' — ' + moduloFormData.destinazione,
             type: 'modulistica', reqId: docRef.id,
-            createdAt: new Date().toISOString(), read: false,
+            date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false,
           });
         }
         resetModuloForm();
@@ -2039,7 +2039,7 @@ export default function App() {
         to: modulo.userName,
         message: 'Modulo Trasferta per ' + modulo.destinazione + ' APPROVATO da ' + user.name,
         type: 'modulistica', reqId: modulo.id,
-        createdAt: new Date().toISOString(), read: false,
+        date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false,
       });
       setModuloSelectedId(null); setHrKmEdits({});
     } catch(e) { console.error(e); }
