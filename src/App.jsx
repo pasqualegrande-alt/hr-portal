@@ -55,12 +55,6 @@ const calcMinutesExcludingLunch = (fromStr, toStr) => {
   return Math.max(0, total);
 };
 
-// Calcola minuti senza escludere la pausa pranzo (per weekend)
-const calcMinutes = (fromStr, toStr) => {
-  const toMins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-  return Math.max(0, toMins(toStr) - toMins(fromStr));
-};
-
 const getISOWeek = (date) => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -966,9 +960,9 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
     const byType = {
       ferie: empty(), trasferta: empty(), malattia: empty(),
       permesso: empty(), fuorisede: empty(), recupero: empty(),
-      permesso104: empty(), congedo: empty(), weekend: empty()
+      permesso104: empty(), congedo: empty()
     };
-    const reqIds = { ferie: [], trasferta: [], malattia: [], permesso: [], fuorisede: [], recupero: [], permesso104: [], congedo: [], weekend: [] };
+    const reqIds = { ferie: [], trasferta: [], malattia: [], permesso: [], fuorisede: [], recupero: [], permesso104: [], congedo: [] };
 
     const isApproved = s => s === 'approvato' || s === 'comunicato';
     const isPending  = s => ['pendente','pendente_responsabile','pendente_mirco'].includes(s);
@@ -987,14 +981,7 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       if (r.type === 'trasferta') { byType.trasferta[b] += dayHrs; reqIds.trasferta.push(r.id); }
       if (r.type === 'malattia')  { byType.malattia[b]  += dayHrs; reqIds.malattia.push(r.id); }
       if (r.type === 'permesso')  { byType.permesso[b]  += dayHrs; reqIds.permesso.push(r.id); }
-      if (r.type === 'fuorisede') {
-        // Separa giorni feriali da weekend
-        const weekendDays = (r.dates || []).filter(d => { const dow = new Date(d+'T12:00:00').getDay(); return dow === 0 || dow === 6; }).filter(d => d.startsWith(monthISO)).length;
-        const ferialDays = daysInMonth - weekendDays;
-        const hrsPerDay = Math.round((r.durationMinutes || 0) / 60 * 10) / 10 / Math.max((r.dates||[]).length,1);
-        if (ferialDays > 0) { byType.fuorisede[b] += Math.round(hrsPerDay * ferialDays * 10)/10; reqIds.fuorisede.push(r.id); }
-        if (weekendDays > 0) { byType.weekend[b] += Math.round(hrsPerDay * weekendDays * 10)/10; reqIds.weekend.push(r.id); }
-      }
+      if (r.type === 'fuorisede') { byType.fuorisede[b] += dayHrs; reqIds.fuorisede.push(r.id); }
       if (r.type === 'permesso104' || r.type === 'congedo') {
         let hrs;
         if (r.extraMode === 'ore') {
@@ -1026,7 +1013,6 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       recupero:     byType.recupero.appr,
       permesso104:  sum(byType.permesso104),
       congedo:      sum(byType.congedo),
-      weekend:      sum(byType.weekend),
       byType, reqIds
     };
   };
@@ -1050,15 +1036,14 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
   };
 
   const COLS = [
-    { key: 'ferie',        label: 'Ferie',                        bg: 'bg-red-50',     text: 'text-red-700',    dot: 'bg-red-500'    },
-    { key: 'trasferta',    label: 'Trasferta',                    bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-500'   },
-    { key: 'malattia',     label: 'Malattia',                     bg: 'bg-orange-50',  text: 'text-orange-700', dot: 'bg-orange-400' },
-    { key: 'permesso',     label: 'Permessi e Mancate Marc.',     bg: 'bg-slate-50',   text: 'text-slate-700',  dot: 'bg-slate-400'  },
-    { key: 'fuorisede',    label: 'Fuori sede',                   bg: 'bg-teal-50',    text: 'text-teal-700',   dot: 'bg-teal-500'   },
-    { key: 'weekend',      label: 'Weekend',                      bg: 'bg-indigo-50',  text: 'text-indigo-700', dot: 'bg-indigo-500' },
-    { key: 'recupero',     label: 'Ore recupero aut.',            bg: 'bg-amber-50',   text: 'text-amber-700',  dot: 'bg-amber-500'  },
-    { key: 'permesso104',  label: 'Permesso 104',                 bg: 'bg-violet-50',  text: 'text-violet-700', dot: 'bg-violet-500' },
-    { key: 'congedo',      label: 'Congedo',                      bg: 'bg-pink-50',    text: 'text-pink-700',   dot: 'bg-pink-500'   },
+    { key: 'ferie',        label: 'Ferie',             bg: 'bg-red-50',     text: 'text-red-700',    dot: 'bg-red-500'    },
+    { key: 'trasferta',    label: 'Trasferta',          bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-500'   },
+    { key: 'malattia',     label: 'Malattia',           bg: 'bg-orange-50',  text: 'text-orange-700', dot: 'bg-orange-400' },
+    { key: 'permesso',     label: 'Permesso',           bg: 'bg-slate-50',   text: 'text-slate-700',  dot: 'bg-slate-400'  },
+    { key: 'fuorisede',    label: 'Fuori sede',         bg: 'bg-teal-50',    text: 'text-teal-700',   dot: 'bg-teal-500'   },
+    { key: 'recupero',     label: 'Ore recupero aut.',  bg: 'bg-amber-50',   text: 'text-amber-700',  dot: 'bg-amber-500'  },
+    { key: 'permesso104',  label: 'Permesso 104',       bg: 'bg-violet-50',  text: 'text-violet-700', dot: 'bg-violet-500' },
+    { key: 'congedo',      label: 'Congedo',            bg: 'bg-pink-50',    text: 'text-pink-700',   dot: 'bg-pink-500'   },
   ];
 
   // ─── Genera foglio presenze Excel ──────────────────────────────────────────
@@ -1242,35 +1227,6 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
           oreCopy.numFmt = '0.00';
           oreCell.style = oreCopy;
         } catch(e) {}
-
-        // Riga str. (ordRow + 1): ore weekend (mancate timbrature sab/dom)
-        const strRow = ws.getRow(ordRow + 1);
-        for (let d = 1; d <= daysInMonth; d++) {
-          if (d > cutoffDay) { strRow.getCell(3 + d).value = null; continue; }
-          const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
-          const dow = new Date(dateStr + 'T12:00:00').getDay();
-          if (dow !== 0 && dow !== 6) { continue; } // solo weekend
-          // Cerca richieste fuorisede approvate per questo giorno
-          const weReqs = requests.filter(r =>
-            r.userId === emp.id &&
-            r.type === 'fuorisede' &&
-            (r.status === 'approvato' || r.status === 'comunicato') &&
-            Array.isArray(r.dates) && r.dates.includes(dateStr)
-          );
-          if (weReqs.length > 0) {
-            const req = weReqs[0];
-            const totalDays = (req.dates||[]).length || 1;
-            const hrsDay = Math.round((req.durationMinutes||0) / 60 / totalDays * 10) / 10;
-            if (hrsDay > 0) {
-              try {
-                const styleCopy = JSON.parse(JSON.stringify(strRow.getCell(3+d).style || {}));
-                styleCopy.numFmt = '0.##';
-                strRow.getCell(3+d).style = styleCopy;
-              } catch(e) {}
-              strRow.getCell(3+d).value = hrsDay;
-            }
-          }
-        }
 
         // Riga * (ordRow + 2): codice P / H / C per permesso/104/congedo
         const starRow = ws.getRow(ordRow + 2);
@@ -1874,6 +1830,21 @@ export default function App() {
     const unsubRapporti = onSnapshot(query(collection(db, 'rapportiIntervento'), orderBy('createdAt', 'desc')), snap => setRapportiList(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => { unsubUsers(); unsubReqs(); unsubNotifs(); unsubClosures(); unsubPoli(); unsubAudit(); unsubAccess(); unsubRapporti(); };
   }, []);
+
+  // Registra accesso anche quando la tab è rimasta aperta (nessun nuovo login esplicito)
+  useEffect(() => {
+    if (!user) return;
+    const todayKey = 'hrportal_access_' + user.id + '_' + new Date().toLocaleDateString('it-IT').replace(/\//g, '-');
+    if (localStorage.getItem(todayKey)) return; // già registrato oggi
+    localStorage.setItem(todayKey, '1');
+    const now = new Date();
+    addDoc(collection(db, 'accessLog'), {
+      userId: user.id, username: user.username, name: user.name, role: user.role,
+      date: now.toLocaleDateString('it-IT'),
+      time: now.toLocaleTimeString('it-IT'),
+      createdAt: now.toISOString()
+    }).catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -2509,10 +2480,7 @@ export default function App() {
     };
 
     const handleSendFuoriSede = async () => {
-      const isWE = selection && (new Date(selection+'T12:00:00').getDay() === 0 || new Date(selection+'T12:00:00').getDay() === 6);
-      const mins = isWE
-        ? calcMinutes(form.timeFrom, form.timeTo) // weekend: nessuna pausa pranzo esclusa
-        : calcMinutesExcludingLunch(form.timeFrom, form.timeTo);
+      const mins = calcMinutesExcludingLunch(form.timeFrom, form.timeTo);
       if (mins <= 0) return alert('Orario non valido');
       const assignedTo = user && user.resp1 && user.resp1 !== '/' ? user.resp1 : 'Mirco Ronci';
       const newReq = {
@@ -2660,32 +2628,7 @@ export default function App() {
     };
 
     const handleCellClick = (dStr, isWeekend, closure, dayReqs) => {
-      if (closure) return;
-
-      // Weekend: mostra dettaglio se ci sono richieste (per tutti i ruoli)
-      if (isWeekend) {
-        if (dayReqs.length > 0 && (user.role === 'hrmanager' || user.role === 'responsabile' || user.role === 'CEO' || user.role === 'amministratore' || (user.role === 'responsabile' && effectiveFilter !== 'mine' && effectiveFilter !== user.name))) {
-          setDayDetailModal({ date: dStr, reqs: dayReqs });
-          return;
-        }
-        // Dipendente o responsabile che guarda se stesso: può aprire form ridotto
-        if (user.role === 'dipendente' || (user.role === 'responsabile' && (effectiveFilter === 'mine' || effectiveFilter === user.name))) {
-          const myReq = dayReqs.find(r => r.userId === user.id);
-          if (myReq) {
-            setReqModal(myReq); setModifyMode(false);
-            setModifyForm({ start: myReq.dates[0], end: myReq.dates[myReq.dates.length - 1], type: myReq.type, timeFrom: myReq.timeFrom || '09:00', timeTo: myReq.timeTo || '10:00' });
-          } else {
-            setRequestType('fuorisede');
-            setForm({ end: '', type: 'fuorisede', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '', recuperoOre: false, extraMode: 'giorni', extraHours: '', extraEnd: '' });
-            setSelection(dStr);
-          }
-          // Se ci sono richieste di altri, mostra anche il dettaglio
-          if (dayReqs.length > 0 && !dayReqs.find(r => r.userId === user.id)) {
-            setDayDetailModal({ date: dStr, reqs: dayReqs });
-          }
-        }
-        return;
-      }
+      if (isWeekend || closure) return;
 
       // hrmanager: mostra sempre il dettaglio giorno, mai il form richiesta
       if (user.role === 'hrmanager') {
@@ -2750,25 +2693,11 @@ export default function App() {
       const isTrasferta = requestType === 'trasferta';
       const isFerie = requestType === 'ferie' || requestType === 'malattia';
       const isExtra = requestType === 'permesso104' || requestType === 'congedo';
-      const isWeekendDay = selection && (new Date(selection).getDay() === 0 || new Date(selection).getDay() === 6);
 
       return (
         <BottomSheet>
           <h3 className="text-xl font-black uppercase italic mb-4">{getTypeLabel(requestType)}</h3>
           <div className="space-y-3">
-            {isWeekendDay ? (
-              <>
-                <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest text-center mb-2">🗓 Weekend — solo Fuori Sede e Trasferta</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {['fuorisede', 'trasferta'].map(t => (
-                    <button key={t} onClick={() => setRequestType(t)} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all flex items-center justify-center gap-1 ' + (requestType === t ? (t === 'trasferta' ? 'bg-blue-800 text-white' : 'bg-teal-600 text-white') : 'bg-slate-100 text-slate-500')}>
-                      {t === 'trasferta' ? <Briefcase size={14}/> : <Clock size={14}/>} {getTypeLabel(t)}
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
             <div className="grid grid-cols-3 gap-2 mb-2">
               {['ferie', 'malattia', 'permesso'].map(t => (
                 <button key={t} onClick={() => setRequestType(t)} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all ' + (requestType === t ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500')}>{getTypeLabel(t)}</button>
@@ -2795,8 +2724,6 @@ export default function App() {
                 Congedo
               </button>
             </div>
-            </>
-            )}
 
             {!isExtra && <div className="border-t pt-3">
               <div><label className="text-[10px] font-black text-slate-400 uppercase">Data</label><input type="date" value={selection} readOnly className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
@@ -2982,25 +2909,27 @@ export default function App() {
             <span className="font-black uppercase italic text-sm">{currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}</span>
             <button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-3 bg-slate-50 rounded-2xl"><ChevronRight size={20}/></button>
           </div>
-          {/* Header giorni — settimana lun-dom */}
+          {/* Header giorni */}
           <div className="grid gap-0.5 mb-0.5" style={{gridTemplateColumns: '24px repeat(7, 1fr)'}}>
             <div className="text-center text-[9px] font-black text-slate-300 py-1">W</div>
-            {['L','M','M','G','V','S','D'].map((d, i) => <div key={i} className={'text-center text-[9px] font-black py-1 uppercase ' + (i >= 5 ? 'text-red-300' : 'text-slate-400')}>{d}</div>)}
+            {['D','L','M','M','G','V','S'].map((d, i) => <div key={i} className="text-center text-[9px] font-black text-slate-400 py-1 uppercase">{d}</div>)}
           </div>
           {/* Righe settimana */}
           {(() => {
             const cells = [];
-            // firstDay: getDay() → 0=dom,1=lun,...,6=sab → converti a 0=lun,...,6=dom
-            const firstDayMon = (firstDay + 6) % 7;
-            for (let i = 0; i < firstDayMon; i++) cells.push(null);
+            // Riempi le celle: firstDay celle vuote + daysInMonth giorni
+            for (let i = 0; i < firstDay; i++) cells.push(null);
             for (let i = 1; i <= daysInMonth; i++) cells.push(i);
+            // Aggiungi celle vuote in coda per completare l'ultima riga
             while (cells.length % 7 !== 0) cells.push(null);
             const rows = [];
             for (let r = 0; r < cells.length / 7; r++) rows.push(cells.slice(r * 7, r * 7 + 7));
             const todayStr = new Date().toISOString().split('T')[0];
             return rows.map((row, ri) => {
-              // In layout lun-dom: row[0]=Lun ... row[5]=Sab, row[6]=Dom
-              const firstWeekday = row[0]; // lunedì
+              // Calcola numero settimana dal LUNEDÌ della riga (ISO: la settimana inizia il lunedì)
+              // row[0]=Dom, row[1]=Lun — se lunedì esiste usalo, altrimenti usa il primo giorno reale dopo domenica
+              const monday = row[1];
+              const firstWeekday = row.slice(1).find(d => d !== null); // primo giorno da lun in poi
               const weekRef = firstWeekday ?? row.find(d => d !== null);
               const weekNum = weekRef ? getISOWeek(new Date(year, month, weekRef)) : null;
               return (
@@ -3018,9 +2947,8 @@ export default function App() {
                     let cellBg = 'bg-white';
                     if (isWeekend) cellBg = 'bg-red-50/30';
                     else if (closure) cellBg = closure.contaComeFerie ? 'bg-purple-50' : 'bg-slate-100';
-                    const canClick = !closure && (user.role !== 'CEO') && (!isWeekend || user.role === 'dipendente' || user.role === 'responsabile' || user.role === 'hrmanager' || dayReqs.length > 0);
                     return (
-                      <div key={di} onClick={() => handleCellClick(dStr, isWeekend, closure, dayReqs)} className={'h-16 p-1 rounded-xl transition-all flex flex-col ' + cellBg + (isToday ? ' border-2 border-blue-500' : ' border border-slate-100') + (canClick ? ' cursor-pointer active:bg-blue-50' : ' cursor-default')}>
+                      <div key={di} onClick={() => handleCellClick(dStr, isWeekend, closure, dayReqs)} className={'h-16 p-1 rounded-xl transition-all flex flex-col ' + cellBg + (isToday ? ' border-2 border-blue-500' : ' border border-slate-100') + ((!isWeekend && !closure && user.role !== 'CEO') ? ' cursor-pointer active:bg-blue-50' : ' cursor-default')}>
                         <span className={'text-[12px] font-bold shrink-0 ' + (isToday ? 'text-blue-600 font-black' : isWeekend ? 'text-red-300' : closure ? (closure.contaComeFerie ? 'text-purple-400' : 'text-slate-400') : 'text-slate-400')}>{day}</span>
                         <div className="overflow-y-auto flex-1 space-y-0.5 mt-0.5">
                           {closure && <div className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + (closure.contaComeFerie ? 'bg-purple-400' : 'bg-slate-400')}>Chiusura az.</div>}
@@ -3508,8 +3436,10 @@ export default function App() {
               await signInAnonymously(auth);
               setUser(f);
               setLastNotifView(localStorage.getItem('lastNotifView_' + f.id) || '');
-              // Registra accesso
+              // Registra accesso e setta flag giornaliero (evita duplicato da useEffect)
               const now = new Date();
+              const todayKey = 'hrportal_access_' + f.id + '_' + now.toLocaleDateString('it-IT').replace(/\//g, '-');
+              localStorage.setItem(todayKey, '1');
               await addDoc(collection(db, 'accessLog'), {
                 userId: f.id, username: f.username, name: f.name, role: f.role,
                 date: now.toLocaleDateString('it-IT'),
