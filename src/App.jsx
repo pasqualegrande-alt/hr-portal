@@ -2628,7 +2628,21 @@ export default function App() {
     };
 
     const handleCellClick = (dStr, isWeekend, closure, dayReqs) => {
-      if (isWeekend || closure) return;
+      if (closure) return;
+      if (isWeekend) {
+        // Su weekend: apre il dettaglio giorno se ci sono richieste (tutti i ruoli)
+        if (dayReqs.length > 0) {
+          setDayDetailModal({ date: dStr, reqs: dayReqs });
+          return;
+        }
+        // Dipendente/responsabile (se stesso) senza richieste: apre form ridotto fuorisede/trasferta
+        if (user.role === 'dipendente' || (user.role === 'responsabile' && (effectiveFilter === 'mine' || effectiveFilter === user.name))) {
+          setRequestType('fuorisede');
+          setForm({ end: '', type: 'fuorisede', timeFrom: '09:00', timeTo: '10:00', mancataTimbratura: false, nota: '', recuperoOre: false, extraMode: 'giorni', extraHours: '', extraEnd: '' });
+          setSelection(dStr);
+        }
+        return;
+      }
 
       // hrmanager: mostra sempre il dettaglio giorno, mai il form richiesta
       if (user.role === 'hrmanager') {
@@ -2909,27 +2923,25 @@ export default function App() {
             <span className="font-black uppercase italic text-sm">{currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}</span>
             <button onClick={() => setCurrentDate(new Date(year, month + 1))} className="p-3 bg-slate-50 rounded-2xl"><ChevronRight size={20}/></button>
           </div>
-          {/* Header giorni */}
+          {/* Header giorni — settimana lun-dom */}
           <div className="grid gap-0.5 mb-0.5" style={{gridTemplateColumns: '24px repeat(7, 1fr)'}}>
             <div className="text-center text-[9px] font-black text-slate-300 py-1">W</div>
-            {['D','L','M','M','G','V','S'].map((d, i) => <div key={i} className="text-center text-[9px] font-black text-slate-400 py-1 uppercase">{d}</div>)}
+            {['L','M','M','G','V','S','D'].map((d, i) => <div key={i} className={'text-center text-[9px] font-black py-1 uppercase ' + (i >= 5 ? 'text-red-300' : 'text-slate-400')}>{d}</div>)}
           </div>
           {/* Righe settimana */}
           {(() => {
             const cells = [];
-            // Riempi le celle: firstDay celle vuote + daysInMonth giorni
-            for (let i = 0; i < firstDay; i++) cells.push(null);
+            // firstDay: getDay() → 0=dom,1=lun,...,6=sab → converti a 0=lun,...,6=dom
+            const firstDayMon = (firstDay + 6) % 7;
+            for (let i = 0; i < firstDayMon; i++) cells.push(null);
             for (let i = 1; i <= daysInMonth; i++) cells.push(i);
-            // Aggiungi celle vuote in coda per completare l'ultima riga
             while (cells.length % 7 !== 0) cells.push(null);
             const rows = [];
             for (let r = 0; r < cells.length / 7; r++) rows.push(cells.slice(r * 7, r * 7 + 7));
             const todayStr = new Date().toISOString().split('T')[0];
             return rows.map((row, ri) => {
-              // Calcola numero settimana dal LUNEDÌ della riga (ISO: la settimana inizia il lunedì)
-              // row[0]=Dom, row[1]=Lun — se lunedì esiste usalo, altrimenti usa il primo giorno reale dopo domenica
-              const monday = row[1];
-              const firstWeekday = row.slice(1).find(d => d !== null); // primo giorno da lun in poi
+              // In layout lun-dom: row[0]=Lun ... row[5]=Sab, row[6]=Dom
+              const firstWeekday = row[0];
               const weekRef = firstWeekday ?? row.find(d => d !== null);
               const weekNum = weekRef ? getISOWeek(new Date(year, month, weekRef)) : null;
               return (
@@ -2948,7 +2960,7 @@ export default function App() {
                     if (isWeekend) cellBg = 'bg-red-50/30';
                     else if (closure) cellBg = closure.contaComeFerie ? 'bg-purple-50' : 'bg-slate-100';
                     return (
-                      <div key={di} onClick={() => handleCellClick(dStr, isWeekend, closure, dayReqs)} className={'h-16 p-1 rounded-xl transition-all flex flex-col ' + cellBg + (isToday ? ' border-2 border-blue-500' : ' border border-slate-100') + ((!isWeekend && !closure && user.role !== 'CEO') ? ' cursor-pointer active:bg-blue-50' : ' cursor-default')}>
+                      <div key={di} onClick={() => handleCellClick(dStr, isWeekend, closure, dayReqs)} className={'h-16 p-1 rounded-xl transition-all flex flex-col ' + cellBg + (isToday ? ' border-2 border-blue-500' : ' border border-slate-100') + ((!closure && !isWeekend && user.role !== 'CEO') || (isWeekend && dayReqs.length > 0) || (isWeekend && (user.role === 'dipendente' || user.role === 'responsabile')) ? ' cursor-pointer active:bg-blue-50' : ' cursor-default')}>
                         <span className={'text-[12px] font-bold shrink-0 ' + (isToday ? 'text-blue-600 font-black' : isWeekend ? 'text-red-300' : closure ? (closure.contaComeFerie ? 'text-purple-400' : 'text-slate-400') : 'text-slate-400')}>{day}</span>
                         <div className="overflow-y-auto flex-1 space-y-0.5 mt-0.5">
                           {closure && <div className={'text-[7px] px-1 rounded font-black text-white truncate leading-tight py-0.5 ' + (closure.contaComeFerie ? 'bg-purple-400' : 'bg-slate-400')}>Chiusura az.</div>}
