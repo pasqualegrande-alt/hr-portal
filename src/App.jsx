@@ -1793,6 +1793,7 @@ export default function App() {
   const [hrKmEdits, setHrKmEdits] = useState({});
   const [moduloEditingId, setModuloEditingId] = useState(null);
   const [typeFilter, setTypeFilter] = useState('tutti');
+  const [pendingOnly, setPendingOnly] = useState(false);
   // ─── TAB MODULISTICA ─────────────────────────────────────────────────────
   const [modulisticaTab, setModulisticaTab] = useState('trasferta'); // 'trasferta' | 'rapporto'
   // ─── RAPPORTO INTERVENTO STATE ───────────────────────────────────────────
@@ -2395,9 +2396,11 @@ export default function App() {
       }
       if (!passUser) return false;
       // Filtro tipo richiesta
-      if (typeFilter === 'tutti') return true;
+      if (typeFilter === 'tutti' && !pendingOnly) return true;
+      if (pendingOnly && !['pendente','pendente_responsabile','pendente_mirco'].includes(r.status)) return false;
       if (typeFilter === 'mancata_marcatura') return r.type === 'fuorisede' && r.mancataTimbratura;
-      return r.type === typeFilter;
+      if (typeFilter !== 'tutti') return r.type === typeFilter;
+      return true;
     });
 
     const buildDates = (start, end) => {
@@ -2715,6 +2718,7 @@ export default function App() {
       const isTrasferta = requestType === 'trasferta';
       const isFerie = requestType === 'ferie' || requestType === 'malattia';
       const isExtra = requestType === 'permesso104' || requestType === 'congedo';
+      const isWeekendDay = selection && (new Date(selection+'T12:00:00').getDay() === 0 || new Date(selection+'T12:00:00').getDay() === 6);
 
       return (
         <BottomSheet>
@@ -2722,7 +2726,7 @@ export default function App() {
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-2 mb-2">
               {['ferie', 'malattia', 'permesso'].map(t => (
-                <button key={t} onClick={() => setRequestType(t)} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all ' + (requestType === t ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500')}>{getTypeLabel(t)}</button>
+                <button key={t} onClick={() => !isWeekendDay && setRequestType(t)} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all ' + (isWeekendDay ? 'bg-slate-50 text-slate-200 cursor-not-allowed' : requestType === t ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500')}>{getTypeLabel(t)}</button>
               ))}
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -2739,13 +2743,14 @@ export default function App() {
               <div className="flex-1 h-px bg-slate-200"></div>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setRequestType('permesso104')} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all ' + (requestType === 'permesso104' ? 'bg-violet-600 text-white' : 'bg-violet-50 text-violet-600 border border-violet-200')}>
+              <button onClick={() => !isWeekendDay && setRequestType('permesso104')} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all ' + (isWeekendDay ? 'bg-slate-50 text-slate-200 cursor-not-allowed border border-slate-100' : requestType === 'permesso104' ? 'bg-violet-600 text-white' : 'bg-violet-50 text-violet-600 border border-violet-200')}>
                 Permesso 104
               </button>
-              <button onClick={() => setRequestType('congedo')} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all ' + (requestType === 'congedo' ? 'bg-pink-600 text-white' : 'bg-pink-50 text-pink-600 border border-pink-200')}>
+              <button onClick={() => !isWeekendDay && setRequestType('congedo')} className={'py-3 rounded-2xl font-black text-xs uppercase transition-all ' + (isWeekendDay ? 'bg-slate-50 text-slate-200 cursor-not-allowed border border-slate-100' : requestType === 'congedo' ? 'bg-pink-600 text-white' : 'bg-pink-50 text-pink-600 border border-pink-200')}>
                 Congedo
               </button>
             </div>
+            {isWeekendDay && <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest text-center">🗓 Weekend — disponibili solo Fuori Sede e Trasferta</p>}
 
             {!isExtra && <div className="border-t pt-3">
               <div><label className="text-[10px] font-black text-slate-400 uppercase">Data</label><input type="date" value={selection} readOnly className="w-full p-4 bg-slate-50 border rounded-2xl font-bold mt-1 text-base" /></div>
@@ -2910,7 +2915,7 @@ export default function App() {
     return (
       <div className="pb-2">
         {opts.length > 0 && (
-          <div className="mb-4 flex gap-2">
+          <div className="mb-4 flex gap-2 flex-wrap">
             <select value={effectiveFilter} onChange={e => setCalFilter(e.target.value)} className="flex-1 p-4 bg-white border-2 border-blue-100 rounded-2xl font-black text-blue-600 outline-none text-sm">
               {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -2923,6 +2928,9 @@ export default function App() {
               <option value="fuorisede">Fuori sede</option>
               <option value="mancata_marcatura">Mancata marcatura</option>
             </select>
+            <button onClick={() => setPendingOnly(p => !p)} className={'px-4 py-3 rounded-2xl font-black text-xs uppercase whitespace-nowrap border-2 transition-all ' + (pendingOnly ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-orange-500 border-orange-200 hover:border-orange-400')}>
+              ⏳ In attesa
+            </button>
           </div>
         )}
         <div className="bg-white p-3 rounded-3xl shadow-sm border border-slate-200">
