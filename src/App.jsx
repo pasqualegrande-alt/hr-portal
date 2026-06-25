@@ -982,11 +982,15 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       if (r.type === 'malattia')  { byType.malattia[b]  += dayHrs; reqIds.malattia.push(r.id); }
       if (r.type === 'permesso')  { byType.permesso[b]  += dayHrs; reqIds.permesso.push(r.id); }
       if (r.type === 'fuorisede') {
+        const totalReqDays = (r.dates||[]).length || 1; // giorni TOTALI della richiesta
         const weekendDays = (r.dates||[]).filter(d => { const dow = new Date(d+'T12:00:00').getDay(); return dow === 0 || dow === 6; }).filter(d => d.startsWith(monthISO)).length;
         const ferialDays = daysInMonth - weekendDays;
-        const hrsPerDay = daysInMonth > 0 ? dayHrs / Math.max(daysInMonth, 1) : dayHrs;
-        if (ferialDays > 0) { byType.fuorisede[b] += Math.round(hrsPerDay * ferialDays * 10)/10; reqIds.fuorisede.push(r.id); }
-        if (weekendDays > 0) { byType.weekend[b] += Math.round(hrsPerDay * weekendDays * 10)/10; reqIds.weekend.push(r.id); }
+        const totalMins = r.durationMinutes || 0;
+        const minsPerDay = totalMins / totalReqDays;
+        const hrsFerial  = ferialDays  > 0 ? Math.round(minsPerDay * ferialDays  / 60 * 10) / 10 : 0;
+        const hrsWeekend = weekendDays > 0 ? Math.round(minsPerDay * weekendDays / 60 * 10) / 10 : 0;
+        if (ferialDays  > 0) { byType.fuorisede[b] += hrsFerial;  reqIds.fuorisede.push(r.id); }
+        if (weekendDays > 0) { byType.weekend[b]   += hrsWeekend; reqIds.weekend.push(r.id); }
       }
       if (r.type === 'permesso104' || r.type === 'congedo') {
         let hrs;
@@ -1235,6 +1239,34 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
           oreCopy.numFmt = '0.00';
           oreCell.style = oreCopy;
         } catch(e) {}
+
+        // Riga str. (ordRow + 1): ore weekend (mancate timbrature sab/dom)
+        const strRow = ws.getRow(ordRow + 1);
+        for (let d = 1; d <= daysInMonth; d++) {
+          if (d > cutoffDay) { strRow.getCell(3 + d).value = null; continue; }
+          const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+          const dow = new Date(dateStr + 'T12:00:00').getDay();
+          if (dow !== 0 && dow !== 6) continue; // solo sabato e domenica
+          const weReqs = requests.filter(r =>
+            r.userId === emp.id &&
+            r.type === 'fuorisede' &&
+            (r.status === 'approvato' || r.status === 'comunicato') &&
+            Array.isArray(r.dates) && r.dates.includes(dateStr)
+          );
+          if (weReqs.length > 0) {
+            const req = weReqs[0];
+            const totalDays = (req.dates||[]).length || 1;
+            const hrsDay = Math.round((req.durationMinutes||0) / 60 / totalDays * 10) / 10;
+            if (hrsDay > 0) {
+              try {
+                const styleCopy = JSON.parse(JSON.stringify(strRow.getCell(3+d).style || {}));
+                styleCopy.numFmt = '0.##';
+                strRow.getCell(3+d).style = styleCopy;
+              } catch(e) {}
+              strRow.getCell(3+d).value = hrsDay;
+            }
+          }
+        }
 
         // Riga * (ordRow + 2): codice P / H / C per permesso/104/congedo
         const starRow = ws.getRow(ordRow + 2);
