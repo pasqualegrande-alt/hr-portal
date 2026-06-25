@@ -1421,9 +1421,9 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
                           {!hasAny
                             ? <span className="text-slate-200 font-bold">—</span>
                             : <span className="inline-flex items-center gap-1 text-xs font-black flex-wrap justify-center">
-                                {bt.appr > 0 && <span className="text-green-600">{bt.appr}h</span>}
-                                {bt.pend > 0 && <><span className="text-slate-300">+</span><span className="text-orange-500">{bt.pend}h</span></>}
-                                {bt.rif  > 0 && <><span className="text-slate-300">+</span><span className="text-red-500">{bt.rif}h</span></>}
+                                {bt.appr > 0 && <span className="text-green-600">{Math.round(bt.appr*10)/10}h</span>}
+                                {bt.pend > 0 && <><span className="text-slate-300">+</span><span className="text-orange-500">{Math.round(bt.pend*10)/10}h</span></>}
+                                {bt.rif  > 0 && <><span className="text-slate-300">+</span><span className="text-red-500">{Math.round(bt.rif*10)/10}h</span></>}
                               </span>
                           }
                         </td>
@@ -1431,9 +1431,9 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
                     })}
                     {(() => {
                       const absKeys = ['ferie','trasferta','malattia','permesso','recupero','permesso104','congedo'];
-                      const totAppr = absKeys.reduce((s,k)=>s+(h.byType[k]?.appr||0),0);
-                      const totPend = absKeys.reduce((s,k)=>s+(h.byType[k]?.pend||0),0);
-                      const totRif  = absKeys.reduce((s,k)=>s+(h.byType[k]?.rif||0),0);
+                      const totAppr = Math.round(absKeys.reduce((s,k)=>s+(h.byType[k]?.appr||0),0)*10)/10;
+                      const totPend = Math.round(absKeys.reduce((s,k)=>s+(h.byType[k]?.pend||0),0)*10)/10;
+                      const totRif  = Math.round(absKeys.reduce((s,k)=>s+(h.byType[k]?.rif||0),0)*10)/10;
                       const hasAny  = totAppr > 0 || totPend > 0 || totRif > 0;
                       return (
                         <td className="px-4 py-2.5 text-center">
