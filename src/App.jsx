@@ -777,9 +777,9 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
   const fmt = v => v > 0 ? (Math.round(v*10)/10)+'h' : '—';
   // fuorisede NON conta come assenza (lavoro fuori sede)
   const absenceKeys = ['ferie','trasferta','malattia','permesso','recupero','permesso104','congedo'];
-  const totAppr = absenceKeys.reduce((s,k)=>s+(byType[k]?.appr||0),0);
-  const totPend = absenceKeys.reduce((s,k)=>s+(byType[k]?.pend||0),0);
-  const totRif  = absenceKeys.reduce((s,k)=>s+(byType[k]?.rif||0),0);
+  const totAppr = Math.round(absenceKeys.reduce((s,k)=>s+(byType[k]?.appr||0),0)*10)/10;
+  const totPend = Math.round(absenceKeys.reduce((s,k)=>s+(byType[k]?.pend||0),0)*10)/10;
+  const totRif  = Math.round(absenceKeys.reduce((s,k)=>s+(byType[k]?.rif||0),0)*10)/10;
 
   // Mini arrow button
   const Arr = ({ onClick, disabled, children }) => (
@@ -1013,14 +1013,14 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
     // Aggiungi ore chiusura ferie al bucket approvato delle ferie
     byType.ferie.appr += closureFerieHours;
 
-    const sum = t => t.appr + t.pend + t.rif;
+    const sum = t => Math.round((t.appr + t.pend + t.rif) * 10) / 10;
     return {
       ferie:        sum(byType.ferie),
       trasferta:    sum(byType.trasferta),
       malattia:     sum(byType.malattia),
       permesso:     sum(byType.permesso),
       fuorisede:    sum(byType.fuorisede),
-      recupero:     byType.recupero.appr,
+      recupero:     Math.round(byType.recupero.appr * 10) / 10,
       permesso104:  sum(byType.permesso104),
       congedo:      sum(byType.congedo),
       weekend:      sum(byType.weekend),
