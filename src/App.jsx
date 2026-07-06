@@ -2964,6 +2964,7 @@ export default function App() {
               ⏳ In attesa
             </button>
           </div>
+          <p className="text-[10px] font-bold text-orange-400 mb-2">⚠ Attenzione: assicurati che il filtro "IN ATTESA" non sia selezionato per vedere tutte le richieste.</p>
         )}
         <div className="bg-white p-3 rounded-3xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-4">
@@ -3003,7 +3004,12 @@ export default function App() {
                     const isWeekend = new Date(dStr).getDay() === 0 || new Date(dStr).getDay() === 6;
                     const closure = getClosureForDate(dStr);
                     const isToday = dStr === todayStr;
-                    const dayReqs = visibleRequests.filter(r => r.dates && r.dates.includes(dStr)).slice().sort((a, b) => (a.createdAt||'').localeCompare(b.createdAt||''));
+                    const isPending = r => ['pendente','pendente_responsabile','pendente_mirco'].includes(r.status);
+                    const dayReqs = visibleRequests.filter(r => r.dates && r.dates.includes(dStr)).slice().sort((a, b) => {
+                      if (isPending(a) && !isPending(b)) return -1;
+                      if (!isPending(a) && isPending(b)) return 1;
+                      return (a.createdAt||'').localeCompare(b.createdAt||'');
+                    });
                     let cellBg = 'bg-white';
                     if (isWeekend) cellBg = 'bg-red-50/30';
                     else if (closure) cellBg = closure.contaComeFerie ? 'bg-purple-50' : 'bg-slate-100';
@@ -3812,7 +3818,7 @@ export default function App() {
               <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Dipendente</p>
               <p className="font-black text-slate-800">{user.name}</p>
             </div>
-            {[['Destinazione *','destinazione','Es. Milano, Ufficio ABC'],['Indirizzo destinazione (opzionale)','indirizzo','Via Roma 1, 20100 Milano'],['Commessa Excogita *','commessa','Codice commessa (es. E26C001)']].map(([label,key,ph]) => (
+            {[['Destinazione *','destinazione','Es. Milano, Ufficio ABC'],['Indirizzo destinazione (opzionale)','indirizzo','Via Roma 1, 20100 Milano'],['Commessa / SDF *','commessa','Codice Commessa/SDF (es. E26C001 / E26S001)']].map(([label,key,ph]) => (
               <div key={key} className="bg-white rounded-2xl p-4 shadow-sm">
                 <label className="text-[10px] font-black text-slate-400 uppercase">{label}</label>
                 <input type="text" value={moduloFormData[key]} onChange={e => setModuloFormData(p => ({...p, [key]: e.target.value}))} placeholder={ph} className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm focus:border-blue-400"/>
