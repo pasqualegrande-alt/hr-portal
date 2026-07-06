@@ -2965,7 +2965,9 @@ export default function App() {
             </button>
           </div>
         )}
-        <p className="text-[10px] font-bold text-orange-400 mb-2">⚠ Attenzione: assicurati che il filtro "IN ATTESA" non sia selezionato per vedere tutte le richieste.</p>
+        {opts.length > 0 && pendingOnly && (
+          <p className="text-[10px] font-bold text-orange-400 mb-2">⚠ Attenzione: assicurati che il filtro "IN ATTESA" non sia selezionato per vedere tutte le richieste.</p>
+        )}
         <div className="bg-white p-3 rounded-3xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-4">
             <button onClick={() => setCurrentDate(new Date(year, month - 1))} className="p-3 bg-slate-50 rounded-2xl"><ChevronLeft size={20}/></button>
