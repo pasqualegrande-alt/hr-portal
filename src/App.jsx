@@ -1833,6 +1833,8 @@ export default function App() {
   const [rapportoSelectedId, setRapportoSelectedId] = useState(null);
   const [rapportoStep, setRapportoStep] = useState('list');
   const [rapportoEditingId, setRapportoEditingId] = useState(null);
+  const [meseAperto, setMeseAperto] = useState(null);
+  const [meseApertoR, setMeseApertoR] = useState(null);
 
   useEffect(() => { userRef.current = user; }, [user]);
 
@@ -3672,8 +3674,6 @@ export default function App() {
       return (by+bm).localeCompare(ay+am);
     });
 
-    const [meseApertoR, setMeseApertoR] = React.useState(null);
-
     const archiviaRapporto = async (r) => {
       if (!window.confirm('Sei sicuro di voler archiviare questo rapporto?')) return;
       await updateDoc(doc(db, 'rapportiIntervento', r.id), { archiviato: true, meseRiferimento: getMeseRifR(r) });
@@ -4136,8 +4136,6 @@ export default function App() {
       const [am,ay] = a.split('/'); const [bm,by] = b.split('/');
       return (by+bm).localeCompare(ay+am);
     });
-
-    const [meseAperto, setMeseAperto] = React.useState(null);
 
     const archiviaModulo = async (m) => {
       if (!window.confirm('Sei sicuro di voler archiviare questo modulo?')) return;
