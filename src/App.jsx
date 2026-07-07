@@ -113,7 +113,10 @@ const SectionDivider = ({ label, count }) => (
 const LogView = ({ auditLogs, db }) => {
   const [filters, setFilters] = useState({ username: '', date: '', recipient: '', type: '', action: '' });
   const [resetKey, setResetKey] = useState(0);
+  const [moduliOnly, setModuliOnly] = useState(false);
   const debounceRef = React.useRef({});
+
+  const MODULE_TYPES = ['modulo_trasferta', 'rapporto_intervento'];
 
   const handleFilterChange = (col, value) => {
     clearTimeout(debounceRef.current[col]);
@@ -151,8 +154,21 @@ const LogView = ({ auditLogs, db }) => {
   };
 
   const actionLabel = (a) => {
-    const map = { inviata: '📤 Inviata', approvata: '✅ Approvata', rifiutata: '❌ Rifiutata', cancellata: '🗑 Cancellata', modificata: '✏️ Modificata', 'rivalutata→approvata': '🔄 Rivalutata→Appr.' };
+    const map = {
+      inviata: '📤 Inviata', approvata: '✅ Approvata', rifiutata: '❌ Rifiutata',
+      cancellata: '🗑 Cancellata', modificata: '✏️ Modificata', 'rivalutata→approvata': '🔄 Rivalutata→Appr.',
+      'modulo_creato': '📋 Creato', 'modulo_modificato': '✏️ Modificato',
+      'modulo_archiviato': '📦 Archiviato', 'modulo_ripristinato': '↩️ Ripristinato',
+      'modulo_approvato': '✅ Approvato', 'rapporto_creato': '📋 Creato',
+      'rapporto_modificato': '✏️ Modificato', 'rapporto_archiviato': '📦 Archiviato',
+      'rapporto_ripristinato': '↩️ Ripristinato'
+    };
     return map[a] || a;
+  };
+
+  const typeLabel = (t) => {
+    const map = { modulo_trasferta: '🧳 Trasferta', rapporto_intervento: '📋 Rapporto' };
+    return map[t] || t;
   };
 
   const handleSort = (col) => {
@@ -167,6 +183,7 @@ const LogView = ({ auditLogs, db }) => {
 
   const filtered = auditLogs
     .filter(l =>
+      (!moduliOnly || MODULE_TYPES.includes(l.type)) &&
       (!filters.username || (l.username||'').toLowerCase().includes(filters.username.toLowerCase())) &&
       (!filters.date     || (l.date||'').includes(filters.date)) &&
       (!filters.recipient|| (l.recipient||'').toLowerCase().includes(filters.recipient.toLowerCase())) &&
@@ -197,7 +214,10 @@ const LogView = ({ auditLogs, db }) => {
           <h2 className="text-xl font-black uppercase italic">Registro Operazioni</h2>
           <p className="text-[10px] text-slate-400 font-bold mt-0.5">Vista ottimizzata per monitor — {auditLogs.length} operazioni totali</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setModuliOnly(p => !p)} className={'flex items-center gap-1 px-3 py-2 rounded-xl font-black uppercase text-xs border-2 transition-all ' + (moduliOnly ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-blue-600 border-blue-200 hover:border-blue-400')}>
+            📋 Solo moduli
+          </button>
           {hasFilters && (
             <button onClick={resetFilters}
               className="flex items-center gap-1 bg-slate-100 text-slate-500 px-3 py-2 rounded-xl font-black uppercase text-xs">
@@ -462,7 +482,7 @@ const AccessLogView = ({ accessLog, db }) => {
 // ─── RAPPORTO INTERVENTO — componente esterno (stato locale per evitare re-render) ──
 const EMPTY_RAPPORTO = { data:'', cliente:'', luogo:'', cSede:'si', cSedeSpecifica:'', mezzo:'proprio', mezzoTipo:'', operatore:'', dalleOre:'', alleOre:'', durata:'', righe:[{commessa:'',descrizione:''}], esito:'positivo', note:'' };
 
-const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCancel }) => {
+const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCancel, writeLog }) => {
   const [fd, setFdRaw] = useState(initialData || EMPTY_RAPPORTO);
   const setFd = (k, v) => setFdRaw(p => ({...p, [k]: v}));
   const addRiga = () => setFdRaw(p => ({...p, righe:[...p.righe, {commessa:'',descrizione:''}]}));
@@ -505,11 +525,13 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
           // Operatore modifica → notifica a Mirco
           await addDoc(collection(db, 'notifications'), { to: 'Mirco Ronci', message: `Rapporto intervento "${existing?.cliente||fd.cliente}" modificato da ${user.name} — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
         }
+        if (writeLog) await writeLog({ action: 'rapporto_modificato', fromUser: user, toUser: existing?.userName || fd.cliente, type: 'rapporto_intervento', nota: `${fd.cliente}${fd.luogo ? ' — '+fd.luogo : ''} REV ${String((existing?.revisione||0)+1).padStart(2,'0')}`, reqId: editingId });
       } else {
         const docRef = await addDoc(collection(db, 'rapportiIntervento'), { ...fd, userId: user.id, userName: user.name, username: user.username, createdAt: now.toISOString(), revisione: 0, revisioniStorico: [] });
         if (user.username !== 'mirco.ceo') {
           await addDoc(collection(db, 'notifications'), { to: 'Mirco Ronci', message: `Nuovo rapporto di intervento da ${user.name} — ${fd.cliente}${fd.luogo ? ', '+fd.luogo : ''}`, type: 'rapporto', reqId: docRef.id, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
         }
+        if (writeLog) await writeLog({ action: 'rapporto_creato', fromUser: user, toUser: 'Mirco Ronci', type: 'rapporto_intervento', nota: `${fd.cliente}${fd.luogo ? ' — '+fd.luogo : ''}`, reqId: docRef.id });
       }
     } catch(e) {
       console.error('[Rapporto] errore:', e);
@@ -2019,7 +2041,6 @@ export default function App() {
       const hrUser = users.find(u => u.role === 'hrmanager');
       const isEditing = !!moduloEditingId;
       if (isEditing) {
-        // Modifica modulo esistente → torna in_attesa
         await updateDoc(doc(db, 'moduliTrasferta', moduloEditingId), {
           ...moduloFormData,
           status: 'in_attesa',
@@ -2034,10 +2055,10 @@ export default function App() {
             date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false,
           });
         }
+        await writeAuditLog({ action: 'modulo_modificato', fromUser: user, toUser: hrUser?.name || 'HR Manager', type: 'modulo_trasferta', nota: `Trasferta a ${moduloFormData.destinazione}`, reqId: moduloEditingId });
         resetModuloForm();
         alert('Modulo modificato. L\'HR Manager sarà notificato per la riapprovazione.');
       } else {
-        // Nuovo modulo
         const docRef = await addDoc(collection(db, 'moduliTrasferta'), {
           userId: user.id, userName: user.name,
           ...moduloFormData,
@@ -2052,6 +2073,7 @@ export default function App() {
             date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false,
           });
         }
+        await writeAuditLog({ action: 'modulo_creato', fromUser: user, toUser: hrUser?.name || 'HR Manager', type: 'modulo_trasferta', nota: `Trasferta a ${moduloFormData.destinazione}`, reqId: docRef.id });
         resetModuloForm();
         alert('Modulo inviato con successo!');
       }
@@ -2084,6 +2106,7 @@ export default function App() {
         type: 'modulistica', reqId: modulo.id,
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false,
       });
+      await writeAuditLog({ action: 'modulo_approvato', fromUser: user, toUser: modulo.userName, type: 'modulo_trasferta', nota: `Trasferta a ${modulo.destinazione}`, reqId: modulo.id });
       setModuloSelectedId(null); setHrKmEdits({});
     } catch(e) { console.error(e); }
   };
@@ -3653,6 +3676,7 @@ export default function App() {
         initialData={initialData}
         editingId={rapportoEditingId}
         user={user} db={db} users={users}
+        writeLog={writeAuditLog}
         onSaved={() => { setRapportoStep('list'); setRapportoEditingId(null); }}
         onCancel={() => { setRapportoStep('list'); setRapportoEditingId(null); }}
       />;
@@ -3681,11 +3705,13 @@ export default function App() {
     const archiviaRapporto = async (r) => {
       if (!window.confirm('Sei sicuro di voler archiviare questo rapporto?')) return;
       await updateDoc(doc(db, 'rapportiIntervento', r.id), { archiviato: true, meseRiferimento: getMeseRifR(r) });
+      await writeAuditLog({ action: 'rapporto_archiviato', fromUser: user, toUser: r.userName, type: 'rapporto_intervento', nota: `Rapporto ${r.cliente}${r.luogo ? ' — '+r.luogo : ''}`, reqId: r.id });
     };
 
     const ripristinaRapporto = async (r) => {
       if (!window.confirm('Sei sicuro di voler ripristinare questo rapporto?')) return;
       await updateDoc(doc(db, 'rapportiIntervento', r.id), { archiviato: false, meseRiferimento: null });
+      await writeAuditLog({ action: 'rapporto_ripristinato', fromUser: user, toUser: r.userName, type: 'rapporto_intervento', nota: `Rapporto ${r.cliente}`, reqId: r.id });
     };
 
     // ── LIST ────────────────────────────────────────────────────────────────
@@ -4155,11 +4181,13 @@ export default function App() {
       if (!window.confirm('Sei sicuro di voler archiviare questo modulo?')) return;
       const meseRif = getMeseRif(m);
       await updateDoc(doc(db, 'moduliTrasferta', m.id), { archiviato: true, meseRiferimento: meseRif });
+      await writeAuditLog({ action: 'modulo_archiviato', fromUser: user, toUser: m.userName, type: 'modulo_trasferta', nota: `Trasferta a ${m.destinazione} — ${meseRif}`, reqId: m.id });
     };
 
     const ripristinaModulo = async (m) => {
       if (!window.confirm('Sei sicuro di voler ripristinare questo modulo?')) return;
       await updateDoc(doc(db, 'moduliTrasferta', m.id), { archiviato: false, meseRiferimento: null });
+      await writeAuditLog({ action: 'modulo_ripristinato', fromUser: user, toUser: m.userName, type: 'modulo_trasferta', nota: `Trasferta a ${m.destinazione}`, reqId: m.id });
     };
 
     const inAttesa = myModuli.filter(m => m.status === 'in_attesa').length;
