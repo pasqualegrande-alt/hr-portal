@@ -3550,7 +3550,7 @@ export default function App() {
     </div>
   );
 
-  if (user.role === 'amministratore' && view === 'notifications') setView('calendar');
+  if (user.role === 'amministratore' && view === 'notifications') { /* admin può vedere le notifiche */ }
 
   // ─── RAPPORTO VIEW ───────────────────────────────────────────────────────
   const RapportoView = () => {
@@ -4409,6 +4409,14 @@ export default function App() {
           </button>
         )}
         {user.role !== 'amministratore' && <button onClick={() => { const ts = new Date().toISOString(); setView('notifications'); setLastNotifView(ts); localStorage.setItem('lastNotifView_' + user.id, ts); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
+          <Bell size={22}/><span className="text-[10px] font-black uppercase">Notifiche</span>
+          {unreadNotifCount > 0 && (
+            <span className="absolute top-2 right-[calc(50%-20px)] bg-red-500 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[9px] font-black px-1 text-white">
+              {unreadNotifCount}
+            </span>
+          )}
+        </button>}
+        {user.role === 'amministratore' && <button onClick={() => { const ts = new Date().toISOString(); setView('notifications'); setLastNotifView(ts); localStorage.setItem('lastNotifView_' + user.id, ts); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
           <Bell size={22}/><span className="text-[10px] font-black uppercase">Notifiche</span>
           {unreadNotifCount > 0 && (
             <span className="absolute top-2 right-[calc(50%-20px)] bg-red-500 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[9px] font-black px-1 text-white">
