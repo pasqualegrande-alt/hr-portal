@@ -3712,12 +3712,14 @@ export default function App() {
                       <p className="text-xs text-slate-500">{fmtD(r.data)} · {r.luogo||'—'} · {r.operatore}</p>
                       {(r.righe||[]).filter(x=>x.commessa).map((x,i)=><p key={i} className="text-xs text-slate-400">{x.commessa}</p>)}
                     </button>
+                    {(isMirco || isHR) && (
                     <div className="flex border-t border-slate-100">
                       <button onClick={() => archiviaRapporto(r)}
                         className="w-full flex items-center justify-center gap-1 py-2 text-slate-500 text-xs font-black uppercase hover:bg-slate-50 rounded-b-2xl">
                         📦 Archivia
                       </button>
                     </div>
+                    )}
                   </div>
                 );
               })}
@@ -3749,13 +3751,15 @@ export default function App() {
                     </div>
                     <div className="flex border-t border-slate-200">
                       <button onClick={() => setRapportoSelectedId(r.id)}
-                        className="flex-1 flex items-center justify-center gap-1 py-2 text-slate-500 text-xs font-black uppercase hover:bg-slate-100 border-r border-slate-200">
+                        className={'flex-1 flex items-center justify-center gap-1 py-2 text-slate-500 text-xs font-black uppercase hover:bg-slate-100 ' + (isMirco || isHR ? 'border-r border-slate-200' : '')}>
                         🖨️ Stampa PDF
                       </button>
-                      <button onClick={() => ripristinaRapporto(r)}
-                        className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-500 text-xs font-black uppercase hover:bg-blue-50">
-                        ↩️ Ripristina
-                      </button>
+                      {(isMirco || isHR) && (
+                        <button onClick={() => ripristinaRapporto(r)}
+                          className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-500 text-xs font-black uppercase hover:bg-blue-50">
+                          ↩️ Ripristina
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -4222,14 +4226,16 @@ export default function App() {
                               e.stopPropagation();
                               if (!window.confirm('Sei sicuro di voler cancellare il modulo?')) return;
                               await deleteDoc(doc(db, 'moduliTrasferta', m.id));
-                            }} className="flex-1 flex items-center justify-center gap-1 py-2 text-red-500 text-xs font-black uppercase hover:bg-red-50 border-r border-slate-100">
+                            }} className="flex-1 flex items-center justify-center gap-1 py-2 text-red-500 text-xs font-black uppercase hover:bg-red-50">
                               <X size={12}/> Cancella
                             </button>
                           </>)}
-                          <button onClick={(e) => { e.stopPropagation(); archiviaModulo(m); }}
-                            className={'flex-1 flex items-center justify-center gap-1 py-2 text-slate-500 text-xs font-black uppercase hover:bg-slate-50 ' + (!isHR ? '' : 'rounded-b-2xl')}>
-                            📦 Archivia
-                          </button>
+                          {isHR && (
+                            <button onClick={(e) => { e.stopPropagation(); archiviaModulo(m); }}
+                              className="w-full flex items-center justify-center gap-1 py-2 text-slate-500 text-xs font-black uppercase hover:bg-slate-50 rounded-b-2xl">
+                              📦 Archivia
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -4262,13 +4268,15 @@ export default function App() {
                           </div>
                           <div className="flex border-t border-slate-200">
                             <button onClick={() => { setModuloSelectedId(m.id); setHrKmEdits({}); }}
-                              className="flex-1 flex items-center justify-center gap-1 py-2 text-slate-500 text-xs font-black uppercase hover:bg-slate-100 border-r border-slate-200">
+                              className={'flex-1 flex items-center justify-center gap-1 py-2 text-slate-500 text-xs font-black uppercase hover:bg-slate-100 ' + (isHR ? 'border-r border-slate-200' : '')}>
                               🖨️ Stampa PDF
                             </button>
-                            <button onClick={() => ripristinaModulo(m)}
-                              className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-500 text-xs font-black uppercase hover:bg-blue-50">
-                              ↩️ Ripristina
-                            </button>
+                            {isHR && (
+                              <button onClick={() => ripristinaModulo(m)}
+                                className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-500 text-xs font-black uppercase hover:bg-blue-50">
+                                ↩️ Ripristina
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
