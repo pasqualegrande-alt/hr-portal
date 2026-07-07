@@ -3532,6 +3532,8 @@ export default function App() {
   // ─── RAPPORTO VIEW ───────────────────────────────────────────────────────
   const RapportoView = () => {
     const isMirco = user.username === 'mirco.ceo';
+    const isHR = user.role === 'hrmanager';
+    const canManageArchive = isMirco || isHR;
     const fmtD = (s) => { if (!s) return '—'; const p = s.split('-'); if (p.length !== 3) return s; return p[2]+'/'+p[1]+'/'+p[0].slice(2); };
     const selectedRapporto = rapportiList.find(r => r.id === rapportoSelectedId);
 
