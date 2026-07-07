@@ -3587,13 +3587,19 @@ export default function App() {
             </div>
           )}
 
-          {(isMirco || selectedRapporto.userId === user.id) && (
+          {(isMirco || selectedRapporto.userId === user.id) && !selectedRapporto.archiviato && (
             <button onClick={() => {
               setRapportoEditingId(selectedRapporto.id);
               setRapportoStep('new'); setRapportoSelectedId(null);
             }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-sm mb-3">
               ✏️ {isMirco && selectedRapporto.userId !== user.id ? 'Modifica (come Mirco)' : 'Modifica'}
             </button>
+          )}
+          {selectedRapporto.archiviato && (
+            <div className="mb-3 bg-slate-100 rounded-2xl p-3 text-center">
+              <p className="text-slate-500 font-black text-xs uppercase">📦 Rapporto archiviato — sola lettura</p>
+              <p className="text-slate-400 text-xs mt-1">Per modificare, ripristinare prima dall'archivio</p>
+            </div>
           )}
           <button onClick={() => {
             const r = selectedRapporto;
@@ -3619,7 +3625,7 @@ export default function App() {
           }} className="w-full bg-slate-800 text-white py-4 rounded-2xl font-black uppercase text-sm mb-3">
             🖨️ Stampa / Salva PDF
           </button>
-          {selectedRapporto.userId === user.id && !isMirco && (
+          {selectedRapporto.userId === user.id && !isMirco && !selectedRapporto.archiviato && (
             <button onClick={async () => {
               if (!window.confirm('Sei sicuro di voler cancellare questo rapporto?')) return;
               await deleteDoc(doc(db, 'rapportiIntervento', selectedRapporto.id));
@@ -3869,13 +3875,19 @@ export default function App() {
             <button onClick={() => printModulo(selectedModulo)} className="flex-1 bg-slate-100 text-slate-700 py-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2">
               <Download size={15}/> Esporta PDF
             </button>
-            {isHR && (
+            {isHR && !selectedModulo.archiviato && (
               <button onClick={() => approveModulo(selectedModulo)} className={'flex-1 py-4 rounded-2xl font-black uppercase text-sm ' + (selectedModulo.status === 'approvato' ? 'bg-yellow-500 text-white' : 'bg-green-500 text-white')}>
                 {selectedModulo.status === 'approvato' ? '✏️ Ri-approva' : '✓ Approva'}
               </button>
             )}
           </div>
-          {selectedModulo.status === 'approvato' && (
+          {selectedModulo.archiviato && (
+            <div className="mt-3 bg-slate-100 rounded-2xl p-3 text-center">
+              <p className="text-slate-500 font-black text-xs uppercase">📦 Modulo archiviato — sola lettura</p>
+              <p className="text-slate-400 text-xs mt-1">Per modificare, ripristinare prima dall'archivio</p>
+            </div>
+          )}
+          {!selectedModulo.archiviato && selectedModulo.status === 'approvato' && (
             <p className="text-center text-green-600 font-black text-sm mt-4">✓ Approvato da {selectedModulo.approvedBy}</p>
           )}
         </div>
