@@ -3535,10 +3535,6 @@ export default function App() {
     const fmtD = (s) => { if (!s) return '—'; const p = s.split('-'); if (p.length !== 3) return s; return p[2]+'/'+p[1]+'/'+p[0].slice(2); };
     const selectedRapporto = rapportiList.find(r => r.id === rapportoSelectedId);
 
-    const myRapporti = isMirco
-      ? [...rapportiList].sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''))
-      : rapportiList.filter(r => r.userId === user.id || r.userId === 'mirco').sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
-
     // ── DETAIL ──────────────────────────────────────────────────────────────
     if (rapportoSelectedId && selectedRapporto) {
       const rev = selectedRapporto.revisione || 0;
