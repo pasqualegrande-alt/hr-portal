@@ -3652,6 +3652,38 @@ export default function App() {
       />;
     }
 
+    const myRapporti = isMirco
+      ? [...rapportiList].filter(r => !r.archiviato).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''))
+      : rapportiList.filter(r => (r.userId === user.id || r.userId === 'mirco') && !r.archiviato).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+
+    const rapportiArchiviati = isMirco
+      ? [...rapportiList].filter(r => r.archiviato)
+      : rapportiList.filter(r => (r.userId === user.id) && r.archiviato);
+
+    const getMeseRifR = (r) => {
+      const d = r.data || r.createdAt || '';
+      if (!d) return null;
+      const dt = new Date(d.includes('T') ? d : d + 'T12:00:00');
+      return String(dt.getMonth()+1).padStart(2,'0') + '/' + String(dt.getFullYear()).slice(2);
+    };
+
+    const mesiArchiviatiR = [...new Set(rapportiArchiviati.map(r => getMeseRifR(r)).filter(Boolean))].sort((a,b) => {
+      const [am,ay] = a.split('/'); const [bm,by] = b.split('/');
+      return (by+bm).localeCompare(ay+am);
+    });
+
+    const [meseApertoR, setMeseApertoR] = React.useState(null);
+
+    const archiviaRapporto = async (r) => {
+      if (!window.confirm('Sei sicuro di voler archiviare questo rapporto?')) return;
+      await updateDoc(doc(db, 'rapportiIntervento', r.id), { archiviato: true, meseRiferimento: getMeseRifR(r) });
+    };
+
+    const ripristinaRapporto = async (r) => {
+      if (!window.confirm('Sei sicuro di voler ripristinare questo rapporto?')) return;
+      await updateDoc(doc(db, 'rapportiIntervento', r.id), { archiviato: false, meseRiferimento: null });
+    };
+
     // ── LIST ────────────────────────────────────────────────────────────────
     return (
       <div className="px-4 pt-16 pb-24 max-w-lg mx-auto">
@@ -3675,19 +3707,66 @@ export default function App() {
                 const rev = r.revisione || 0;
                 const esitoCols = { positivo:'border-green-400 bg-green-50', negativo:'border-red-400 bg-red-50', sospeso:'border-orange-400 bg-orange-50', altro:'border-slate-300 bg-slate-50' };
                 return (
-                  <button key={r.id} onClick={() => setRapportoSelectedId(r.id)}
-                    className={'w-full text-left rounded-2xl shadow-sm border-l-4 p-4 ' + (esitoCols[r.esito]||esitoCols.altro)}>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="font-black text-sm">{isMirco ? r.userName+' — ' : ''}{r.cliente}</p>
-                      <span className="shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-slate-500 border">REV {String(rev).padStart(2,'0')}</span>
+                  <div key={r.id} className={'rounded-2xl shadow-sm border-l-4 ' + (esitoCols[r.esito]||esitoCols.altro)}>
+                    <button onClick={() => setRapportoSelectedId(r.id)} className="w-full text-left p-4">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="font-black text-sm">{isMirco ? r.userName+' — ' : ''}{r.cliente}</p>
+                        <span className="shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-slate-500 border">REV {String(rev).padStart(2,'0')}</span>
+                      </div>
+                      <p className="text-xs text-slate-500">{fmtD(r.data)} · {r.luogo||'—'} · {r.operatore}</p>
+                      {(r.righe||[]).filter(x=>x.commessa).map((x,i)=><p key={i} className="text-xs text-slate-400">{x.commessa}</p>)}
+                    </button>
+                    <div className="flex border-t border-slate-100">
+                      <button onClick={() => archiviaRapporto(r)}
+                        className="w-full flex items-center justify-center gap-1 py-2 text-slate-500 text-xs font-black uppercase hover:bg-slate-50 rounded-b-2xl">
+                        📦 Archivia
+                      </button>
                     </div>
-                    <p className="text-xs text-slate-500">{fmtD(r.data)} · {r.luogo||'—'} · {r.operatore}</p>
-                    {(r.righe||[]).filter(x=>x.commessa).map((x,i)=><p key={i} className="text-xs text-slate-400">{x.commessa}</p>)}
-                  </button>
+                  </div>
                 );
               })}
             </div>
         }
+
+        {/* Sezione archivio rapporti */}
+        {mesiArchiviatiR.length > 0 && (
+          <div className="mt-8">
+            <p className="text-[10px] font-black text-slate-400 uppercase mb-3">📁 Archivio</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {mesiArchiviatiR.map(mese => (
+                <button key={mese} onClick={() => setMeseApertoR(meseApertoR === mese ? null : mese)}
+                  className={'px-4 py-2 rounded-xl font-black text-xs border-2 transition-all ' + (meseApertoR === mese ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400')}>
+                  {mese}
+                </button>
+              ))}
+            </div>
+            {meseApertoR && (
+              <div className="space-y-3">
+                {rapportiArchiviati.filter(r => getMeseRifR(r) === meseApertoR).map(r => (
+                  <div key={r.id} className="rounded-2xl shadow-sm border-l-4 bg-slate-50 border-slate-300 opacity-80">
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="font-black text-sm text-slate-600">{isMirco ? r.userName+' — ' : ''}{r.cliente}</p>
+                        <span className="shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">Archiviato</span>
+                      </div>
+                      <p className="text-xs text-slate-400">{fmtD(r.data)} · {r.luogo||'—'} · {r.operatore}</p>
+                    </div>
+                    <div className="flex border-t border-slate-200">
+                      <button onClick={() => setRapportoSelectedId(r.id)}
+                        className="flex-1 flex items-center justify-center gap-1 py-2 text-slate-500 text-xs font-black uppercase hover:bg-slate-100 border-r border-slate-200">
+                        🖨️ Stampa PDF
+                      </button>
+                      <button onClick={() => ripristinaRapporto(r)}
+                        className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-500 text-xs font-black uppercase hover:bg-blue-50">
+                        ↩️ Ripristina
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -4033,12 +4112,43 @@ export default function App() {
 
     // ── LIST VIEW (with tabs) ─────────────────────────────────────────────
     const myModuli = isHR
-      ? [...moduliList].sort((a,b) => {
+      ? [...moduliList].filter(m => !m.archiviato).sort((a,b) => {
           if (a.status==='in_attesa' && b.status!=='in_attesa') return -1;
           if (b.status==='in_attesa' && a.status!=='in_attesa') return 1;
           return (b.createdAt||'').localeCompare(a.createdAt||'');
         })
-      : moduliList.filter(m => m.userId === user.id).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+      : moduliList.filter(m => m.userId === user.id && !m.archiviato).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+
+    const moduliArchiviati = isHR
+      ? [...moduliList].filter(m => m.archiviato)
+      : moduliList.filter(m => m.userId === user.id && m.archiviato);
+
+    // Calcola mese riferimento da dataInizio
+    const getMeseRif = (m) => {
+      const d = m.dataInizio || m.createdAt || '';
+      if (!d) return null;
+      const dt = new Date(d.includes('T') ? d : d + 'T12:00:00');
+      return String(dt.getMonth()+1).padStart(2,'0') + '/' + String(dt.getFullYear()).slice(2);
+    };
+
+    // Raggruppa archiviati per mese
+    const mesiArchiviati = [...new Set(moduliArchiviati.map(m => getMeseRif(m)).filter(Boolean))].sort((a,b) => {
+      const [am,ay] = a.split('/'); const [bm,by] = b.split('/');
+      return (by+bm).localeCompare(ay+am);
+    });
+
+    const [meseAperto, setMeseAperto] = React.useState(null);
+
+    const archiviaModulo = async (m) => {
+      if (!window.confirm('Sei sicuro di voler archiviare questo modulo?')) return;
+      const meseRif = getMeseRif(m);
+      await updateDoc(doc(db, 'moduliTrasferta', m.id), { archiviato: true, meseRiferimento: meseRif });
+    };
+
+    const ripristinaModulo = async (m) => {
+      if (!window.confirm('Sei sicuro di voler ripristinare questo modulo?')) return;
+      await updateDoc(doc(db, 'moduliTrasferta', m.id), { archiviato: false, meseRiferimento: null });
+    };
 
     const inAttesa = myModuli.filter(m => m.status === 'in_attesa').length;
 
@@ -4048,7 +4158,7 @@ export default function App() {
         <div className="flex border-b border-slate-200 bg-white sticky top-16 z-20">
           <button onClick={() => setModulisticaTab('trasferta')}
             className={'flex-1 py-3 font-black uppercase text-xs border-b-2 transition-colors ' + (modulisticaTab==='trasferta' ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-400')}>
-            🧳 Trasferta
+            🧳 Rimborsi e Trasferte
           </button>
           <button onClick={() => setModulisticaTab('rapporto')}
             className={'flex-1 py-3 font-black uppercase text-xs border-b-2 transition-colors ' + (modulisticaTab==='rapporto' ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-400')}>
@@ -4098,8 +4208,8 @@ export default function App() {
                           <p className="text-xs text-slate-500">{fmtD(m.dataInizio)} → {fmtD(m.dataFine)} · {(m.spese||[]).length} spese · {(m.kmRows||[]).length} km</p>
                           {m.commessa && <p className="text-xs text-slate-400">Commessa: {m.commessa}</p>}
                         </button>
-                        {!isHR && (
-                          <div className="flex border-t border-slate-100">
+                        <div className="flex border-t border-slate-100">
+                          {!isHR && (<>
                             <button onClick={(e) => {
                               e.stopPropagation();
                               setModuloEditingId(m.id);
@@ -4111,22 +4221,67 @@ export default function App() {
                               });
                               setModuloStep('new'); setModuloMainStep('header');
                               setModuloSpesaPhase('editing'); setModuloKmPhase('editing');
-                            }} className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-500 text-xs font-black uppercase hover:bg-blue-50 rounded-bl-2xl border-r border-slate-100">
+                            }} className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-500 text-xs font-black uppercase hover:bg-blue-50 border-r border-slate-100">
                               ✏️ Modifica
                             </button>
                             <button onClick={async (e) => {
                               e.stopPropagation();
                               if (!window.confirm('Sei sicuro di voler cancellare il modulo?')) return;
                               await deleteDoc(doc(db, 'moduliTrasferta', m.id));
-                            }} className="flex-1 flex items-center justify-center gap-1 py-2 text-red-500 text-xs font-black uppercase hover:bg-red-50 rounded-br-2xl">
+                            }} className="flex-1 flex items-center justify-center gap-1 py-2 text-red-500 text-xs font-black uppercase hover:bg-red-50 border-r border-slate-100">
                               <X size={12}/> Cancella
                             </button>
-                          </div>
-                        )}
+                          </>)}
+                          <button onClick={(e) => { e.stopPropagation(); archiviaModulo(m); }}
+                            className={'flex-1 flex items-center justify-center gap-1 py-2 text-slate-500 text-xs font-black uppercase hover:bg-slate-50 ' + (!isHR ? '' : 'rounded-b-2xl')}>
+                            📦 Archivia
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
               }
+
+              {/* Sezione archivio */}
+              {mesiArchiviati.length > 0 && (
+                <div className="mt-8">
+                  <p className="text-[10px] font-black text-slate-400 uppercase mb-3">📁 Archivio</p>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {mesiArchiviati.map(mese => (
+                      <button key={mese} onClick={() => setMeseAperto(meseAperto === mese ? null : mese)}
+                        className={'px-4 py-2 rounded-xl font-black text-xs border-2 transition-all ' + (meseAperto === mese ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400')}>
+                        {mese}
+                      </button>
+                    ))}
+                  </div>
+                  {meseAperto && (
+                    <div className="space-y-3">
+                      {moduliArchiviati.filter(m => getMeseRif(m) === meseAperto).map(m => (
+                        <div key={m.id} className="rounded-2xl shadow-sm border-l-4 bg-slate-50 border-slate-300 opacity-80">
+                          <div className="p-4">
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <p className="font-black text-sm text-slate-600">{isHR ? m.userName+' — ' : ''}Trasferta a {m.destinazione}</p>
+                              <span className="shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">Archiviato</span>
+                            </div>
+                            <p className="text-xs text-slate-400">{fmtD(m.dataInizio)} → {fmtD(m.dataFine)} · {(m.spese||[]).length} spese · {(m.kmRows||[]).length} km</p>
+                            {m.commessa && <p className="text-xs text-slate-300">Commessa: {m.commessa}</p>}
+                          </div>
+                          <div className="flex border-t border-slate-200">
+                            <button onClick={() => { setModuloSelectedId(m.id); setHrKmEdits({}); }}
+                              className="flex-1 flex items-center justify-center gap-1 py-2 text-slate-500 text-xs font-black uppercase hover:bg-slate-100 border-r border-slate-200">
+                              🖨️ Stampa PDF
+                            </button>
+                            <button onClick={() => ripristinaModulo(m)}
+                              className="flex-1 flex items-center justify-center gap-1 py-2 text-blue-500 text-xs font-black uppercase hover:bg-blue-50">
+                              ↩️ Ripristina
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
