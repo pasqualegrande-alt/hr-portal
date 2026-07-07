@@ -110,7 +110,7 @@ const SectionDivider = ({ label, count }) => (
 );
 
 
-const LogView = ({ auditLogs, db }) => {
+const LogView = ({ auditLogs, db, currentUser }) => {
   const [filters, setFilters] = useState({ username: '', date: '', recipient: '', type: '', action: '' });
   const [resetKey, setResetKey] = useState(0);
   const [moduliOnly, setModuliOnly] = useState(false);
@@ -355,6 +355,11 @@ const LogView = ({ auditLogs, db }) => {
                             <td className="px-3 py-2 text-[10px] font-black text-blue-600 whitespace-nowrap">{l.reqValue || <span className="text-slate-200 font-normal">—</span>}</td>
                             <td className="px-3 py-2 whitespace-nowrap font-bold text-slate-700">{actionLabel(l.action)}</td>
                             <td className="px-3 py-2 text-slate-500 italic">{l.nota || <span className="text-slate-200">—</span>}</td>
+                            {currentUser?.role === 'amministratore' && (
+                              <td className="px-3 py-2 text-center">
+                                <button onClick={() => { if(window.confirm('Sei sicuro di voler cancellare questa riga?')) deleteDoc(doc(db,'auditLog',l.id)); }} className="text-red-400 hover:text-red-600 font-black text-sm leading-none" title="Elimina">✕</button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -3550,7 +3555,7 @@ export default function App() {
     </div>
   );
 
-  if (user.role === 'amministratore' && view === 'notifications') { /* admin può vedere le notifiche */ }
+  if (user.role === 'amministratore' && view === 'notifications') setView('calendar');
 
   // ─── RAPPORTO VIEW ───────────────────────────────────────────────────────
   const RapportoView = () => {
@@ -4362,7 +4367,7 @@ export default function App() {
       {view === 'modulistica' && ModulisticaView()}
           {view === 'users' && showAdmin && <AdminUsersView />}
           {view === 'closures' && (showAdmin || user.role === 'hrmanager') && <ClosuresView />}
-          {view === 'log' && (showAdmin || user.role === 'hrmanager') && <LogView auditLogs={auditLogs} db={db} />}
+          {view === 'log' && (showAdmin || user.role === 'hrmanager') && <LogView auditLogs={auditLogs} db={db} currentUser={user} />}
           {view === 'accesslog' && user.role === 'amministratore' && <AccessLogView accessLog={accessLog} db={db} />}
           {view === 'overview' && (showAdmin || user.role === 'responsabile') && <OverviewView users={users} requests={requests} closures={closures} />}
         </div>
