@@ -1325,6 +1325,8 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         }
       });
 
+      // Imposta larghezza colonne da D (4) ad AH (34) a 3
+      for (let c = 4; c <= 34; c++) ws.getColumn(c).width = 3;
       // Imposta larghezza colonna AJ (indice 36) a 7.5
       ws.getColumn(36).width = 7.5;
 
