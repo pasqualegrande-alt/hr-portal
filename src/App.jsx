@@ -34,7 +34,7 @@ const LUNCH_END = '14:00';
 const INITIAL_USERS = [
   { id: '1', firstName: 'Mirco', lastName: 'Ronci', name: 'Mirco Ronci', username: 'mirco.ceo', password: '123', role: 'CEO' },
   { id: '2', firstName: 'Admin', lastName: 'User', name: 'Admin User', username: 'admin', password: '123', role: 'amministratore' },
-  { id: '3', firstName: 'Silvia', lastName: 'Cori', name: 'Silvia Cori', username: 's.cori', password: '123', role: 'dipendente', resp1: '', resp2: '/' },
+  { id: '3', firstName: 'Silvia', lastName: 'Cori', name: 'Silvia Cori', username: 's.cori', password: '123', role: 'dipendente', resp1: '', resp2: '/', oreGiornaliere: 5 },
   { id: 'hrm', firstName: 'HR', lastName: 'Manager', name: 'HR Manager', username: 'hrmanager', password: 'Excogita!234', role: 'hrmanager', resp1: '/', resp2: '/' },
 ];
 
@@ -691,6 +691,10 @@ const getWorkingDays = (year, month) => {
 
 const HOURS_PER_DAY = 7;
 
+// Ritorna le ore giornaliere contrattuali del dipendente (part-time: es. 5h/giorno).
+// Se non specificato, si assume il tempo pieno (HOURS_PER_DAY).
+const getDailyHours = (emp) => (emp && emp.oreGiornaliere) ? emp.oreGiornaliere : HOURS_PER_DAY;
+
 
 const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
   const isHR = currentUser.role === 'hrmanager' || currentUser.role === 'amministratore' || currentUser.role === 'CEO';
@@ -716,10 +720,11 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
     ? employees.filter(u => (u.firstName+' '+u.lastName+' '+u.username).toLowerCase().includes(search.toLowerCase()))
     : employees;
   const workingDays = getWorkingDays(year, month);
-  const theoreticalHours = workingDays * HOURS_PER_DAY;
+  const theoreticalHours = workingDays * getDailyHours(emp);
 
   const calcEmpHours = () => {
     if (!emp) return {};
+    const dailyHrs = getDailyHours(emp);
     const myReqs = requests.filter(r =>
       r.userId === emp.id &&
       r.dates && r.dates.some(d => d.startsWith(monthISO))
@@ -743,7 +748,7 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
       while (curr <= end) {
         const iso = curr.toISOString().split('T')[0];
         const dow = curr.getDay();
-        if (iso.startsWith(monthISO) && dow >= 1 && dow <= 5) closureFerieHours += HOURS_PER_DAY;
+        if (iso.startsWith(monthISO) && dow >= 1 && dow <= 5) closureFerieHours += dailyHrs;
         curr.setDate(curr.getDate() + 1);
       }
     }
@@ -754,7 +759,7 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
       if (daysInMonth === 0) continue;
       const b = r.type === 'malattia' ? 'appr' : bucket(r.status);
       const dayHrs = ['ferie','trasferta','malattia'].includes(r.type)
-        ? daysInMonth * HOURS_PER_DAY
+        ? daysInMonth * dailyHrs
         : Math.round((r.durationMinutes||0)/60*10)/10;
       if (r.type === 'ferie')       byType.ferie[b]       += dayHrs;
       if (r.type === 'trasferta')   byType.trasferta[b]   += dayHrs;
@@ -772,11 +777,11 @@ const EmployeeCardView = ({ users, requests, closures, currentUser }) => {
           const daysThisMonth = daysInMonth;
           const totalHrs = Math.round((r.durationMinutes||0)/60*10)/10;
           if (r.extraMode === 'giorni') {
-            hrs = daysInMonth * HOURS_PER_DAY;
+            hrs = daysInMonth * dailyHrs;
           } else {
             // giorni+ore: proporziona le ore extra
-            const extraMins = (r.durationMinutes||0) - totalDays * HOURS_PER_DAY * 60;
-            hrs = daysInMonth * HOURS_PER_DAY + Math.round(extraMins/60*10)/10;
+            const extraMins = (r.durationMinutes||0) - totalDays * dailyHrs * 60;
+            hrs = daysInMonth * dailyHrs + Math.round(extraMins/60*10)/10;
           }
         }
         if (r.type === 'permesso104') byType.permesso104[b] += hrs;
@@ -955,6 +960,8 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
   const monthISO = `${year}-${String(month+1).padStart(2,'0')}`;
 
   const calcHours = (userId) => {
+    const emp = users.find(u => u.id === userId);
+    const dailyHrs = getDailyHours(emp);
     const myReqs = requests.filter(r =>
       r.userId === userId &&
       r.dates && r.dates.some(d => d.startsWith(monthISO))
@@ -979,7 +986,7 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
           } else {
             match = iso >= c.dal && iso <= c.al;
           }
-          if (match) { total += HOURS_PER_DAY; break; }
+          if (match) { total += dailyHrs; break; }
         }
       }
       return total;
@@ -1001,7 +1008,7 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       if (daysInMonth === 0) continue;
       const b = r.type === 'malattia' ? 'appr' : bucket(r.status);
       const dayHrs = ['ferie','trasferta','malattia'].includes(r.type)
-        ? daysInMonth * HOURS_PER_DAY
+        ? daysInMonth * dailyHrs
         : Math.round((r.durationMinutes || 0) / 60 * 10) / 10;
 
       if (r.type === 'ferie')     { byType.ferie[b]     += dayHrs; reqIds.ferie.push(r.id); }
@@ -1024,11 +1031,11 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         if (r.extraMode === 'ore') {
           hrs = Math.round((r.durationMinutes||0)/60*10)/10;
         } else if (r.extraMode === 'giorni') {
-          hrs = daysInMonth * HOURS_PER_DAY;
+          hrs = daysInMonth * dailyHrs;
         } else {
           const totalDays = (r.dates||[]).length || 1;
-          const extraMins = (r.durationMinutes||0) - totalDays * HOURS_PER_DAY * 60;
-          hrs = daysInMonth * HOURS_PER_DAY + Math.round(extraMins/60*10)/10;
+          const extraMins = (r.durationMinutes||0) - totalDays * dailyHrs * 60;
+          hrs = daysInMonth * dailyHrs + Math.round(extraMins/60*10)/10;
         }
         if (r.type === 'permesso104') { byType.permesso104[b] += hrs; reqIds.permesso104.push(r.id); }
         if (r.type === 'congedo')     { byType.congedo[b]     += hrs; reqIds.congedo.push(r.id); }
@@ -1105,9 +1112,9 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       if (match) return cl.contaComeFerie ? 'F' : null;
     }
 
-    // Ore base: 5 per Silvia Cori (part-time), 7 per tutti gli altri
+    // Ore base: dipendono dalle ore giornaliere contrattuali del dipendente (part-time incluso)
     const emp = users.find(u => u.id === userId);
-    const baseHrs = emp && emp.username === 's.cori' ? 5 : HOURS_PER_DAY;
+    const baseHrs = getDailyHours(emp);
 
     const dayReqs = requests.filter(r =>
       r.userId === userId &&
@@ -2185,7 +2192,7 @@ export default function App() {
   );
 
   const AdminUsersView = () => {
-    const emptyForm = { firstName: '', lastName: '', username: '', password: '', role: 'dipendente', resp1: '', resp2: '/' };
+    const emptyForm = { firstName: '', lastName: '', username: '', password: '', role: 'dipendente', resp1: '', resp2: '/', oreGiornaliere: 7 };
     const [editingId, setEditingId] = useState(null);
     const [formData, setFormData] = useState(emptyForm);
     const [poliForm, setPoliForm] = useState({ name: '', members: [] });
@@ -2276,6 +2283,14 @@ export default function App() {
                 </select>
               </div>
             </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase pl-1">Ore giornaliere (part-time)</label>
+              <input type="number" step="0.5" min="1" max="12" placeholder="7"
+                className="mt-1 w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none text-sm"
+                value={formData.oreGiornaliere ?? 7}
+                onChange={e => setFormData({...formData, oreGiornaliere: parseFloat(e.target.value) || 7})} />
+              <p className="text-[10px] text-slate-400 font-bold pl-1 mt-1">Usato per calcolare ferie, trasferta, malattia ecc. Tempo pieno = 7.</p>
+            </div>
             <button onClick={handleSave} className="bg-blue-600 text-white rounded-2xl font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-700 transition-all py-4">
               <Save size={18}/> {editingId ? 'Aggiorna' : 'Salva'}
             </button>
@@ -2288,7 +2303,7 @@ export default function App() {
             <table className="w-full text-left min-w-[560px]">
               <thead className="bg-slate-50 border-b">
                 <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  <th className="p-4">Collaboratore</th><th className="p-4">Ruolo</th><th className="p-4">Resp.</th><th className="p-4">Mirco</th><th className="p-4 text-right">Azioni</th>
+                  <th className="p-4">Collaboratore</th><th className="p-4">Ruolo</th><th className="p-4">Resp.</th><th className="p-4">Mirco</th><th className="p-4">Ore/gg</th><th className="p-4 text-right">Azioni</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -2298,8 +2313,9 @@ export default function App() {
                     <td className="p-4"><span className={'px-2 py-1 rounded-full text-[9px] font-black uppercase ' + (u.role === 'hrmanager' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600')}>{u.role === 'hrmanager' ? 'HR Manager' : u.role}</span></td>
                     <td className="p-4 text-sm font-bold text-slate-600">{u.resp1 || '/'}</td>
                     <td className="p-4 text-sm font-bold text-slate-600">{u.resp2 || '/'}</td>
+                    <td className="p-4 text-sm font-bold text-slate-600">{u.oreGiornaliere || 7}h</td>
                     <td className="p-4 text-right space-x-1">
-                      <button onClick={() => { setEditingId(u.id); setFormData({resp1: '', resp2: '/', ...u}); }} className="p-2 text-blue-400 hover:bg-blue-50 rounded-xl"><Edit3 size={16}/></button>
+                      <button onClick={() => { setEditingId(u.id); setFormData({resp1: '', resp2: '/', oreGiornaliere: 7, ...u}); }} className="p-2 text-blue-400 hover:bg-blue-50 rounded-xl"><Edit3 size={16}/></button>
                       <button onClick={() => deleteDoc(doc(db, 'users', u.id))} className="p-2 text-red-300 hover:bg-red-50 rounded-xl"><Trash2 size={16}/></button>
                     </td>
                   </tr>
@@ -2633,16 +2649,16 @@ export default function App() {
         durationMinutes = calcMinutesExcludingLunch(form.timeFrom, form.timeTo);
         if (durationMinutes <= 0) return alert('Orario non valido');
       } else if (form.extraMode === 'giorni') {
-        // Solo giorni: calcolo automatico 7h/giorno
+        // Solo giorni: calcolo automatico in base alle ore giornaliere del dipendente
         dates = buildDates(selection, form.end || selection);
         if (dates.length === 0) return alert('Seleziona almeno un giorno lavorativo');
-        durationMinutes = dates.length * HOURS_PER_DAY * 60;
+        durationMinutes = dates.length * getDailyHours(user) * 60;
       } else {
         // Giorni + ore parziali (con orario)
         dates = buildDates(selection, form.end || selection);
         if (dates.length === 0) return alert('Seleziona almeno un giorno lavorativo');
         const extraMins = (form.timeFrom && form.timeTo) ? calcMinutesExcludingLunch(form.timeFrom, form.timeTo) : 0;
-        durationMinutes = dates.length * HOURS_PER_DAY * 60 + extraMins;
+        durationMinutes = dates.length * getDailyHours(user) * 60 + extraMins;
       }
 
       const newReq = {
@@ -2913,7 +2929,7 @@ export default function App() {
                       </div>
                       {selection && <p className="text-xs font-black text-slate-500 pl-1">
                         Ore totali: <span className={requestType === 'permesso104' ? 'text-violet-600' : 'text-pink-600'}>
-                          {buildDates(selection, form.end || selection).length * HOURS_PER_DAY}h
+                          {buildDates(selection, form.end || selection).length * getDailyHours(user)}h
                         </span>
                       </p>}
                     </div>
@@ -2971,7 +2987,7 @@ export default function App() {
                       </div>
                       {selection && <p className="text-xs font-black text-slate-500 pl-1">
                         Ore totali: <span className={requestType === 'permesso104' ? 'text-violet-600' : 'text-pink-600'}>
-                          {buildDates(selection, form.end || selection).length * HOURS_PER_DAY + Math.round(calcMinutesExcludingLunch(form.timeFrom || '00:00', form.timeTo || '00:00') / 60 * 10) / 10}h
+                          {buildDates(selection, form.end || selection).length * getDailyHours(user) + Math.round(calcMinutesExcludingLunch(form.timeFrom || '00:00', form.timeTo || '00:00') / 60 * 10) / 10}h
                         </span>
                       </p>}
                     </div>
