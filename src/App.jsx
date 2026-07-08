@@ -134,42 +134,22 @@ const LogView = ({ auditLogs, db, currentUser }) => {
     await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'auditLog', d.id))));
   };
 
-  const handleExportExcel = async () => {
+  const handleExportExcel = () => {
     if (auditLogs.length === 0) { alert('Nessuna operazione da esportare.'); return; }
-    if (!window.ExcelJS) {
-      await new Promise((res, rej) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
-        s.onload = res; s.onerror = rej;
-        document.head.appendChild(s);
-      });
-    }
-    const wb = new window.ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Registro Operazioni');
-    ws.columns = [
-      { header: 'Codice',      key: 'code',      width: 30 },
-      { header: 'Username',    key: 'username',   width: 16 },
-      { header: 'Data',        key: 'date',       width: 12 },
-      { header: 'Orario',      key: 'time',       width: 10 },
-      { header: 'Destinatario',key: 'recipient',  width: 22 },
-      { header: 'Tipo',        key: 'type',       width: 20 },
-      { header: 'Azione',      key: 'action',     width: 18 },
-      { header: 'Nota',        key: 'nota',       width: 40 },
-    ];
-    // Intestazione navy
-    ws.getRow(1).eachCell(cell => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3661' } };
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
-      cell.alignment = { vertical: 'middle', horizontal: 'center' };
-    });
-    ws.getRow(1).height = 20;
-    auditLogs.forEach(l => ws.addRow({ code: l.code||'', username: l.username||'', date: l.date||'', time: l.time||'', recipient: l.recipient||'', type: l.type||'', action: l.action||'', nota: l.nota||'' }));
-    const d = new Date();
-    const fname = `registro_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.xlsx`;
-    const buf = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const cols = ['Codice','Username','Data','Orario','Destinatario','Tipo','Azione','Nota'];
+    const rows = auditLogs.map(l => [
+      l.code||'', l.username||'', l.date||'', l.time||'',
+      l.recipient||'', l.type||'', l.action||'',
+      (l.nota||'').replace(/;/g,',')
+    ]);
+    const csv = [cols,...rows].map(r=>r.map(v=>`"${v}"`).join(';')).join('\r\n');
+    const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = fname; a.click();
+    const a = document.createElement('a');
+    a.href = url;
+    const d = new Date();
+    a.download = `registro_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
+    a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -248,7 +228,7 @@ const LogView = ({ auditLogs, db, currentUser }) => {
             <Trash2 size={14}/> Svuota
           </button>
           <button onClick={handleExportExcel} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
-            <Save size={14}/> Esporta Excel
+            <Save size={14}/> Esporta CSV
           </button>
         </div>
       </div>
@@ -359,7 +339,7 @@ const LogView = ({ auditLogs, db, currentUser }) => {
                   : <SectionDivider label={label} count={items.length}/>
                 }
                 <div className="bg-white border-y overflow-hidden shadow-sm">
-                  <div className="overflow-x-auto overflow-y-auto max-h-[70vh]">
+                  <div className="overflow-x-auto">
                     <table className="w-full text-left text-[11px]">
                       <TableHead/>
                       <tbody className="divide-y divide-slate-50">
@@ -411,38 +391,18 @@ const AccessLogView = ({ accessLog, db }) => {
     await deleteDoc(doc(db, 'accessLog', id));
   };
 
-  const handleExportCSV = async () => {
+  const handleExportCSV = () => {
     if (accessLog.length === 0) { alert('Nessun accesso da esportare.'); return; }
-    if (!window.ExcelJS) {
-      await new Promise((res, rej) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
-        s.onload = res; s.onerror = rej;
-        document.head.appendChild(s);
-      });
-    }
-    const wb = new window.ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Registro Accessi');
-    ws.columns = [
-      { header: 'Username', key: 'username', width: 20 },
-      { header: 'Nome',     key: 'name',     width: 24 },
-      { header: 'Ruolo',    key: 'role',     width: 16 },
-      { header: 'Data',     key: 'date',     width: 14 },
-      { header: 'Ora',      key: 'time',     width: 12 },
-    ];
-    ws.getRow(1).eachCell(cell => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3661' } };
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
-      cell.alignment = { vertical: 'middle', horizontal: 'center' };
-    });
-    ws.getRow(1).height = 20;
-    accessLog.forEach(l => ws.addRow({ username: l.username||'', name: l.name||'', role: l.role||'', date: l.date||'', time: l.time||'' }));
-    const d = new Date();
-    const fname = `accessi_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.xlsx`;
-    const buf = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const cols = ['Username','Nome','Ruolo','Data','Ora'];
+    const rows = accessLog.map(l => [l.username||'', l.name||'', l.role||'', l.date||'', l.time||'']);
+    const csv = [cols,...rows].map(r => r.map(v => `"${v}"`).join(';')).join('\r\n');
+    const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = fname; a.click();
+    const a = document.createElement('a');
+    a.href = url;
+    const d = new Date();
+    a.download = `accessi_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
+    a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -463,7 +423,7 @@ const AccessLogView = ({ accessLog, db }) => {
             <Trash2 size={14}/> Svuota
           </button>
           <button onClick={handleExportCSV} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
-            <Save size={14}/> Esporta Excel
+            <Save size={14}/> Esporta CSV
           </button>
         </div>
       </div>
@@ -488,9 +448,9 @@ const AccessLogView = ({ accessLog, db }) => {
 
       {filtered.length > 0 && (
         <div className="bg-white border-y overflow-hidden shadow-sm">
-          <div className="overflow-x-auto overflow-y-auto max-h-[70vh]">
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-[11px]">
-              <thead className="bg-slate-900 sticky top-0 z-10">
+              <thead className="bg-slate-900">
                 <tr className="text-[9px] font-black uppercase tracking-widest text-slate-300">
                   <th className="px-3 py-2 w-32">Username</th>
                   <th className="px-3 py-2 w-40">Nome</th>
@@ -1237,13 +1197,33 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
         }
       });
 
+      // Rimuove le colonne AK/AL (retribuzione / €), non più utilizzate: il modulo finisce ad AJ
+      const mergesToShrink = ws.model.merges.filter(m => {
+        const endCol = m.split(':')[1].match(/[A-Z]+/)[0];
+        return endCol === 'AK' || endCol === 'AL';
+      });
+      mergesToShrink.forEach(m => {
+        const [startRef, endRef] = m.split(':');
+        const rowNum = endRef.match(/\d+/)[0];
+        try {
+          ws.unMergeCells(m);
+          ws.mergeCells(startRef + ':AJ' + rowNum);
+        } catch(e) {}
+      });
+      [3, 32, 61, 90].forEach(r => {
+        ws.getRow(r).getCell(37).value = null; // AK: 'retribuzione'
+        ws.getRow(r).getCell(38).value = null; // AL: ' €'
+      });
+      ws.getColumn(37).hidden = true;
+      ws.getColumn(38).hidden = true;
+
       ws.pageSetup.orientation = 'landscape';
       ws.pageSetup.paperSize = 9;
       ws.pageSetup.fitToPage = false;
       ws.pageSetup.scale = 100;
       ws.pageSetup.horizontalCentered = true;
       ws.pageSetup.verticalCentered = true;
-      ws.pageSetup.printArea = 'A1:AL86';
+      ws.pageSetup.printArea = 'A1:AJ86';
       try { ws.getRow(28).addPageBreak(); } catch(e) {}
       try { ws.getRow(57).addPageBreak(); } catch(e) {}
 
