@@ -278,14 +278,15 @@ const LogView = ({ auditLogs, db, currentUser }) => {
           { items: older, label: 'Archivio precedente', color: 'text-slate-300' },
         ].filter(s => s.items.length > 0);
 
+        const stickyTh = "sticky top-0 z-10 bg-slate-900 ";
         const TableHead = () => (
-          <thead className="bg-slate-900 border-b sticky top-0 z-10">
+          <thead className="border-b">
               <tr className="text-[9px] font-black uppercase tracking-widest text-slate-300">
-                <th className="px-3 py-2 cursor-pointer select-none whitespace-nowrap w-48" onClick={() => handleSort('code')}>
+                <th className={stickyTh + "px-3 py-2 cursor-pointer select-none whitespace-nowrap w-48"} onClick={() => handleSort('code')}>
                   Codice <SortIcon col="code"/>
                 </th>
                 {/* Username */}
-                <th className="px-3 py-2 w-32">
+                <th className={stickyTh + "px-3 py-2 w-32"}>
                   <div className="cursor-pointer select-none" onClick={() => handleSort('username')}>Username <SortIcon col="username"/></div>
                   <input
                     key={resetKey + '-username'}
@@ -297,7 +298,7 @@ const LogView = ({ auditLogs, db, currentUser }) => {
                   />
                 </th>
                 {/* Data */}
-                <th className="px-3 py-2 w-28">
+                <th className={stickyTh + "px-3 py-2 w-28"}>
                   <div className="cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('date')}>Data <SortIcon col="date"/></div>
                   <input
                     key={resetKey + '-date'}
@@ -309,11 +310,11 @@ const LogView = ({ auditLogs, db, currentUser }) => {
                   />
                 </th>
                 {/* Orario */}
-                <th className="px-3 py-2 w-24 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('time')}>
+                <th className={stickyTh + "px-3 py-2 w-24 cursor-pointer select-none whitespace-nowrap"} onClick={() => handleSort('time')}>
                   Orario <SortIcon col="time"/>
                 </th>
                 {/* Destinatario */}
-                <th className="px-3 py-2 w-36">
+                <th className={stickyTh + "px-3 py-2 w-36"}>
                   <div className="cursor-pointer select-none" onClick={() => handleSort('recipient')}>Destinatario <SortIcon col="recipient"/></div>
                   <input
                     key={resetKey + '-recipient'}
@@ -325,7 +326,7 @@ const LogView = ({ auditLogs, db, currentUser }) => {
                   />
                 </th>
                 {/* Tipo */}
-                <th className="px-3 py-2 w-28">
+                <th className={stickyTh + "px-3 py-2 w-28"}>
                   <div className="cursor-pointer select-none" onClick={() => handleSort('type')}>Tipo <SortIcon col="type"/></div>
                   <input
                     key={resetKey + '-type'}
@@ -336,10 +337,10 @@ const LogView = ({ auditLogs, db, currentUser }) => {
                     className="w-full mt-1 p-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold outline-none placeholder-slate-500 text-slate-200 focus:border-blue-400"
                   />
                 </th>
-                <th className="px-3 py-2 w-44 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('reqDates')}>Data rich. <SortIcon col="reqDates"/></th>
-                <th className="px-3 py-2 w-20 cursor-pointer select-none" onClick={() => handleSort('reqValue')}>Valore <SortIcon col="reqValue"/></th>
+                <th className={stickyTh + "px-3 py-2 w-44 cursor-pointer select-none whitespace-nowrap"} onClick={() => handleSort('reqDates')}>Data rich. <SortIcon col="reqDates"/></th>
+                <th className={stickyTh + "px-3 py-2 w-20 cursor-pointer select-none"} onClick={() => handleSort('reqValue')}>Valore <SortIcon col="reqValue"/></th>
                 {/* Azione */}
-                <th className="px-3 py-2 w-44">
+                <th className={stickyTh + "px-3 py-2 w-44"}>
                   <div className="cursor-pointer select-none" onClick={() => handleSort('action')}>Azione <SortIcon col="action"/></div>
                   <input
                     key={resetKey + '-action'}
@@ -351,7 +352,7 @@ const LogView = ({ auditLogs, db, currentUser }) => {
                   />
                 </th>
                 {/* Nota */}
-                <th className="px-3 py-2">Nota</th>
+                <th className={stickyTh + "px-3 py-2"}>Nota</th>
               </tr>
             </thead>
         );
@@ -511,14 +512,14 @@ const AccessLogView = ({ accessLog, db }) => {
         <div className="bg-white border-y shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[11px]">
-              <thead className="bg-slate-900 sticky top-0 z-10">
+              <thead>
                 <tr className="text-[9px] font-black uppercase tracking-widest text-slate-300">
-                  <th className="px-3 py-2 w-32">Username</th>
-                  <th className="px-3 py-2 w-40">Nome</th>
-                  <th className="px-3 py-2 w-28">Ruolo</th>
-                  <th className="px-3 py-2 w-28">Data</th>
-                  <th className="px-3 py-2 w-24">Ora</th>
-                  <th className="px-3 py-2 w-10"></th>
+                  <th className="sticky top-0 z-10 bg-slate-900 px-3 py-2 w-32">Username</th>
+                  <th className="sticky top-0 z-10 bg-slate-900 px-3 py-2 w-40">Nome</th>
+                  <th className="sticky top-0 z-10 bg-slate-900 px-3 py-2 w-28">Ruolo</th>
+                  <th className="sticky top-0 z-10 bg-slate-900 px-3 py-2 w-28">Data</th>
+                  <th className="sticky top-0 z-10 bg-slate-900 px-3 py-2 w-24">Ora</th>
+                  <th className="sticky top-0 z-10 bg-slate-900 px-3 py-2 w-10"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
