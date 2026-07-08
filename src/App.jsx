@@ -127,6 +127,8 @@ const LogView = ({ auditLogs, db, currentUser }) => {
   const [sortCol, setSortCol] = useState('code');
   const [sortDir, setSortDir] = useState('desc');
 
+  const [exportingLog, setExportingLog] = useState(false);
+
   const handleClearLog = async () => {
     if (!checkResetPassword()) { alert('Password errata o operazione annullata.'); return; }
     if (!window.confirm('Cancellare tutto il registro operazioni?')) return;
@@ -134,23 +136,51 @@ const LogView = ({ auditLogs, db, currentUser }) => {
     await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'auditLog', d.id))));
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (auditLogs.length === 0) { alert('Nessuna operazione da esportare.'); return; }
-    const cols = ['Codice','Username','Data','Orario','Destinatario','Tipo','Azione','Nota'];
-    const rows = auditLogs.map(l => [
-      l.code||'', l.username||'', l.date||'', l.time||'',
-      l.recipient||'', l.type||'', l.action||'',
-      (l.nota||'').replace(/;/g,',')
-    ]);
-    const csv = [cols,...rows].map(r=>r.map(v=>`"${v}"`).join(';')).join('\r\n');
-    const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const d = new Date();
-    a.download = `registro_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setExportingLog(true);
+    try {
+      if (!window.ExcelJS) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      const cols = ['Codice','Username','Data','Orario','Destinatario','Tipo','Azione','Nota'];
+      const rows = auditLogs.map(l => [
+        l.code||'', l.username||'', l.date||'', l.time||'',
+        l.recipient||'', l.type||'', l.action||'', l.nota||''
+      ]);
+      const workbook = new window.ExcelJS.Workbook();
+      const ws = workbook.addWorksheet('Registro Operazioni');
+      ws.addRow(cols);
+      rows.forEach(r => ws.addRow(r));
+      const header = ws.getRow(1);
+      header.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+      header.alignment = { vertical: 'middle' };
+      ws.views = [{ state: 'frozen', ySplit: 1 }];
+      ws.columns.forEach((col, i) => {
+        const maxLen = Math.max(cols[i].length, ...rows.map(r => (r[i] || '').toString().length));
+        col.width = Math.min(Math.max(maxLen + 2, 10), 50);
+      });
+      ws.autoFilter = { from: 'A1', to: String.fromCharCode(65 + cols.length - 1) + '1' };
+      const buf = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const d = new Date();
+      a.download = `registro_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      alert('Errore durante l\'esportazione: ' + e.message); console.error(e);
+    } finally {
+      setExportingLog(false);
+    }
   };
 
   const actionLabel = (a) => {
@@ -227,8 +257,8 @@ const LogView = ({ auditLogs, db, currentUser }) => {
           <button onClick={handleClearLog} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
             <Trash2 size={14}/> Svuota
           </button>
-          <button onClick={handleExportExcel} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
-            <Save size={14}/> Esporta CSV
+          <button onClick={handleExportExcel} disabled={exportingLog} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-black uppercase text-xs disabled:opacity-50">
+            <Save size={14}/> {exportingLog ? 'Esportazione...' : 'Esporta Excel'}
           </button>
         </div>
       </div>
@@ -338,7 +368,7 @@ const LogView = ({ auditLogs, db, currentUser }) => {
                   ? <p className={'text-[10px] font-black uppercase tracking-widest mb-2 ' + color}>{label} ({items.length})</p>
                   : <SectionDivider label={label} count={items.length}/>
                 }
-                <div className="bg-white border-y overflow-hidden shadow-sm">
+                <div className="bg-white border-y shadow-sm">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-[11px]">
                       <TableHead/>
@@ -380,6 +410,8 @@ const AccessLogView = ({ accessLog, db }) => {
   const [filterUser, setFilterUser] = useState('');
   const [filterDate, setFilterDate] = useState('');
 
+  const [exportingAccess, setExportingAccess] = useState(false);
+
   const handleClearAll = async () => {
     if (!window.confirm('Sei sicuro di voler svuotare tutto il registro accessi?')) return;
     const snap = await getDocs(collection(db, 'accessLog'));
@@ -391,19 +423,48 @@ const AccessLogView = ({ accessLog, db }) => {
     await deleteDoc(doc(db, 'accessLog', id));
   };
 
-  const handleExportCSV = () => {
+  const handleExportExcel = async () => {
     if (accessLog.length === 0) { alert('Nessun accesso da esportare.'); return; }
-    const cols = ['Username','Nome','Ruolo','Data','Ora'];
-    const rows = accessLog.map(l => [l.username||'', l.name||'', l.role||'', l.date||'', l.time||'']);
-    const csv = [cols,...rows].map(r => r.map(v => `"${v}"`).join(';')).join('\r\n');
-    const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const d = new Date();
-    a.download = `accessi_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setExportingAccess(true);
+    try {
+      if (!window.ExcelJS) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      const cols = ['Username','Nome','Ruolo','Data','Ora'];
+      const rows = accessLog.map(l => [l.username||'', l.name||'', l.role||'', l.date||'', l.time||'']);
+      const workbook = new window.ExcelJS.Workbook();
+      const ws = workbook.addWorksheet('Registro Accessi');
+      ws.addRow(cols);
+      rows.forEach(r => ws.addRow(r));
+      const header = ws.getRow(1);
+      header.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+      header.alignment = { vertical: 'middle' };
+      ws.views = [{ state: 'frozen', ySplit: 1 }];
+      ws.columns.forEach((col, i) => {
+        const maxLen = Math.max(cols[i].length, ...rows.map(r => (r[i] || '').toString().length));
+        col.width = Math.min(Math.max(maxLen + 2, 10), 50);
+      });
+      ws.autoFilter = { from: 'A1', to: String.fromCharCode(65 + cols.length - 1) + '1' };
+      const buf = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const d = new Date();
+      a.download = `accessi_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      alert('Errore durante l\'esportazione: ' + e.message); console.error(e);
+    } finally {
+      setExportingAccess(false);
+    }
   };
 
   const filtered = accessLog.filter(l =>
@@ -422,8 +483,8 @@ const AccessLogView = ({ accessLog, db }) => {
           <button onClick={handleClearAll} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
             <Trash2 size={14}/> Svuota
           </button>
-          <button onClick={handleExportCSV} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
-            <Save size={14}/> Esporta CSV
+          <button onClick={handleExportExcel} disabled={exportingAccess} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-black uppercase text-xs disabled:opacity-50">
+            <Save size={14}/> {exportingAccess ? 'Esportazione...' : 'Esporta Excel'}
           </button>
         </div>
       </div>
@@ -447,10 +508,10 @@ const AccessLogView = ({ accessLog, db }) => {
       {accessLog.length === 0 && <p className="text-slate-400 text-sm font-bold text-center py-8">Nessun accesso registrato.</p>}
 
       {filtered.length > 0 && (
-        <div className="bg-white border-y overflow-hidden shadow-sm">
+        <div className="bg-white border-y shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[11px]">
-              <thead className="bg-slate-900">
+              <thead className="bg-slate-900 sticky top-0 z-10">
                 <tr className="text-[9px] font-black uppercase tracking-widest text-slate-300">
                   <th className="px-3 py-2 w-32">Username</th>
                   <th className="px-3 py-2 w-40">Nome</th>
@@ -1312,11 +1373,18 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
             const totalDays = (req.dates||[]).length || 1;
             const hrsDay = Math.round((req.durationMinutes||0) / 60 / totalDays * 10) / 10;
             if (hrsDay > 0) {
-              try {
-                const styleCopy = JSON.parse(JSON.stringify(strRow.getCell(3+d).style || {}));
-                styleCopy.numFmt = '0.##';
-                strRow.getCell(3+d).style = styleCopy;
-              } catch(e) {}
+              if (!Number.isInteger(hrsDay)) {
+                // Numero decimale: come nella riga ord., forza formato + riduci e adatta
+                // per evitare che colonne strette mostrino un artefatto di troncamento
+                try {
+                  const styleCopy = JSON.parse(JSON.stringify(strRow.getCell(3+d).style || {}));
+                  styleCopy.numFmt = '0.##';
+                  if (styleCopy.alignment) styleCopy.alignment.shrinkToFit = true;
+                  else styleCopy.alignment = { shrinkToFit: true };
+                  strRow.getCell(3+d).style = styleCopy;
+                } catch(e) {}
+              }
+              // Numero intero (5, 4...): lascia il formato del template intatto, come nella riga ord.
               strRow.getCell(3+d).value = hrsDay;
             }
           }
