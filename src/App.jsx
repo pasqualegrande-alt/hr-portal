@@ -370,7 +370,7 @@ const LogView = ({ auditLogs, db, currentUser }) => {
                   : <SectionDivider label={label} count={items.length}/>
                 }
                 <div className="bg-white border-y shadow-sm">
-                  <div className="overflow-x-auto">
+                  <div className="overflow-auto" style={{maxHeight: '520px'}}>
                     <table className="w-full text-left text-[11px]">
                       <TableHead/>
                       <tbody className="divide-y divide-slate-50">
@@ -510,7 +510,7 @@ const AccessLogView = ({ accessLog, db }) => {
 
       {filtered.length > 0 && (
         <div className="bg-white border-y shadow-sm">
-          <div className="overflow-x-auto">
+          <div className="overflow-auto" style={{maxHeight: 'calc(100vh - 280px)'}}>
             <table className="w-full text-left text-[11px]">
               <thead>
                 <tr className="text-[9px] font-black uppercase tracking-widest text-slate-300">
