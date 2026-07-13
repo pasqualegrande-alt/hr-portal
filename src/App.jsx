@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Users, Bell, LogOut, LogIn, ChevronLeft, ChevronRight, Trash2, Edit3, CheckCircle, XCircle, UserPlus, Save, X, Building2, GitBranch, Briefcase, Clock, ClipboardList, RefreshCw, LayoutGrid, Download} from 'lucide-react';
 import { db, getMessagingInstance } from './firebase';
-import { collection, doc, setDoc, getDocs, onSnapshot, deleteDoc, updateDoc, addDoc, query, orderBy } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, getDocs, onSnapshot, deleteDoc, updateDoc, addDoc, query, orderBy } from 'firebase/firestore';
 import { getToken, onMessage } from 'firebase/messaging';
 import { signInAnonymously, signOut } from 'firebase/auth';
 import { auth } from './firebase';
@@ -1978,6 +1978,32 @@ export default function App() {
       setLoading(false);
     };
     initUsers();
+  }, []);
+
+  // Migrazione una tantum: il vecchio sistema di conteggio (basato su un timestamp
+  // locale nel browser) non segnava mai "read: true" le notifiche generali.
+  // Passando al nuovo sistema (basato sul campo "read" su Firestore), tutto lo storico
+  // pregresso apparirebbe di colpo come non letto. Qui lo azzeriamo una sola volta,
+  // lasciando intatti i moduli/rapporto non ancora "Visto" (quelli erano già tracciati
+  // correttamente anche prima).
+  useEffect(() => {
+    const migrateNotifRead = async () => {
+      try {
+        const flagRef = doc(db, 'meta', 'notifReadMigration');
+        const flagSnap = await getDoc(flagRef);
+        if (flagSnap.exists() && flagSnap.data()?.done) return;
+        const snap = await getDocs(collection(db, 'notifications'));
+        const toFix = snap.docs.filter(d => {
+          const data = d.data();
+          return data.read !== true && data.type !== 'rapporto' && data.type !== 'modulistica';
+        });
+        await Promise.all(toFix.map(d => updateDoc(doc(db, 'notifications', d.id), { read: true })));
+        await setDoc(flagRef, { done: true, migratedAt: new Date().toISOString(), count: toFix.length });
+      } catch (e) {
+        console.error('Migrazione notifiche non riuscita:', e);
+      }
+    };
+    migrateNotifRead();
   }, []);
 
   useEffect(() => {
