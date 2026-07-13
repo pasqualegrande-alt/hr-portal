@@ -586,17 +586,17 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
           if (existing && existing.userId !== user.id) {
             const uSnap = await getDocs(collection(db, 'users'));
             const compilatore = uSnap.docs.map(d=>d.data()).find(u => u.id === existing.userId);
-            if (compilatore) await addDoc(collection(db, 'notifications'), { to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
+            if (compilatore) await addDoc(collection(db, 'notifications'), { to: compilatore.name, message: `Rapporto intervento "${existing.cliente}" modificato da Mirco — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT'), read: false });
           }
         } else {
           // Operatore modifica → notifica a Mirco
-          await addDoc(collection(db, 'notifications'), { to: 'Mirco Ronci', message: `Rapporto intervento "${existing?.cliente||fd.cliente}" modificato da ${user.name} — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
+          await addDoc(collection(db, 'notifications'), { to: 'Mirco Ronci', message: `Rapporto intervento "${existing?.cliente||fd.cliente}" modificato da ${user.name} — REV ${String(newRev).padStart(2,'0')}`, type: 'rapporto', reqId: editingId, createdAt: now.toISOString(), date: now.toLocaleString('it-IT'), read: false });
         }
         if (writeLog) await writeLog({ action: 'rapporto_modificato', fromUser: user, toUser: existing?.userName || fd.cliente, type: 'rapporto_intervento', nota: `${fd.cliente}${fd.luogo ? ' — '+fd.luogo : ''} REV ${String((existing?.revisione||0)+1).padStart(2,'0')}`, reqId: editingId });
       } else {
         const docRef = await addDoc(collection(db, 'rapportiIntervento'), { ...fd, userId: user.id, userName: user.name, username: user.username, createdAt: now.toISOString(), revisione: 0, revisioniStorico: [] });
         if (user.username !== 'mirco.ceo') {
-          await addDoc(collection(db, 'notifications'), { to: 'Mirco Ronci', message: `Nuovo rapporto di intervento da ${user.name} — ${fd.cliente}${fd.luogo ? ', '+fd.luogo : ''}`, type: 'rapporto', reqId: docRef.id, createdAt: now.toISOString(), date: now.toLocaleString('it-IT') });
+          await addDoc(collection(db, 'notifications'), { to: 'Mirco Ronci', message: `Nuovo rapporto di intervento da ${user.name} — ${fd.cliente}${fd.luogo ? ', '+fd.luogo : ''}`, type: 'rapporto', reqId: docRef.id, createdAt: now.toISOString(), date: now.toLocaleString('it-IT'), read: false });
         }
         if (writeLog) await writeLog({ action: 'rapporto_creato', fromUser: user, toUser: 'Mirco Ronci', type: 'rapporto_intervento', nota: `${fd.cliente}${fd.luogo ? ' — '+fd.luogo : ''}`, reqId: docRef.id });
       }
@@ -1935,7 +1935,6 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [accessLog, setAccessLog] = useState([]);
   const [calFilter, setCalFilter] = useState(null); // inizializzato dopo login
-  const [lastNotifView, setLastNotifView] = useState(() => localStorage.getItem('lastNotifView_' + (JSON.parse(localStorage.getItem('hrportal_user') || 'null')?.id || 'guest')) || '');
   const userRef = React.useRef(null);
   // ─── MODULISTICA STATE ───────────────────────────────────────────────────
   const [moduloStep, setModuloStep] = useState('list');
@@ -3640,7 +3639,6 @@ export default function App() {
             if (f) {
               await signInAnonymously(auth);
               setUser(f);
-              setLastNotifView(localStorage.getItem('lastNotifView_' + f.id) || '');
               // Registra accesso e setta flag giornaliero (evita duplicato da useEffect)
               const now = new Date();
               const todayKey = 'hrportal_access_' + f.id + '_' + now.toLocaleDateString('it-IT').replace(/\//g, '-');
@@ -4446,7 +4444,7 @@ export default function App() {
   };
 
   const pendingCount = requests.filter(r => r.assignedTo?.toLowerCase() === user.name?.toLowerCase() && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco')).length;
-  const unreadNotifCount = notifications.filter(n => (n.to || '').toLowerCase() === (user.name || '').toLowerCase() && n.createdAt && n.createdAt > (lastNotifView || '0')).length;
+  const unreadNotifCount = notifications.filter(n => (n.to || '').toLowerCase() === (user.name || '').toLowerCase() && n.read !== true).length;
   const showAdmin = user.role === 'amministratore' || user.role === 'CEO';
 
   return (
@@ -4476,7 +4474,7 @@ export default function App() {
           {view === 'closures' && (showAdmin || user.role === 'hrmanager') && <ClosuresView />}
           {view === 'log' && (showAdmin || user.role === 'hrmanager') && <LogView auditLogs={auditLogs} db={db} currentUser={user} />}
           {view === 'accesslog' && user.role === 'amministratore' && <AccessLogView accessLog={accessLog} db={db} />}
-          {view === 'overview' && (showAdmin || user.role === 'responsabile') && <OverviewView users={users} requests={requests} closures={closures} />}
+          {view === 'overview' && (showAdmin || user.role === 'responsabile' || user.role === 'hrmanager') && <OverviewView users={users} requests={requests} closures={closures} />}
         </div>
       </main>
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white flex z-30 border-t border-slate-800">
@@ -4520,7 +4518,12 @@ export default function App() {
             <span className="text-[9px] font-black uppercase">Modulistica</span>
           </button>
         )}
-        {user.role !== 'amministratore' && <button onClick={() => { const ts = new Date().toISOString(); setView('notifications'); setLastNotifView(ts); localStorage.setItem('lastNotifView_' + user.id, ts); }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
+        {user.role !== 'amministratore' && <button onClick={() => {
+          setView('notifications');
+          notifications
+            .filter(n => (n.to || '').toLowerCase() === (user.name || '').toLowerCase() && n.read !== true && n.type !== 'rapporto' && n.type !== 'modulistica')
+            .forEach(n => updateDoc(doc(db, 'notifications', n.id), { read: true }));
+        }} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 relative ' + (view === 'notifications' ? 'text-blue-400' : 'text-slate-500')}>
           <Bell size={22}/><span className="text-[10px] font-black uppercase">Notifiche</span>
           {unreadNotifCount > 0 && (
             <span className="absolute top-2 right-[calc(50%-20px)] bg-red-500 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[9px] font-black px-1 text-white">
@@ -4559,7 +4562,7 @@ export default function App() {
             <ClipboardList size={22}/><span className="text-[10px] font-black uppercase">Moduli</span>
           </button>
         )}
-        {(showAdmin || user.role === 'responsabile') && (
+        {(showAdmin || user.role === 'responsabile' || user.role === 'hrmanager') && (
           <button onClick={() => setView('overview')} className={'flex-1 flex flex-col items-center justify-center py-3 gap-1 ' + (view === 'overview' ? 'text-blue-400' : 'text-slate-500')}>
             <LayoutGrid size={22}/><span className="text-[10px] font-black uppercase">Overview</span>
           </button>
