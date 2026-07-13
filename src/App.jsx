@@ -751,6 +751,12 @@ const getWorkingDays = (year, month) => {
   return count;
 };
 
+// Soglia di sicurezza: nessuna notifica precedente a questa data può mai contare
+// come "non letta" nel badge, qualunque cosa succeda alla migrazione una tantum o
+// alla cache del browser. È una costante fissa nel codice, identica per chiunque
+// apra l'app da qualsiasi dispositivo — non dipende da localStorage né da timing.
+const NOTIF_COUNT_CUTOFF = '2026-07-13T00:00:00.000Z';
+
 const HOURS_PER_DAY = 7;
 
 // Ritorna le ore giornaliere contrattuali del dipendente (part-time: es. 5h/giorno).
@@ -1995,7 +2001,8 @@ export default function App() {
         const snap = await getDocs(collection(db, 'notifications'));
         const toFix = snap.docs.filter(d => {
           const data = d.data();
-          return data.read !== true && data.type !== 'rapporto' && data.type !== 'modulistica';
+          return data.read !== true && data.type !== 'rapporto' && data.type !== 'modulistica'
+            && data.createdAt && data.createdAt < NOTIF_COUNT_CUTOFF;
         });
         await Promise.all(toFix.map(d => updateDoc(doc(db, 'notifications', d.id), { read: true })));
         await setDoc(flagRef, { done: true, migratedAt: new Date().toISOString(), count: toFix.length });
@@ -4470,7 +4477,7 @@ export default function App() {
   };
 
   const pendingCount = requests.filter(r => r.assignedTo?.toLowerCase() === user.name?.toLowerCase() && (r.status === 'pendente' || r.status === 'pendente_responsabile' || r.status === 'pendente_mirco')).length;
-  const unreadNotifCount = notifications.filter(n => (n.to || '').toLowerCase() === (user.name || '').toLowerCase() && n.read !== true).length;
+  const unreadNotifCount = notifications.filter(n => (n.to || '').toLowerCase() === (user.name || '').toLowerCase() && n.read !== true && n.createdAt && n.createdAt >= NOTIF_COUNT_CUTOFF).length;
   const showAdmin = user.role === 'amministratore' || user.role === 'CEO';
 
   return (
