@@ -2176,9 +2176,16 @@ export default function App() {
       const hrUser = users.find(u => u.role === 'hrmanager');
       const isEditing = !!moduloEditingId;
       const etichetta = moduloFormData.soloRimborso ? 'Solo Rimborso' : ('Trasferta a ' + moduloFormData.destinazione);
+      // Un orario senza la relativa data non ha senso (es. "Solo rimborso" con date lasciate
+      // vuote): lo azzeriamo prima di salvare, così non resta un 08:00/17:00 "fantasma".
+      const datiPuliti = {
+        ...moduloFormData,
+        oraInizio: moduloFormData.dataInizio ? moduloFormData.oraInizio : '',
+        oraFine: moduloFormData.dataFine ? moduloFormData.oraFine : '',
+      };
       if (isEditing) {
         await updateDoc(doc(db, 'moduliTrasferta', moduloEditingId), {
-          ...moduloFormData,
+          ...datiPuliti,
           status: 'in_attesa',
           updatedAt: new Date().toISOString(),
           approvedAt: null, approvedBy: null,
@@ -2197,7 +2204,7 @@ export default function App() {
       } else {
         const docRef = await addDoc(collection(db, 'moduliTrasferta'), {
           userId: user.id, userName: user.name,
-          ...moduloFormData,
+          ...datiPuliti,
           status: 'in_attesa',
           createdAt: new Date().toISOString(),
         });
@@ -2275,8 +2282,8 @@ export default function App() {
     win.document.write('<div class="field"><label>Commessa Excogita</label><p>'+(modulo.commessa||'—')+'</p></div>')
     win.document.write('<div class="field"><label>Destinazione</label><p>'+(modulo.destinazione||'—')+'</p></div>')
     win.document.write('<div class="field"><label>Indirizzo</label><p>'+(modulo.indirizzo||'—')+'</p></div>')
-    win.document.write('<div class="field"><label>Data/Ora Inizio</label><p>'+fmtDate(modulo.dataInizio)+' '+(modulo.oraInizio||'')+'</p></div>')
-    win.document.write('<div class="field"><label>Data/Ora Fine</label><p>'+fmtDate(modulo.dataFine)+' '+(modulo.oraFine||'')+'</p></div>')
+    win.document.write('<div class="field"><label>Data/Ora Inizio</label><p>'+(modulo.dataInizio ? fmtDate(modulo.dataInizio)+' '+(modulo.oraInizio||'') : '—')+'</p></div>')
+    win.document.write('<div class="field"><label>Data/Ora Fine</label><p>'+(modulo.dataFine ? fmtDate(modulo.dataFine)+' '+(modulo.oraFine||'') : '—')+'</p></div>')
     win.document.write('</div>')
     win.document.write('<h2>Spese Sostenute</h2><table><colgroup><col style="width:28%"><col style="width:12%"><col style="width:14%"><col style="width:46%"></colgroup><thead><tr><th>Descrizione</th><th>Data</th><th style="text-align:right">Totale €</th><th>Note</th></tr></thead><tbody>')
     win.document.write(rows_spese)
@@ -3982,7 +3989,7 @@ export default function App() {
           <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
             <h3 className="font-black uppercase text-[10px] text-slate-400 mb-3">Dati Trasferta</h3>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              {[['Dipendente', selectedModulo.userName], ['Commessa', selectedModulo.commessa||'—'], ['Destinazione', selectedModulo.destinazione||'—'], ['Indirizzo', selectedModulo.indirizzo||'—'], ['Inizio', (fmtD(selectedModulo.dataInizio))+' '+selectedModulo.oraInizio], ['Fine', (fmtD(selectedModulo.dataFine))+' '+selectedModulo.oraFine]].map(([k,v]) => (
+              {[['Dipendente', selectedModulo.userName], ['Commessa', selectedModulo.commessa||'—'], ['Destinazione', selectedModulo.destinazione||'—'], ['Indirizzo', selectedModulo.indirizzo||'—'], ['Inizio', selectedModulo.dataInizio ? (fmtD(selectedModulo.dataInizio)+' '+selectedModulo.oraInizio) : '—'], ['Fine', selectedModulo.dataFine ? (fmtD(selectedModulo.dataFine)+' '+selectedModulo.oraFine) : '—']].map(([k,v]) => (
                 <div key={k}><p className="text-[9px] font-black text-slate-400 uppercase">{k}</p><p className="font-bold text-sm">{v}</p></div>
               ))}
             </div>
@@ -4175,7 +4182,7 @@ export default function App() {
                 if (!moduloSpesa.data || !moduloSpesa.totale) { alert('Inserisci data e importo'); return; }
                 setModuloFormData(p => ({...p, spese: [...p.spese, {...moduloSpesa}]}));
                 setModuloSpesaPhase('confirm');
-              }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">+ Aggiungi spesa</button>
+              }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">+ Conferma e aggiungi spesa</button>
               <button onClick={() => {
                 if (moduloFormData.soloRimborso && moduloFormData.spese.length === 0) { alert('Con "Solo rimborso" selezionato devi inserire almeno una spesa prima di proseguire.'); return; }
                 setModuloMainStep('km'); setModuloKm({tipo:'Auto',km:'',data:'',targa:'',modello:'',note:''}); setModuloKmPhase('editing');
@@ -4290,8 +4297,8 @@ export default function App() {
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <h3 className="text-[10px] font-black text-slate-400 uppercase mb-2">Dati Trasferta</h3>
               <p className="font-black">{user.name}</p>
-              <p className="text-sm text-slate-600">{moduloFormData.destinazione}{moduloFormData.indirizzo ? ' — '+moduloFormData.indirizzo : ''}</p>
-              <p className="text-sm text-slate-600">{moduloFormData.dataInizio} {moduloFormData.oraInizio} → {moduloFormData.dataFine} {moduloFormData.oraFine}</p>
+              <p className="text-sm text-slate-600">{moduloFormData.destinazione || (moduloFormData.soloRimborso ? 'Solo Rimborso' : '—')}{moduloFormData.indirizzo ? ' — '+moduloFormData.indirizzo : ''}</p>
+              <p className="text-sm text-slate-600">{moduloFormData.dataInizio ? (moduloFormData.dataInizio+' '+moduloFormData.oraInizio) : '—'} → {moduloFormData.dataFine ? (moduloFormData.dataFine+' '+moduloFormData.oraFine) : '—'}</p>
               {moduloFormData.commessa && <p className="text-sm text-slate-500">Commessa: {moduloFormData.commessa}</p>}
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm">
@@ -4422,8 +4429,8 @@ export default function App() {
                               setModuloEditingId(m.id);
                               setModuloFormData({
                                 destinazione: m.destinazione||'', indirizzo: m.indirizzo||'',
-                                dataInizio: m.dataInizio||'', oraInizio: m.oraInizio||'08:00',
-                                dataFine: m.dataFine||'', oraFine: m.oraFine||'17:00',
+                                dataInizio: m.dataInizio||'', oraInizio: m.oraInizio||'',
+                                dataFine: m.dataFine||'', oraFine: m.oraFine||'',
                                 commessa: m.commessa||'', soloRimborso: m.soloRimborso||false, spese: m.spese||[], kmRows: m.kmRows||[]
                               });
                               setModuloStep('new'); setModuloMainStep('header');
