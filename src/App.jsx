@@ -2163,7 +2163,7 @@ export default function App() {
   // ─── MODULISTICA HELPERS ─────────────────────────────────────────────────
   const resetModuloForm = () => {
     setModuloStep('list'); setModuloMainStep('header');
-    setModuloFormData({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',spese:[],kmRows:[]});
+    setModuloFormData({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',soloRimborso:false,spese:[],kmRows:[]});
     setModuloSpesa({descrizione:'Aereo',data:'',totale:'',note:''});
     setModuloSpesaPhase('editing');
     setModuloKm({tipo:'Auto',km:'',data:'',targa:'',modello:'',note:''});
@@ -2175,6 +2175,7 @@ export default function App() {
     try {
       const hrUser = users.find(u => u.role === 'hrmanager');
       const isEditing = !!moduloEditingId;
+      const etichetta = moduloFormData.soloRimborso ? 'Solo Rimborso' : ('Trasferta a ' + moduloFormData.destinazione);
       if (isEditing) {
         await updateDoc(doc(db, 'moduliTrasferta', moduloEditingId), {
           ...moduloFormData,
@@ -2185,12 +2186,12 @@ export default function App() {
         if (hrUser) {
           await addDoc(collection(db, 'notifications'), {
             to: hrUser.name,
-            message: user.name + ' ha modificato il Modulo di Trasferta per ' + moduloFormData.destinazione + ' — richiede riapprovazione',
+            message: user.name + ' ha modificato il Modulo di ' + etichetta + ' — richiede riapprovazione',
             type: 'modulistica', reqId: moduloEditingId,
             date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false,
           });
         }
-        await writeAuditLog({ action: 'modulo_modificato', fromUser: user, toUser: hrUser?.name || 'HR Manager', type: 'modulo_trasferta', nota: `Trasferta a ${moduloFormData.destinazione}`, reqId: moduloEditingId });
+        await writeAuditLog({ action: 'modulo_modificato', fromUser: user, toUser: hrUser?.name || 'HR Manager', type: 'modulo_trasferta', nota: etichetta, reqId: moduloEditingId });
         resetModuloForm();
         alert('Modulo modificato. L\'HR Manager sarà notificato per la riapprovazione.');
       } else {
@@ -2203,12 +2204,12 @@ export default function App() {
         if (hrUser) {
           await addDoc(collection(db, 'notifications'), {
             to: hrUser.name,
-            message: 'Nuovo Modulo di Trasferta da ' + user.name + ' — ' + moduloFormData.destinazione,
+            message: 'Nuovo Modulo di ' + etichetta + ' da ' + user.name,
             type: 'modulistica', reqId: docRef.id,
             date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false,
           });
         }
-        await writeAuditLog({ action: 'modulo_creato', fromUser: user, toUser: hrUser?.name || 'HR Manager', type: 'modulo_trasferta', nota: `Trasferta a ${moduloFormData.destinazione}`, reqId: docRef.id });
+        await writeAuditLog({ action: 'modulo_creato', fromUser: user, toUser: hrUser?.name || 'HR Manager', type: 'modulo_trasferta', nota: etichetta, reqId: docRef.id });
         resetModuloForm();
         alert('Modulo inviato con successo!');
       }
@@ -2226,22 +2227,31 @@ export default function App() {
       if (!window.confirm('Attenzione: alcune righe km hanno indennizzo €/km a 0. Vuoi approvare comunque?')) return;
     }
     try {
+      const etichetta = modulo.soloRimborso ? 'Solo Rimborso' : ('Trasferta a ' + modulo.destinazione);
       const updatedKmRows = (modulo.kmRows||[]).map((row, i) => {
         const ind = parseFloat(hrKmEdits[i]?.indennizzo ?? row.indennizzo ?? 0);
         const km = parseFloat(row.km || 0);
         return { ...row, indennizzo: String(ind), totale: (km * ind).toFixed(2) };
       });
-      await updateDoc(doc(db, 'moduliTrasferta', modulo.id), {
+      const updatePayload = {
         kmRows: updatedKmRows, status: 'approvato',
         approvedAt: new Date().toISOString(), approvedBy: user.name,
-      });
+      };
+      if (modulo.soloRimborso) {
+        // I moduli "Solo Rimborso" vanno in archivio automaticamente all'approvazione
+        const d = modulo.dataInizio || modulo.createdAt || '';
+        const dt = d ? new Date(d.includes('T') ? d : d + 'T12:00:00') : new Date();
+        updatePayload.archiviato = true;
+        updatePayload.meseRiferimento = String(dt.getMonth()+1).padStart(2,'0') + '/' + String(dt.getFullYear()).slice(2);
+      }
+      await updateDoc(doc(db, 'moduliTrasferta', modulo.id), updatePayload);
       await addDoc(collection(db, 'notifications'), {
         to: modulo.userName,
-        message: 'Modulo Trasferta per ' + modulo.destinazione + ' APPROVATO da ' + user.name,
+        message: 'Modulo di ' + etichetta + ' APPROVATO da ' + user.name,
         type: 'modulistica', reqId: modulo.id,
         date: new Date().toLocaleString('it-IT'), createdAt: new Date().toISOString(), read: false,
       });
-      await writeAuditLog({ action: 'modulo_approvato', fromUser: user, toUser: modulo.userName, type: 'modulo_trasferta', nota: `Trasferta a ${modulo.destinazione}`, reqId: modulo.id });
+      await writeAuditLog({ action: 'modulo_approvato', fromUser: user, toUser: modulo.userName, type: 'modulo_trasferta', nota: etichetta, reqId: modulo.id });
       setModuloSelectedId(null); setHrKmEdits({});
     } catch(e) { console.error(e); }
   };
@@ -2259,7 +2269,7 @@ export default function App() {
     const rows_km = (modulo.kmRows||[]).map(r=>'<tr><td>'+r.tipo+'</td><td style="text-align:right">'+r.km+'</td><td>'+fmtDate(r.data)+'</td><td style="font-size:9px">'+(r.targa||'—')+'</td><td>'+(r.modello||'—')+'</td><td style="text-align:right">'+(r.indennizzo?'€ '+fmtEur(r.indennizzo):'—')+'</td><td style="text-align:right">'+(r.totale?'€ '+fmtEur(r.totale):'—')+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
     win.document.write('<!DOCTYPE html><html><head><title>'+nomeFile+'</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#222;}h1{font-size:20px;font-weight:bold;text-transform:uppercase;margin-bottom:4px;color:#1A3661;}h2{font-size:13px;font-weight:bold;margin:20px 0 6px;border-bottom:2px solid #1A3661;padding-bottom:3px;color:#1A3661;text-transform:uppercase;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:8px;}.field label{font-size:9px;font-weight:bold;text-transform:uppercase;color:#888;display:block;}.field p{margin:0;padding:3px 0 3px;border-bottom:1px solid #ddd;font-weight:bold;}table{width:100%;border-collapse:collapse;margin-top:4px;}th{background:#1A3661;color:white;padding:6px 8px;text-align:left;font-size:11px;}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;}.total td{background:#f5f5f5;font-weight:bold;}.note-box{background:#fff3cd;padding:8px 12px;border-left:3px solid #ffc107;font-size:11px;margin-top:10px;}.approved{color:green;font-weight:bold;margin-top:16px;}@media print{button{display:none!important;}}</style></head><body>')
     win.document.write('<div style="display:flex;gap:10px;margin-bottom:16px;"><button onclick="window.print()" style="padding:8px 20px;background:#1A3661;color:white;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#128438; Stampa / Salva PDF</button><button onclick="window.close()" style="padding:8px 16px;background:#f0f0f0;color:#555;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#8592; Chiudi</button></div>')
-    win.document.write('<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><h1 style="margin:0;">Modulo di Trasferta Excogita</h1><span style="font-size:10px;color:#999;text-align:right;">MOD. TR/02<br>del 08/06/2026</span></div><p style="font-size:10px;color:#999;margin:0 0 12px;">Generato il '+new Date().toLocaleDateString('it-IT')+'</p>')
+    win.document.write('<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><h1 style="margin:0;">Modulo di Trasferta e Rimborsi Excogita</h1><span style="font-size:10px;color:#999;text-align:right;">MOD. TR/02<br>del 08/06/2026</span></div><p style="font-size:10px;color:#999;margin:0 0 12px;">Generato il '+new Date().toLocaleDateString('it-IT')+'</p>')
     win.document.write('<h2>Dati Trasferta</h2><div class="grid">')
     win.document.write('<div class="field"><label>Dipendente</label><p>'+(modulo.userName||'—')+'</p></div>')
     win.document.write('<div class="field"><label>Commessa Excogita</label><p>'+(modulo.commessa||'—')+'</p></div>')
@@ -3961,8 +3971,8 @@ export default function App() {
           <div className="flex items-center gap-3 mb-5">
             <button onClick={() => { setModuloSelectedId(null); setHrKmEdits({}); }} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
             <div className="flex-1">
-              <h2 className="font-black uppercase italic text-lg">Modulo Trasferta</h2>
-              <p className="text-xs text-slate-400">{selectedModulo.destinazione} · {fmtD(selectedModulo.dataInizio)}</p>
+              <h2 className="font-black uppercase italic text-lg">Modulo di Trasferta e Rimborsi</h2>
+              <p className="text-xs text-slate-400">{selectedModulo.soloRimborso ? 'Solo Rimborso' : selectedModulo.destinazione} · {fmtD(selectedModulo.dataInizio)}</p>
             </div>
             <span className={'px-3 py-1 rounded-full text-[10px] font-black uppercase ' + (selectedModulo.status === 'approvato' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700')}>
               {selectedModulo.status === 'approvato' ? '✓ Approvato' : 'In attesa'}
@@ -4071,7 +4081,7 @@ export default function App() {
         <div className="px-4 py-4 max-w-lg mx-auto pb-24">
           <div className="flex items-center gap-3 mb-5">
             <button onClick={resetModuloForm} className="p-2 text-slate-400"><ChevronLeft size={22}/></button>
-            <div><h2 className="font-black uppercase italic text-lg">Modulo di Trasferta</h2><p className="text-xs text-slate-400">Passo 1 di 3 — Dati trasferta</p></div>
+            <div><h2 className="font-black uppercase italic text-lg">Modulo di Trasferta e Rimborsi</h2><p className="text-xs text-slate-400">Passo 1 di 3 — Dati trasferta</p></div>
           </div>
           <div className="space-y-3">
             <div className="bg-blue-50 rounded-2xl p-3 flex items-center gap-3">
@@ -4082,23 +4092,32 @@ export default function App() {
               <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Dipendente</p>
               <p className="font-black text-slate-800">{user.name}</p>
             </div>
-            {[['Destinazione *','destinazione','Es. Milano, Ufficio ABC'],['Indirizzo destinazione (opzionale)','indirizzo','Via Roma 1, 20100 Milano'],['Commessa / SDF *','commessa','Codice Commessa/SDF (es. E26C001 / E26S001)']].map(([label,key,ph]) => (
+            <label className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 shadow-sm flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" checked={!!moduloFormData.soloRimborso}
+                onChange={e => setModuloFormData(p => ({...p, soloRimborso: e.target.checked}))}
+                className="mt-0.5 w-5 h-5 accent-amber-600 shrink-0"/>
+              <div>
+                <p className="font-black text-slate-800 text-sm">Solo rimborso</p>
+                <p className="text-xs text-slate-500 mt-0.5">Spesa anticipata per conto dell'azienda, non collegata a una trasferta o a una commessa (es. pranzo con un cliente, acquisto su richiesta). I campi qui sotto diventano facoltativi, ma dovrai indicare almeno una spesa al passo successivo.</p>
+              </div>
+            </label>
+            {[['Destinazione','destinazione','Es. Milano, Ufficio ABC'],['Indirizzo destinazione (opzionale)','indirizzo','Via Roma 1, 20100 Milano'],['Commessa / SDF','commessa','Codice Commessa/SDF (es. E26C001 / E26S001)']].map(([label,key,ph]) => (
               <div key={key} className="bg-white rounded-2xl p-4 shadow-sm">
-                <label className="text-[10px] font-black text-slate-400 uppercase">{label}</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase">{label}{(!moduloFormData.soloRimborso && key !== 'indirizzo') ? ' *' : ''}</label>
                 <input type="text" value={moduloFormData[key]} onChange={e => setModuloFormData(p => ({...p, [key]: e.target.value}))} placeholder={ph} className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm focus:border-blue-400"/>
               </div>
             ))}
             <div className="grid grid-cols-2 gap-3">
-              {[['Data Inizio *','dataInizio','date'],['Ora Inizio *','oraInizio','time'],['Data Fine *','dataFine','date'],['Ora Fine *','oraFine','time']].map(([label,key,type]) => (
+              {[['Data Inizio','dataInizio','date'],['Ora Inizio','oraInizio','time'],['Data Fine','dataFine','date'],['Ora Fine','oraFine','time']].map(([label,key,type]) => (
                 <div key={key} className="bg-white rounded-2xl p-4 shadow-sm">
-                  <label className="text-[10px] font-black text-slate-400 uppercase">{label}</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase">{label}{!moduloFormData.soloRimborso ? ' *' : ''}</label>
                   <input type={type} value={moduloFormData[key]} onChange={e => setModuloFormData(p => ({...p, [key]: e.target.value}))} className="w-full mt-1 p-2 bg-slate-50 border rounded-xl outline-none font-bold text-sm focus:border-blue-400"/>
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-slate-400 font-bold px-1">* campo obbligatorio</p>
+            <p className="text-[10px] text-slate-400 font-bold px-1">{moduloFormData.soloRimborso ? 'Con "Solo rimborso" attivo, questi campi sono facoltativi.' : '* campo obbligatorio'}</p>
             <button onClick={() => {
-              if (!moduloFormData.destinazione || !moduloFormData.commessa || !moduloFormData.dataInizio || !moduloFormData.oraInizio || !moduloFormData.dataFine || !moduloFormData.oraFine) { alert('Compila tutti i campi obbligatori (*)'); return; }
+              if (!moduloFormData.soloRimborso && (!moduloFormData.destinazione || !moduloFormData.commessa || !moduloFormData.dataInizio || !moduloFormData.oraInizio || !moduloFormData.dataFine || !moduloFormData.oraFine)) { alert('Compila tutti i campi obbligatori (*)'); return; }
               setModuloMainStep('spese'); setModuloSpesa({descrizione:'Aereo',data:'',totale:'',note:''}); setModuloSpesaPhase('editing');
             }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">Avanti → Spese</button>
           </div>
@@ -4157,8 +4176,11 @@ export default function App() {
                 setModuloFormData(p => ({...p, spese: [...p.spese, {...moduloSpesa}]}));
                 setModuloSpesaPhase('confirm');
               }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">+ Aggiungi spesa</button>
-              <button onClick={() => { setModuloMainStep('km'); setModuloKm({tipo:'Auto',km:'',data:'',targa:'',modello:'',note:''}); setModuloKmPhase('editing'); }} className="w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black uppercase text-sm">
-                {moduloFormData.spese.length === 0 ? 'Nessuna spesa → Avanti' : 'Avanti senza aggiungere'}
+              <button onClick={() => {
+                if (moduloFormData.soloRimborso && moduloFormData.spese.length === 0) { alert('Con "Solo rimborso" selezionato devi inserire almeno una spesa prima di proseguire.'); return; }
+                setModuloMainStep('km'); setModuloKm({tipo:'Auto',km:'',data:'',targa:'',modello:'',note:''}); setModuloKmPhase('editing');
+              }} className="w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black uppercase text-sm">
+                {moduloFormData.spese.length === 0 ? (moduloFormData.soloRimborso ? 'Aggiungi almeno una spesa per proseguire' : 'Nessuna spesa → Avanti') : 'Avanti senza aggiungere'}
               </button>
             </div>
           )}
@@ -4323,14 +4345,16 @@ export default function App() {
     const archiviaModulo = async (m) => {
       if (!window.confirm('Sei sicuro di voler archiviare questo modulo?')) return;
       const meseRif = getMeseRif(m);
+      const etichetta = m.soloRimborso ? 'Solo Rimborso' : ('Trasferta a ' + m.destinazione);
       await updateDoc(doc(db, 'moduliTrasferta', m.id), { archiviato: true, meseRiferimento: meseRif });
-      await writeAuditLog({ action: 'modulo_archiviato', fromUser: user, toUser: m.userName, type: 'modulo_trasferta', nota: `Trasferta a ${m.destinazione} — ${meseRif}`, reqId: m.id });
+      await writeAuditLog({ action: 'modulo_archiviato', fromUser: user, toUser: m.userName, type: 'modulo_trasferta', nota: `${etichetta} — ${meseRif}`, reqId: m.id });
     };
 
     const ripristinaModulo = async (m) => {
       if (!window.confirm('Sei sicuro di voler ripristinare questo modulo?')) return;
+      const etichetta = m.soloRimborso ? 'Solo Rimborso' : ('Trasferta a ' + m.destinazione);
       await updateDoc(doc(db, 'moduliTrasferta', m.id), { archiviato: false, meseRiferimento: null });
-      await writeAuditLog({ action: 'modulo_ripristinato', fromUser: user, toUser: m.userName, type: 'modulo_trasferta', nota: `Trasferta a ${m.destinazione}`, reqId: m.id });
+      await writeAuditLog({ action: 'modulo_ripristinato', fromUser: user, toUser: m.userName, type: 'modulo_trasferta', nota: etichetta, reqId: m.id });
     };
 
     const inAttesa = myModuli.filter(m => m.status === 'in_attesa').length;
@@ -4357,13 +4381,13 @@ export default function App() {
             {!isHR && (
               <div className="mb-6">
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Moduli disponibili</p>
-                <button onClick={() => { setModuloStep('new'); setModuloMainStep('header'); setModuloFormData({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',spese:[],kmRows:[]}); setModuloSpesaPhase('editing'); setModuloKmPhase('editing'); }}
+                <button onClick={() => { setModuloStep('new'); setModuloMainStep('header'); setModuloFormData({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',soloRimborso:false,spese:[],kmRows:[]}); setModuloSpesaPhase('editing'); setModuloKmPhase('editing'); }}
                   className="w-full bg-white border-2 border-blue-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm active:bg-blue-50 text-left">
                   <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                     <Briefcase size={22} className="text-blue-600"/>
                   </div>
                   <div className="flex-1">
-                    <p className="font-black text-slate-800">Modulo di Trasferta</p>
+                    <p className="font-black text-slate-800">Modulo di Trasferta e Rimborsi</p>
                     <p className="text-xs text-slate-400 mt-0.5">Rimborso spese e indennità km</p>
                   </div>
                   <ChevronRight size={18} className="text-slate-300"/>
@@ -4383,7 +4407,7 @@ export default function App() {
                     <div key={m.id} className={'rounded-2xl shadow-sm border-l-4 ' + (m.status==='approvato' ? 'bg-green-50 border-green-400' : 'bg-orange-50 border-orange-400')}>
                         <button onClick={() => { setModuloSelectedId(m.id); setHrKmEdits({}); }} className="w-full text-left p-4">
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="font-black text-sm">{isHR ? m.userName+' — ' : ''}Trasferta a {m.destinazione}</p>
+                            <p className="font-black text-sm">{isHR ? m.userName+' — ' : ''}{m.soloRimborso ? 'Solo Rimborso' : 'Trasferta a '+m.destinazione}</p>
                             <span className={'shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ' + (m.status==='approvato' ? 'bg-green-200 text-green-700' : 'bg-orange-200 text-orange-700')}>
                               {m.status==='approvato' ? '✓ Appr.' : 'In attesa'}
                             </span>
@@ -4400,7 +4424,7 @@ export default function App() {
                                 destinazione: m.destinazione||'', indirizzo: m.indirizzo||'',
                                 dataInizio: m.dataInizio||'', oraInizio: m.oraInizio||'08:00',
                                 dataFine: m.dataFine||'', oraFine: m.oraFine||'17:00',
-                                commessa: m.commessa||'', spese: m.spese||[], kmRows: m.kmRows||[]
+                                commessa: m.commessa||'', soloRimborso: m.soloRimborso||false, spese: m.spese||[], kmRows: m.kmRows||[]
                               });
                               setModuloStep('new'); setModuloMainStep('header');
                               setModuloSpesaPhase('editing'); setModuloKmPhase('editing');
@@ -4445,7 +4469,7 @@ export default function App() {
                         <div key={m.id} className="rounded-2xl shadow-sm border-l-4 bg-slate-50 border-slate-300 opacity-80">
                           <div className="p-4">
                             <div className="flex items-start justify-between gap-2 mb-1">
-                              <p className="font-black text-sm text-slate-600">{isHR ? m.userName+' — ' : ''}Trasferta a {m.destinazione}</p>
+                              <p className="font-black text-sm text-slate-600">{isHR ? m.userName+' — ' : ''}{m.soloRimborso ? <span className="text-slate-900">Solo Rimborso</span> : <>Trasferta a {m.destinazione}</>}</p>
                               <span className="shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">Archiviato</span>
                             </div>
                             <p className="text-xs text-slate-400">{fmtD(m.dataInizio)} → {fmtD(m.dataFine)} · {(m.spese||[]).length} spese · {(m.kmRows||[]).length} km</p>
