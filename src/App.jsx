@@ -2701,7 +2701,7 @@ export default function App() {
         });
       }
       await checkPolivalenza(dates, user);
-      await writeAuditLog({ action: 'inviata', fromUser: user, toUser: assignedTo, type: requestType, nota: form.nota || '', reqDates: dates, reqValue: getReqValue({ type: requestType, dates, durationMinutes: mins }) });
+      await writeAuditLog({ action: 'inviata', fromUser: user, toUser: assignedTo, type: requestType, nota: form.nota || '', reqDates: dates, reqValue: getReqValue({ type: requestType, dates }) });
       setSelection(null); setRecipientModal(null);
     };
 
