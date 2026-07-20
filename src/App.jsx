@@ -254,9 +254,11 @@ const LogView = ({ auditLogs, db, currentUser }) => {
               <X size={12}/> Reset filtri
             </button>
           )}
-          <button onClick={handleClearLog} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
-            <Trash2 size={14}/> Svuota
-          </button>
+          {currentUser.role === 'amministratore' && (
+            <button onClick={handleClearLog} className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-black uppercase text-xs">
+              <Trash2 size={14}/> Svuota
+            </button>
+          )}
           <button onClick={handleExportExcel} disabled={exportingLog} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-black uppercase text-xs disabled:opacity-50">
             <Save size={14}/> {exportingLog ? 'Esportazione...' : 'Esporta Excel'}
           </button>
@@ -547,12 +549,12 @@ const AccessLogView = ({ accessLog, db }) => {
 
 
 // ─── RAPPORTO INTERVENTO — componente esterno (stato locale per evitare re-render) ──
-const EMPTY_RAPPORTO = { data:'', cliente:'', luogo:'', cSede:'si', cSedeSpecifica:'', mezzo:'proprio', mezzoTipo:'', operatore:'', dalleOre:'', alleOre:'', durata:'', righe:[{commessa:'',descrizione:''}], esito:'positivo', note:'' };
+const EMPTY_RAPPORTO = { data:'', cliente:'', luogo:'', cSede:'si', cSedeSpecifica:'', mezzo:'proprio', mezzoTipo:'', operatore:'', dalleOre:'', alleOre:'', durata:'', righe:[{commessa:'',descrizione:'',esito:'positivo',note:''}] };
 
 const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCancel, writeLog }) => {
   const [fd, setFdRaw] = useState(initialData || EMPTY_RAPPORTO);
   const setFd = (k, v) => setFdRaw(p => ({...p, [k]: v}));
-  const addRiga = () => setFdRaw(p => ({...p, righe:[...p.righe, {commessa:'',descrizione:''}]}));
+  const addRiga = () => setFdRaw(p => ({...p, righe:[...p.righe, {commessa:'',descrizione:'',esito:'positivo',note:''}]}));
   const setRiga = (i, k, v) => setFdRaw(p => { const r=[...p.righe]; r[i]={...r[i],[k]:v}; return {...p, righe:r}; });
   const removeRiga = (i) => setFdRaw(p => ({...p, righe: p.righe.filter((_,idx)=>idx!==i)}));
   const inputCls = "w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-blue-400 text-sm font-bold";
@@ -567,9 +569,9 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
 
   const handleSubmit = async () => {
     // Validazione campi obbligatori
-    const righeValide = (fd.righe||[]).every(r => r.commessa && r.descrizione);
-    if (!fd.data || !fd.cliente || !fd.operatore || !fd.luogo || !fd.durata || !fd.note || !righeValide) {
-      alert('Compila tutti i campi obbligatori:\nData, Cliente, Luogo, Operatore, Durata, N° Commessa, Descrizione, Note');
+    const righeValide = (fd.righe||[]).every(r => r.commessa && r.descrizione && r.note);
+    if (!fd.data || !fd.cliente || !fd.operatore || !fd.luogo || !fd.durata || !righeValide) {
+      alert('Compila tutti i campi obbligatori:\nData, Cliente, Luogo, Operatore, Durata, N° Commessa, Descrizione, Note (per ogni riga)');
       return;
     }
     const now = new Date();
@@ -675,23 +677,18 @@ const RapportoForm = ({ initialData, editingId, user, db, users, onSaved, onCanc
               {fd.righe.length > 1 && <button onClick={() => removeRiga(i)} className="text-red-400 font-black text-lg mt-5 shrink-0 px-1">✕</button>}
             </div>
             <div><label className={labelCls}>Descrizione *</label><textarea value={r.descrizione} onChange={e=>setRiga(i,'descrizione',e.target.value)} placeholder="Descrivi l'intervento..." rows={4} className={inputCls + ' resize-none'}/></div>
+            <div>
+              <label className={labelCls}>Esito dell'intervento</label>
+              <div className="grid grid-cols-2 gap-3">
+                {[['positivo','✓ Positivo','green'],['negativo','✗ Negativo','red'],['sospeso','⏸ Sospeso','orange'],['altro','◎ Altro','slate']].map(([v,lbl,col]) => (
+                  <button key={v} onClick={() => setRiga(i,'esito',v)} className={'py-3 px-3 rounded-xl font-black uppercase text-xs border-2 ' + (r.esito===v ? `border-${col}-500 bg-${col}-50 text-${col}-700` : 'border-slate-200 text-slate-400')}>{lbl}</button>
+                ))}
+              </div>
+            </div>
+            <div><label className={labelCls}>Note *</label><textarea value={r.note} onChange={e=>setRiga(i,'note',e.target.value)} rows={3} placeholder="Note, tariffario, rimborso km, ecc..." className={inputCls + ' resize-none'}/></div>
           </div>
         ))}
         <button onClick={addRiga} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 font-black text-xs uppercase">+ Aggiungi riga</button>
-      </div>
-
-      {/* Esito e note */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm mb-5 space-y-4">
-        <h3 className="font-black uppercase text-[10px] text-slate-400">Esito e Note</h3>
-        <div>
-          <label className={labelCls}>Esito dell'intervento</label>
-          <div className="grid grid-cols-2 gap-3">
-            {[['positivo','✓ Positivo','green'],['negativo','✗ Negativo','red'],['sospeso','⏸ Sospeso','orange'],['altro','◎ Altro','slate']].map(([v,lbl,col]) => (
-              <button key={v} onClick={() => setFd('esito',v)} className={'py-3 px-3 rounded-xl font-black uppercase text-xs border-2 ' + (fd.esito===v ? `border-${col}-500 bg-${col}-50 text-${col}-700` : 'border-slate-200 text-slate-400')}>{lbl}</button>
-            ))}
-          </div>
-        </div>
-        <div><label className={labelCls}>Note *</label><textarea value={fd.note} onChange={e=>setFd('note',e.target.value)} rows={4} placeholder="Note, tariffario, rimborso km, ecc..." className={inputCls + ' resize-none'}/></div>
       </div>
 
       <button onClick={handleSubmit} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-base">
@@ -3724,7 +3721,6 @@ export default function App() {
     if (rapportoSelectedId && selectedRapporto) {
       const rev = selectedRapporto.revisione || 0;
       const esitoCfg = { positivo:{col:'text-green-600',label:'✓ Positivo'}, negativo:{col:'text-red-500',label:'✗ Negativo'}, sospeso:{col:'text-orange-500',label:'⏸ Sospeso'}, altro:{col:'text-slate-500',label:'◎ Altro'} };
-      const ec = esitoCfg[selectedRapporto.esito] || esitoCfg.positivo;
       return (
         <div className="px-4 pt-14 pb-24 max-w-2xl mx-auto">
           <div className="flex items-center gap-3 mb-5">
@@ -3747,18 +3743,23 @@ export default function App() {
 
           <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
             <h3 className="font-black uppercase text-[10px] text-slate-400 mb-3">Descrizione Intervento</h3>
-            <table className="w-full text-sm">
-              <thead><tr className="border-b"><th className="text-left py-1 pr-3 text-[10px] text-slate-400 font-black uppercase w-28">N° Commessa</th><th className="text-left py-1 text-[10px] text-slate-400 font-black uppercase">Descrizione</th></tr></thead>
-              <tbody>{(selectedRapporto.righe||[]).map((r,i) => (
-                <tr key={i} className="border-b border-slate-50"><td className="py-2 pr-3 font-bold text-slate-700 align-top">{r.commessa||'—'}</td><td className="py-2 text-slate-600 whitespace-pre-wrap">{r.descrizione||'—'}</td></tr>
-              ))}</tbody>
-            </table>
-          </div>
-
-          <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
-            <h3 className="font-black uppercase text-[10px] text-slate-400 mb-2">Esito</h3>
-            <p className={'font-black text-base ' + ec.col}>{ec.label}</p>
-            {selectedRapporto.note && <p className="text-sm text-slate-500 mt-2 whitespace-pre-wrap">{selectedRapporto.note}</p>}
+            <div className="space-y-3">
+              {(selectedRapporto.righe||[]).map((r,i) => {
+                const rEsito = r.esito || selectedRapporto.esito || 'positivo';
+                const rNote = (r.note !== undefined && r.note !== '') ? r.note : (selectedRapporto.note || '');
+                const rec = esitoCfg[rEsito] || esitoCfg.positivo;
+                return (
+                  <div key={i} className={i > 0 ? 'border-t border-slate-100 pt-3' : ''}>
+                    <p className="text-[9px] font-black text-slate-400 uppercase">N° Commessa</p>
+                    <p className="font-bold text-sm text-slate-700 mb-2">{r.commessa||'—'}</p>
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Descrizione</p>
+                    <p className="text-sm text-slate-600 whitespace-pre-wrap mb-2">{r.descrizione||'—'}</p>
+                    <p className={'font-black text-sm ' + rec.col}>{rec.label}</p>
+                    {rNote && <p className="text-sm text-slate-500 mt-1 whitespace-pre-wrap">{rNote}</p>}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {(selectedRapporto.revisioniStorico||[]).length > 0 && (
@@ -3788,10 +3789,16 @@ export default function App() {
             const r = selectedRapporto;
             const rev = r.revisione || 0;
             const fmtDate = (s) => { if (!s) return '—'; const p = s.split('-'); if (p.length !== 3) return s; return p[2]+'/'+p[1]+'/'+p[0].slice(2); };
-            const esitoLabel = { positivo:'✓ Positivo', negativo:'✗ Negativo', sospeso:'⏸ Sospeso', altro:'◎ Altro' }[r.esito] || r.esito;
-            const esitoColor = { positivo:'#16a34a', negativo:'#dc2626', sospeso:'#ea580c', altro:'#64748b' }[r.esito] || '#64748b';
+            const esitoLabelMap = { positivo:'✓ Positivo', negativo:'✗ Negativo', sospeso:'⏸ Sospeso', altro:'◎ Altro' };
+            const esitoColorMap = { positivo:'#16a34a', negativo:'#dc2626', sospeso:'#ea580c', altro:'#64748b' };
             const orario = [r.dalleOre&&'dalle '+r.dalleOre, r.alleOre&&'alle '+r.alleOre, r.durata&&'('+r.durata+')'].filter(Boolean).join(' ') || '—';
-            const righeRows = (r.righe||[]).map(riga => `<tr><td style="padding:6px 12px 6px 0;font-weight:bold;vertical-align:top;width:130px;border-bottom:1px solid #f1f5f9">${riga.commessa||'—'}</td><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;white-space:pre-wrap">${riga.descrizione||'—'}</td></tr>`).join('');
+            const righeRows = (r.righe||[]).map(riga => {
+              const rEsito = riga.esito || r.esito || 'positivo';
+              const rNote = (riga.note !== undefined && riga.note !== '') ? riga.note : (r.note || '');
+              const lbl = esitoLabelMap[rEsito] || rEsito;
+              const col = esitoColorMap[rEsito] || '#64748b';
+              return `<tr><td style="padding:6px 12px 6px 0;font-weight:bold;vertical-align:top;width:100px;border-bottom:1px solid #f1f5f9">${riga.commessa||'—'}</td><td style="padding:6px 12px 6px 0;border-bottom:1px solid #f1f5f9;white-space:pre-wrap;vertical-align:top">${riga.descrizione||'—'}</td><td style="padding:6px 12px 6px 0;border-bottom:1px solid #f1f5f9;font-weight:bold;color:${col};vertical-align:top;white-space:nowrap;font-size:10px">${lbl}</td><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;white-space:pre-wrap;vertical-align:top;font-size:10px;color:#555">${rNote||'—'}</td></tr>`;
+            }).join('');
             const nomeFile = 'Rapporto_'+r.cliente.replace(/\s+/g,'-')+'_'+fmtDate(r.data).replace(/\//g,'-');
             const win = window.open('','_blank');
             win.document.write(`<!DOCTYPE html><html><head><title>${nomeFile}</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#222;}h1{font-size:18px;font-weight:bold;text-transform:uppercase;color:#1A3661;margin-bottom:2px;}h2{font-size:12px;font-weight:bold;border-bottom:2px solid #1A3661;padding-bottom:3px;color:#1A3661;text-transform:uppercase;margin:18px 0 8px;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 24px;}.field label{font-size:9px;font-weight:bold;text-transform:uppercase;color:#888;display:block;}.field p{margin:2px 0 4px;padding-bottom:3px;border-bottom:1px solid #ddd;font-weight:bold;}table{width:100%;border-collapse:collapse;}th{background:#1A3661;color:white;padding:6px 8px;text-align:left;font-size:11px;}@media print{button{display:none!important;}}</style></head><body>`);
@@ -3799,9 +3806,7 @@ export default function App() {
             win.document.write(`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;"><div><h1>Rapporto di Intervento Excogita</h1><p style="font-size:10px;color:#999;margin:0">Generato il ${new Date().toLocaleDateString('it-IT')}</p></div><span style="font-size:10px;color:#999;text-align:right">MOD. RA01<br>REV ${String(rev).padStart(2,'0')}</span></div>`);
             win.document.write(`<h2>Dati Intervento</h2><div class="grid">`);
             win.document.write(`<div class="field"><label>Data</label><p>${fmtDate(r.data)}</p></div><div class="field"><label>Cliente</label><p>${r.cliente||'—'}</p></div><div class="field"><label>Luogo</label><p>${r.luogo||'—'}</p></div><div class="field"><label>Operatore</label><p>${r.operatore||'—'}</p></div><div class="field"><label>C/o Sede Cliente</label><p>${r.cSede==='si'?'Sì':'No'+(r.cSedeSpecifica?' — '+r.cSedeSpecifica:'')}</p></div><div class="field"><label>Mezzo</label><p>${r.mezzo==='proprio'?'Mezzo Proprio':'Mezzo Aziendale'+(r.mezzoTipo?' — '+r.mezzoTipo:'')}</p></div><div class="field"><label>Orario</label><p>${orario}</p></div><div class="field"><label>Compilato da</label><p>${r.userName||'—'}</p></div></div>`);
-            win.document.write(`<h2>Descrizione Intervento</h2><table><thead><tr><th style="width:130px">N° Commessa</th><th>Descrizione</th></tr></thead><tbody>${righeRows}</tbody></table>`);
-            win.document.write(`<h2>Esito dell'Intervento</h2><p style="font-weight:bold;font-size:14px;color:${esitoColor}">${esitoLabel}</p>`);
-            if (r.note) win.document.write(`<p style="margin-top:6px;white-space:pre-wrap;font-size:11px;color:#555">${r.note}</p>`);
+            win.document.write(`<h2>Descrizione Intervento</h2><table><thead><tr><th style="width:100px">N° Commessa</th><th>Descrizione</th><th style="width:80px">Esito</th><th>Note</th></tr></thead><tbody>${righeRows}</tbody></table>`);
             win.document.write(`<div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px"><div style="border-top:1px solid #ccc;padding-top:6px;font-size:10px;color:#888">Firma del Tecnico</div><div style="border-top:1px solid #ccc;padding-top:6px;font-size:10px;color:#888">Firma del Cliente</div></div>`);
             win.document.write('</body></html>');
             win.document.close();
@@ -3829,8 +3834,11 @@ export default function App() {
         cSede: existing.cSede||'si', cSedeSpecifica: existing.cSedeSpecifica||'',
         mezzo: existing.mezzo||'proprio', mezzoTipo: existing.mezzoTipo||'',
         operatore: existing.operatore||'', dalleOre: existing.dalleOre||'', alleOre: existing.alleOre||'', durata: existing.durata||'',
-        righe: existing.righe||[{commessa:'',descrizione:''}],
-        esito: existing.esito||'positivo', note: existing.note||''
+        righe: (existing.righe && existing.righe.length ? existing.righe : [{commessa:'',descrizione:''}]).map(r => ({
+          commessa: r.commessa||'', descrizione: r.descrizione||'',
+          esito: r.esito || existing.esito || 'positivo',
+          note: r.note !== undefined ? r.note : (existing.note || '')
+        }))
       } : { ...EMPTY_RAPPORTO };
       return <RapportoForm
         initialData={initialData}
@@ -3896,8 +3904,12 @@ export default function App() {
               {myRapporti.map(r => {
                 const rev = r.revisione || 0;
                 const esitoCols = { positivo:'border-green-400 bg-green-50', negativo:'border-red-400 bg-red-50', sospeso:'border-orange-400 bg-orange-50', altro:'border-slate-300 bg-slate-50' };
+                // Colore della card = esito peggiore tra tutte le righe (fallback per rapporti vecchi con esito unico)
+                const priorita = { negativo:0, sospeso:1, altro:2, positivo:3 };
+                const rigaEsiti = (r.righe && r.righe.length ? r.righe.map(x => x.esito || r.esito || 'positivo') : [r.esito || 'positivo']);
+                const worstEsito = rigaEsiti.reduce((w,e) => (priorita[e]??9) < (priorita[w]??9) ? e : w, 'positivo');
                 return (
-                  <div key={r.id} className={'rounded-2xl shadow-sm border-l-4 ' + (esitoCols[r.esito]||esitoCols.altro)}>
+                  <div key={r.id} className={'rounded-2xl shadow-sm border-l-4 ' + (esitoCols[worstEsito]||esitoCols.altro)}>
                     <button onClick={() => setRapportoSelectedId(r.id)} className="w-full text-left p-4">
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <p className="font-black text-sm">{isMirco ? r.userName+' — ' : ''}{r.cliente}</p>
