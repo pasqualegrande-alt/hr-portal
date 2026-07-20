@@ -1942,7 +1942,7 @@ export default function App() {
   // ─── MODULISTICA STATE ───────────────────────────────────────────────────
   const [moduloStep, setModuloStep] = useState('list');
   const [moduloMainStep, setModuloMainStep] = useState('header');
-  const [moduloFormData, setModuloFormData] = useState({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',spese:[],kmRows:[]});
+  const [moduloFormData, setModuloFormData] = useState({destinazione:'',indirizzo:'',dataInizio:'',oraInizio:'08:00',dataFine:'',oraFine:'17:00',commessa:'',soloRimborso:false,spese:[],kmRows:[]});
   const [moduloSpesa, setModuloSpesa] = useState({descrizione:'Aereo',data:'',totale:'',note:''});
   const [moduloSpesaPhase, setModuloSpesaPhase] = useState('editing');
   const [moduloKm, setModuloKm] = useState({tipo:'Auto',km:'',data:'',targa:'',modello:'',note:''});
@@ -2260,7 +2260,7 @@ export default function App() {
     } catch(e) { console.error(e); }
   };
 
-  const printModulo = (modulo) => {
+  const renderModuloHtml = (modulo, { isPreview = false } = {}) => {
     const nomeFile = 'Mod_Trasferta_' + (modulo.userName||'').replace(/\s+/g,'-') + '_' + (modulo.commessa||'senza-commessa').replace(/\s+/g,'');
     const win = window.open('', '_blank');
     const totalSpese = (modulo.spese||[]).reduce((s,r)=>s+parseFloat(r.totale||0),0).toFixed(2);
@@ -2271,8 +2271,15 @@ export default function App() {
     const fmtEur = (n) => { const f = parseFloat(n||0).toFixed(2); const [int,dec] = f.split('.'); return int.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+dec; };
     const rows_spese = (modulo.spese||[]).map(r=>'<tr><td>'+r.descrizione+'</td><td>'+fmtDate(r.data)+'</td><td style="text-align:right">€ '+fmtEur(r.totale)+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
     const rows_km = (modulo.kmRows||[]).map(r=>'<tr><td>'+r.tipo+'</td><td style="text-align:right">'+r.km+'</td><td>'+fmtDate(r.data)+'</td><td style="font-size:9px">'+(r.targa||'—')+'</td><td>'+(r.modello||'—')+'</td><td style="text-align:right">'+(r.indennizzo?'€ '+fmtEur(r.indennizzo):'—')+'</td><td style="text-align:right">'+(r.totale?'€ '+fmtEur(r.totale):'—')+'</td><td>'+(r.note||'—')+'</td></tr>').join('');
-    win.document.write('<!DOCTYPE html><html><head><title>'+nomeFile+'</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#222;}h1{font-size:20px;font-weight:bold;text-transform:uppercase;margin-bottom:4px;color:#1A3661;}h2{font-size:13px;font-weight:bold;margin:20px 0 6px;border-bottom:2px solid #1A3661;padding-bottom:3px;color:#1A3661;text-transform:uppercase;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:8px;}.field label{font-size:9px;font-weight:bold;text-transform:uppercase;color:#888;display:block;}.field p{margin:0;padding:3px 0 3px;border-bottom:1px solid #ddd;font-weight:bold;}table{width:100%;border-collapse:collapse;margin-top:4px;}th{background:#1A3661;color:white;padding:6px 8px;text-align:left;font-size:11px;}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;}.total td{background:#f5f5f5;font-weight:bold;}.note-box{background:#fff3cd;padding:8px 12px;border-left:3px solid #ffc107;font-size:11px;margin-top:10px;}.approved{color:green;font-weight:bold;margin-top:16px;}@media print{button{display:none!important;}}</style></head><body>')
-    win.document.write('<div style="display:flex;gap:10px;margin-bottom:16px;"><button onclick="window.print()" style="padding:8px 20px;background:#1A3661;color:white;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#128438; Stampa / Salva PDF</button><button onclick="window.close()" style="padding:8px 16px;background:#f0f0f0;color:#555;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#8592; Chiudi</button></div>')
+    win.document.write('<!DOCTYPE html><html><head><title>'+(isPreview ? 'Anteprima Modulo' : nomeFile)+'</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#222;}h1{font-size:20px;font-weight:bold;text-transform:uppercase;margin-bottom:4px;color:#1A3661;}h2{font-size:13px;font-weight:bold;margin:20px 0 6px;border-bottom:2px solid #1A3661;padding-bottom:3px;color:#1A3661;text-transform:uppercase;}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:8px;}.field label{font-size:9px;font-weight:bold;text-transform:uppercase;color:#888;display:block;}.field p{margin:0;padding:3px 0 3px;border-bottom:1px solid #ddd;font-weight:bold;}table{width:100%;border-collapse:collapse;margin-top:4px;}th{background:#1A3661;color:white;padding:6px 8px;text-align:left;font-size:11px;}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;}.total td{background:#f5f5f5;font-weight:bold;}.note-box{background:#fff3cd;padding:8px 12px;border-left:3px solid #ffc107;font-size:11px;margin-top:10px;}.approved{color:green;font-weight:bold;margin-top:16px;}.preview-banner{background:#fef3c7;border:2px dashed #d97706;color:#92400e;font-weight:bold;text-align:center;padding:10px;border-radius:8px;margin-bottom:16px;text-transform:uppercase;font-size:12px;}@media print{button{display:none!important;}'+(isPreview ? 'body{display:none!important;}' : '')+'}</style></head><body>')
+    if (isPreview) {
+      win.document.write('<div style="display:flex;gap:10px;margin-bottom:16px;"><button onclick="window.close()" style="padding:8px 16px;background:#f0f0f0;color:#555;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#8592; Chiudi anteprima</button></div>')
+      win.document.write('<div class="preview-banner">&#128064; Anteprima — il modulo non è ancora stato inviato. Questo documento non è stampabile.</div>')
+      // Sovrascrive window.print per impedire la stampa dell'anteprima (Ctrl+P incluso)
+      win.print = function(){ win.alert("Questa è solo un'anteprima: non è possibile stamparla. Invia prima il modulo."); };
+    } else {
+      win.document.write('<div style="display:flex;gap:10px;margin-bottom:16px;"><button onclick="window.print()" style="padding:8px 20px;background:#1A3661;color:white;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#128438; Stampa / Salva PDF</button><button onclick="window.close()" style="padding:8px 16px;background:#f0f0f0;color:#555;border:none;cursor:pointer;font-weight:bold;border-radius:6px;">&#8592; Chiudi</button></div>')
+    }
     win.document.write('<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><h1 style="margin:0;">Modulo di Trasferta e Rimborsi Excogita</h1><span style="font-size:10px;color:#999;text-align:right;">MOD. TR/02<br>del 08/06/2026</span></div><p style="font-size:10px;color:#999;margin:0 0 12px;">Generato il '+new Date().toLocaleDateString('it-IT')+'</p>')
     win.document.write('<h2>Dati Trasferta</h2><div class="grid">')
     win.document.write('<div class="field"><label>Dipendente</label><p>'+(modulo.userName||'—')+'</p></div>')
@@ -2294,6 +2301,21 @@ export default function App() {
     }
     win.document.write('</body></html>');
     win.document.close();
+  };
+
+  const printModulo = (modulo) => renderModuloHtml(modulo, { isPreview: false });
+
+  const previewModuloFormData = () => {
+    renderModuloHtml({
+      userName: user.name,
+      commessa: moduloFormData.commessa,
+      destinazione: moduloFormData.soloRimborso ? 'Solo Rimborso' : moduloFormData.destinazione,
+      indirizzo: moduloFormData.indirizzo,
+      dataInizio: moduloFormData.dataInizio, oraInizio: moduloFormData.oraInizio,
+      dataFine: moduloFormData.dataFine, oraFine: moduloFormData.oraFine,
+      spese: moduloFormData.spese, kmRows: moduloFormData.kmRows,
+      status: 'in_attesa',
+    }, { isPreview: true });
   };
 
   // BottomSheet component (shared)
@@ -4323,6 +4345,9 @@ export default function App() {
               {moduloFormData.kmRows.map((r,i) => <p key={i} className="text-sm">{r.tipo} · {r.km} km · {fmtD(r.data)}{r.note?' · '+r.note:''}</p>)}
               {moduloFormData.kmRows.length === 0 && <p className="text-slate-300 text-sm">Nessuna riga km inserita</p>}
             </div>
+            <button onClick={previewModuloFormData} className="w-full bg-white border-2 border-slate-200 text-slate-600 py-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2">
+              🖨️ Preview di stampa
+            </button>
             <button onClick={() => { setModuloMainStep('header'); }} className="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2">
               ✏️ Correggi Modulo
             </button>
