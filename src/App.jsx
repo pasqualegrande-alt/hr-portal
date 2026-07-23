@@ -1195,6 +1195,7 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
       if (req.type === 'trasferta') return baseHrs;
       if (req.type === 'fuorisede') return baseHrs;
       if (req.type === 'permesso' || req.type === 'permesso104') {
+        if (req.type === 'permesso' && req.recuperoOre && req.recuperoApproved) return baseHrs;
         const hrs = Math.round((req.durationMinutes || 0) / 60 * 4) / 4;
         return Math.max(0, baseHrs - hrs);
       }
@@ -1213,7 +1214,7 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
     );
     if (dayReqs.length > 0) {
       const t = dayReqs[0].type;
-      if (t === 'permesso')    return 'P';
+      if (t === 'permesso')    return (dayReqs[0].recuperoOre && dayReqs[0].recuperoApproved) ? 'R' : 'P';
       if (t === 'permesso104') return 'H';
       if (t === 'congedo')     return 'C';
     }
@@ -1325,6 +1326,7 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
           const cell = row.getCell(col);
           if (d > cutoffDay) { cell.value = null; continue; }
           const val = getHoursForDay(emp.id, dateStr);
+          const isRecupero = getStarCode(emp.id, dateStr) === 'R';
           if (val === null || val === undefined) {
             cell.value = null;
           } else if (typeof val === 'string') {
@@ -1333,6 +1335,15 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
           } else if (Number.isInteger(val)) {
             // Numero intero (7, 5, 6...) → lascia il formato del template intatto
             cell.value = val;
+            if (isRecupero) {
+              // Permesso con recupero ore approvato: ore piene ma evidenziate in rosso
+              // grassetto, così l'HR sa di dover verificare le timbrature effettive
+              try {
+                const styleCopy = JSON.parse(JSON.stringify(cell.style || {}));
+                styleCopy.font = { ...(styleCopy.font||{}), bold: true, color: { argb: 'FFFF0000' } };
+                cell.style = styleCopy;
+              } catch(e) {}
+            }
           } else {
             // Numero decimale (5.5, 5.75...): scrivi come numero reale (non stringa)
             // con deep copy dello stile per forzare formato decimale senza rompere nulla
@@ -1401,6 +1412,13 @@ const HRView = ({ users, requests, closures, auditLogs }) => {
           const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
           const code = getStarCode(emp.id, dateStr);
           starRow.getCell(3 + d).value = code || null;
+          if (code === 'R') {
+            try {
+              const styleCopy = JSON.parse(JSON.stringify(starRow.getCell(3+d).style || {}));
+              styleCopy.font = { ...(styleCopy.font||{}), bold: true, color: { argb: 'FFFF0000' } };
+              starRow.getCell(3+d).style = styleCopy;
+            } catch(e) {}
+          }
         }
       });
 
